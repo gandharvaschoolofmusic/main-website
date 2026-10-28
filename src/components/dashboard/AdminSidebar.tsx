@@ -11,6 +11,7 @@ import {
   GraduationCap,
   BookOpen,
   Calendar,
+  Video,
   CreditCard,
   Banknote,
   FileText,
@@ -63,6 +64,11 @@ const navItems: NavItem[] = [
     name: "Classes",
     href: "/admin/lessons",
     icon: Calendar,
+  },
+  {
+    name: "Recordings",
+    href: "/admin/recordings",
+    icon: Video,
   },
   {
     name: "Payments",

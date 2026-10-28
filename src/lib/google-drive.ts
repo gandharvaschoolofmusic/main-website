@@ -114,6 +114,7 @@ export async function uploadToDrive(
   fileBuffer: Buffer,
   fileName: string,
   mimeType: string,
+  options?: { preserveExactName?: boolean },
 ): Promise<DriveUploadResult> {
   const folderId = await getConfiguredFolderId();
 
@@ -130,11 +131,13 @@ export async function uploadToDrive(
   stream.push(fileBuffer);
   stream.push(null);
 
+  const finalName = options?.preserveExactName ? fileName : `${Date.now()}_${fileName}`;
+
   try {
     // Upload file to Google Drive
     const response = await drive.files.create({
       requestBody: {
-        name: `${Date.now()}_${fileName}`,
+        name: finalName,
         parents: [folderId],
       },
       media: {

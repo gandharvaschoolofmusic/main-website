@@ -501,14 +501,28 @@ function LessonRoomContent({
     };
   }, [room, multiCam]);
 
-  const handleLeaveRoom = () => {
-    // 1. Finalize and trigger upload of automatic lesson recording
-    autoRecorder.stopAndUpload();
-    // 2. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
-    multiCam.stopSecondaryCamera().catch(() => {});
-    releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
-    // 3. Mark intentional leave and return to caller dashboard
-    onLeave();
+  const [isSavingRecording, setIsSavingRecording] = useState(false);
+
+  const handleLeaveRoom = async () => {
+    if (isSavingRecording) return;
+    setIsSavingRecording(true);
+
+    try {
+      // 1. Finalize and await upload of automatic lesson recording
+      await autoRecorder.stopAndUpload();
+    } catch (e) {
+      console.warn("[LessonRoom] Error uploading lesson recording on leave:", e);
+    } finally {
+      // 2. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
+      try {
+        await multiCam.stopSecondaryCamera();
+      } catch {
+        // Ignore
+      }
+      releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
+      // 3. Mark intentional leave and return to caller dashboard
+      onLeave();
+    }
   };
 
   // Format remaining time
@@ -517,41 +531,76 @@ function LessonRoomContent({
   const timeFormatted = `${minutes}:${seconds.toString().padStart(2, "0")}`;
 
   return (
-    <MeetRoomUI
-      lesson={lesson}
-      audioMode={audioMode}
-      isSwitchingAudioMode={isSwitchingAudioMode}
-      isMuted={isMuted}
-      isVideoOff={isVideoOff}
-      isScreenSharing={isScreenSharing}
-      activeFloorState={activeFloorState}
-      onFloorChange={setActiveFloorState}
-      connectionQuality={connectionQuality}
-      isReconnecting={isReconnecting}
-      timeFormatted={timeFormatted}
-      availableCameras={availableCameras}
-      selectedCameraId={selectedCameraId}
-      audioDeviceId={initialConfig.audioDeviceId}
-      multiCam={multiCam}
-      onToggleMic={handleToggleMic}
-      onToggleVideo={handleToggleVideo}
-      onToggleScreenShare={handleToggleScreenShare}
-      onSwitchAudioMode={handleSwitchAudioMode}
-      onCameraDeviceSwitch={handleCameraDeviceSwitch}
-      onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
-      onLeave={handleLeaveRoom}
-    >
-      <MultiCameraModal
-        isOpen={isMultiCamModalOpen}
-        onClose={() => setIsMultiCamModalOpen(false)}
+    <>
+      <MeetRoomUI
+        lesson={lesson}
+        audioMode={audioMode}
+        isSwitchingAudioMode={isSwitchingAudioMode}
+        isMuted={isMuted}
+        isVideoOff={isVideoOff}
+        isScreenSharing={isScreenSharing}
+        activeFloorState={activeFloorState}
+        onFloorChange={setActiveFloorState}
+        connectionQuality={connectionQuality}
+        isReconnecting={isReconnecting}
+        timeFormatted={timeFormatted}
+        availableCameras={availableCameras}
+        selectedCameraId={selectedCameraId}
+        audioDeviceId={initialConfig.audioDeviceId}
         multiCam={multiCam}
-        primaryTrack={Array.from(room.localParticipant.videoTrackPublications.values()).find(
-          (publication) => publication.source === Track.Source.Camera && publication.trackName !== "secondary-camera",
-        )?.videoTrack}
-        onPrimaryDeviceSwitch={handleCameraDeviceSwitch}
-        isTeacher={lesson.isTeacher}
-      />
-    </MeetRoomUI>
+        onToggleMic={handleToggleMic}
+        onToggleVideo={handleToggleVideo}
+        onToggleScreenShare={handleToggleScreenShare}
+        onSwitchAudioMode={handleSwitchAudioMode}
+        onCameraDeviceSwitch={handleCameraDeviceSwitch}
+        onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
+        onLeave={handleLeaveRoom}
+      >
+        <MultiCameraModal
+          isOpen={isMultiCamModalOpen}
+          onClose={() => setIsMultiCamModalOpen(false)}
+          multiCam={multiCam}
+          primaryTrack={Array.from(room.localParticipant.videoTrackPublications.values()).find(
+            (publication) => publication.source === Track.Source.Camera && publication.trackName !== "secondary-camera",
+          )?.videoTrack}
+          onPrimaryDeviceSwitch={handleCameraDeviceSwitch}
+          isTeacher={lesson.isTeacher}
+        />
+      </MeetRoomUI>
+
+      {/* Apple Design: Translucent Recording Archival Dialog */}
+      {isSavingRecording && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0E0C18]/85 backdrop-blur-xl p-6 transition-all duration-300">
+          <div className="relative max-w-sm w-full bg-[#161226]/95 border border-white/10 rounded-3xl p-7 text-center shadow-2xl flex flex-col items-center gap-5">
+            {/* Subtle top ambient indicator */}
+            <div className="absolute top-0 left-8 right-8 h-[2px] bg-gradient-to-r from-transparent via-[#FF7803] to-transparent" />
+            
+            {/* Spinning Indicator with Gandharva Brand Ring */}
+            <div className="relative w-16 h-16 flex items-center justify-center">
+              <div className="absolute inset-0 rounded-full border-2 border-[#FF7803]/20" />
+              <div className="w-16 h-16 rounded-full border-2 border-transparent border-t-[#FF7803] border-r-[#3C096C] animate-spin" />
+              <div className="w-8 h-8 rounded-full bg-[#3C096C]/40 flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-[#FF7803] animate-ping" />
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <h3 className="font-serif text-lg font-bold text-white tracking-tight">
+                Saving Lesson Recording
+              </h3>
+              <p className="text-xs text-stone-300 leading-relaxed max-w-xs">
+                Archiving session audio and stage video securely to Google Drive. Please keep this tab open...
+              </p>
+            </div>
+
+            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono text-stone-400">
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
+              Google Drive Cloud Sync
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 

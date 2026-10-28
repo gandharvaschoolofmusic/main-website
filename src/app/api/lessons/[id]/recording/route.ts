@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { uploadToDrive, isDriveConfigured } from "@/lib/google-drive";
@@ -77,22 +78,35 @@ export async function POST(
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const safeInstrument = (lesson.instrument || "Lesson")
-      .replace(/[^a-zA-Z0-9_-]/g, "_")
-      .trim();
-    const dateStamp = new Date().toISOString().slice(0, 10);
-    const fileName = `Gandharva_${safeInstrument}_${dateStamp}_${lessonId.slice(-6)}.webm`;
+    // 4. Construct human-readable recording file name
+    const existingCount = await db.lessonRecording.count({
+      where: { lessonId },
+    });
+
+    const sanitize = (val: string) =>
+      val.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").trim();
+
+    const safeInstrument = sanitize(lesson.instrument || "Lesson");
+    const safeStudent = sanitize(lesson.student?.name?.split(" ")[0] || "Student");
+    const safeTeacher = sanitize(lesson.teacher?.name?.split(" ")[0] || "Teacher");
+    const now = new Date();
+    const dateStamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
+    const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
+    const partSuffix = existingCount > 0 ? `_Part${existingCount + 1}` : "";
+    const fileName = `Gandharva_${safeInstrument}_${safeStudent}_${safeTeacher}_${dateStamp}_${timeStamp}${partSuffix}.webm`;
     const mimeType = file.type || "video/webm";
 
     let fileUrl = "";
     let fileId: string | null = null;
     let storageBackend: "GOOGLE_DRIVE" | "LOCAL" = "LOCAL";
 
-    // 4. Try Google Drive upload first
+    // 5. Try Google Drive upload first (with clean human-readable name)
     let driveError: string | null = null;
     if (isDriveConfigured()) {
       try {
-        const driveResult = await uploadToDrive(buffer, fileName, mimeType);
+        const driveResult = await uploadToDrive(buffer, fileName, mimeType, {
+          preserveExactName: true,
+        });
         fileUrl = driveResult.fileUrl;
         fileId = driveResult.fileId;
         storageBackend = "GOOGLE_DRIVE";
@@ -111,7 +125,7 @@ export async function POST(
       driveError = "Google Drive credentials not configured in environment.";
     }
 
-    // 5. Fallback to local disk storage if Google Drive failed or not configured
+    // 6. Fallback to local disk storage if Google Drive failed or not configured
     if (storageBackend !== "GOOGLE_DRIVE") {
       const recordingsDir = path.join(process.cwd(), "public", "recordings");
       if (!fs.existsSync(recordingsDir)) {
@@ -129,7 +143,7 @@ export async function POST(
       );
     }
 
-    // 6. Persist to database
+    // 7. Persist to database (each rejoin creates a new LessonRecording entry)
     const recordingRecord = await db.lessonRecording.create({
       data: {
         lessonId,
@@ -142,14 +156,39 @@ export async function POST(
       },
     });
 
+    // Calculate total cumulative duration for the lesson across all parts
+    const sumAgg = await db.lessonRecording.aggregate({
+      where: { lessonId },
+      _sum: { durationSeconds: true },
+    });
+    const cumulativeDuration = sumAgg._sum.durationSeconds || durationSeconds;
+
     await db.lesson.update({
       where: { id: lessonId },
       data: {
         recordingUrl: fileUrl,
         recordingFileId: fileId,
-        recordingDurationSeconds: durationSeconds,
+        recordingDurationSeconds: cumulativeDuration,
       },
     });
+
+    if (lesson.groupRoomId) {
+      await db.lesson.updateMany({
+        where: { groupRoomId: lesson.groupRoomId },
+        data: {
+          recordingUrl: fileUrl,
+          recordingFileId: fileId,
+          recordingDurationSeconds: cumulativeDuration,
+        },
+      });
+    }
+
+    try {
+      revalidateTag("admin-recordings", "max");
+      revalidateTag("admin-lessons", "max");
+    } catch {
+      // Revalidation during non-cache contexts is safe to ignore
+    }
 
     return Response.json({
       success: true,

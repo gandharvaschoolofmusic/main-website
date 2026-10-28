@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useRef, useCallback } from "react";
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant } from "livekit-client";
+import { useEffect, useRef, useCallback, useState } from "react";
+import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, LocalTrackPublication } from "livekit-client";
 
 interface UseLessonAutoRecorderProps {
   room: Room | undefined | null;
   lessonId: string;
   isTeacher: boolean;
+  callerRole?: string;
   partnerName: string;
   instrument: string;
 }
@@ -14,29 +15,28 @@ interface UseLessonAutoRecorderProps {
 /**
  * useLessonAutoRecorder
  *
- * Automatically records lesson screen/stage and mixed audio (teacher + student).
+ * Automatically and silently records the lesson stage (teacher + student video, screen shares)
+ * and mixed audio (microphone feeds from both sides) in the background.
  *
- * Features:
- * - 100% silent & discreet in the UI (no distracting indicators).
- * - Highly optimized for zero server impact and minimal client CPU:
- *   - Resolution: 854x480 (480p widescreen).
- *   - Framerate: 15 fps (smooth musical visual feedback, low CPU).
- *   - Bitrate: 450 kbps video + 64 kbps Opus audio (~3.5 MB per 10 minutes).
- * - Web Audio AudioContext mixes local mic and remote audio tracks in real-time.
- * - Slices into memory chunks.
- * - On room exit, automatically POSTs to /api/lessons/[id]/recording which uploads
- *   to Google Drive (with local disk fallback).
+ * Highlights:
+ * - Silent & discreet background operation with zero frame drops.
+ * - Dynamic composite layout: auto-adapts to screen share or side-by-side video feeds.
+ * - Mixed AudioContext engine combining local and remote audio.
+ * - Safely stops and uploads recording to Google Drive when lesson ends.
  */
 export function useLessonAutoRecorder({
   room,
   lessonId,
   isTeacher,
+  callerRole,
   partnerName,
   instrument,
 }: UseLessonAutoRecorderProps) {
-  // Only the teacher records to avoid duplicate server uploads and save client resources.
-  // If teacher is present, they act as the recording host.
-  const isRecorderRole = isTeacher;
+  // Teachers and Admins record by default
+  const isRecorderRole = isTeacher || callerRole === "ADMIN" || callerRole === "TEACHER";
+
+  const [isRecording, setIsRecording] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
 
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const recordedChunksRef = useRef<Blob[]>([]);
@@ -47,30 +47,40 @@ export function useLessonAutoRecorder({
   const animationFrameIdRef = useRef<number | null>(null);
   const hasUploadedRef = useRef(false);
 
-  // Hidden DOM video elements to capture live frames for the offscreen canvas
+  // Hidden DOM video elements to capture live video frames for canvas compositing
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenShareVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Audio track sources map to disconnect on leave
+  // Audio track sources map
   const audioSourcesMapRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
 
-  // Function to finalize and upload recording
-  const uploadRecording = useCallback(async () => {
-    if (hasUploadedRef.current || recordedChunksRef.current.length === 0) return;
-    hasUploadedRef.current = true;
+  // Upload finalized recording blob to backend
+  const uploadRecording = useCallback(async (): Promise<{
+    success: boolean;
+    fileUrl?: string;
+    storageBackend?: string;
+    error?: string;
+  }> => {
+    if (hasUploadedRef.current) return { success: true };
+    if (recordedChunksRef.current.length === 0) {
+      return { success: false, error: "No video chunks recorded." };
+    }
+
+    setIsUploading(true);
 
     try {
       const mimeType = mediaRecorderRef.current?.mimeType || "video/webm";
       const blob = new Blob(recordedChunksRef.current, { type: mimeType });
 
       if (blob.size < 1000) {
-        // Less than 1KB, likely empty recording
-        return;
+        setIsUploading(false);
+        return { success: false, error: "Recording file was too small or empty." };
       }
 
-      const durationSeconds = Math.round(
-        (Date.now() - (recordingStartTimeRef.current || Date.now())) / 1000,
+      const durationSeconds = Math.max(
+        1,
+        Math.round((Date.now() - (recordingStartTimeRef.current || Date.now())) / 1000),
       );
 
       const formData = new FormData();
@@ -81,53 +91,101 @@ export function useLessonAutoRecorder({
       );
       formData.append("durationSeconds", String(durationSeconds));
 
-      // Use keepalive fetch so the upload completes even during page navigation
-      fetch(`/api/lessons/${lessonId}/recording`, {
+      // Note: Do NOT use keepalive: true, as browsers strictly reject keepalive fetch requests > 64KB!
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s max timeout for large uploads
+
+      const res = await fetch(`/api/lessons/${lessonId}/recording`, {
         method: "POST",
         body: formData,
-        keepalive: true,
-      }).catch((err) => {
-        console.warn("[AutoRecorder] Upload request failed:", err);
+        signal: controller.signal,
       });
+      clearTimeout(timeoutId);
+
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || `Server responded with status ${res.status}`);
+      }
+
+      const data = await res.json();
+      hasUploadedRef.current = true;
+      setIsUploading(false);
+      return {
+        success: true,
+        fileUrl: data.fileUrl,
+        storageBackend: data.storageBackend,
+      };
     } catch (err) {
-      console.warn("[AutoRecorder] Error preparing upload:", err);
+      setIsUploading(false);
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn("[AutoRecorder] Upload request failed:", msg);
+      return { success: false, error: msg };
     }
   }, [lessonId]);
 
-  // Teardown and stop recorder
-  const stopRecording = useCallback(() => {
-    if (!isRecordingRef.current) return;
+  // Teardown and stop recorder (returns Promise so callers can await upload completion)
+  const stopAndUpload = useCallback(async (): Promise<{
+    success: boolean;
+    fileUrl?: string;
+    error?: string;
+  }> => {
+    if (hasUploadedRef.current) {
+      return { success: true };
+    }
+    if (!isRecordingRef.current && recordedChunksRef.current.length === 0) {
+      return { success: false, error: "No recorded chunks available." };
+    }
+
     isRecordingRef.current = false;
+    setIsRecording(false);
 
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
       animationFrameIdRef.current = null;
     }
 
+    // Stop MediaRecorder cleanly and wait for onstop event to collect final buffered chunk
     if (
       mediaRecorderRef.current &&
       mediaRecorderRef.current.state !== "inactive"
     ) {
-      try {
-        mediaRecorderRef.current.stop();
-      } catch {
-        // Ignore
-      }
+      await new Promise<void>((resolve) => {
+        const rec = mediaRecorderRef.current;
+        if (!rec) return resolve();
+
+        const onStopHandler = () => {
+          rec.removeEventListener("stop", onStopHandler);
+          resolve();
+        };
+
+        rec.addEventListener("stop", onStopHandler);
+        try {
+          rec.stop();
+        } catch {
+          resolve();
+        }
+        // Fallback safety timeout if stop event is delayed
+        setTimeout(resolve, 800);
+      });
     }
 
     // Clean up audio context
     try {
-      audioSourcesMapRef.current.forEach((src) => src.disconnect());
+      audioSourcesMapRef.current.forEach((src) => {
+        try {
+          src.disconnect();
+        } catch {
+          // Ignore
+        }
+      });
       audioSourcesMapRef.current.clear();
       audioContextRef.current?.close();
     } catch {
       // Ignore
     }
 
-    // Upload after stopping
-    setTimeout(() => {
-      uploadRecording();
-    }, 300);
+    // Upload finalized recording
+    return await uploadRecording();
   }, [uploadRecording]);
 
   useEffect(() => {
@@ -157,15 +215,24 @@ export function useLessonAutoRecorder({
     screenShareVideoRef.current = createHiddenVideo();
 
     // 1. Initialize AudioContext and Destination
-    const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
+    const AudioCtx =
+      window.AudioContext ||
+      (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const audioCtx = new AudioCtx();
     audioContextRef.current = audioCtx;
     const destination = audioCtx.createMediaStreamDestination();
     audioDestinationRef.current = destination;
 
+    const resumeAudioIfSuspended = () => {
+      if (audioCtx.state === "suspended") {
+        audioCtx.resume().catch(() => {});
+      }
+    };
+
     // 2. Connect audio tracks to destination
     const addAudioTrack = (track: MediaStreamTrack, id: string) => {
       if (isCleanedUp || audioSourcesMapRef.current.has(id)) return;
+      resumeAudioIfSuspended();
       try {
         const stream = new MediaStream([track]);
         const source = audioCtx.createMediaStreamSource(stream);
@@ -188,7 +255,7 @@ export function useLessonAutoRecorder({
       }
     };
 
-    // 3. Connect existing local mic
+    // 3. Connect existing local mic and camera
     const checkLocalTracks = () => {
       if (!room.localParticipant) return;
       for (const pub of room.localParticipant.audioTrackPublications.values()) {
@@ -197,14 +264,39 @@ export function useLessonAutoRecorder({
         }
       }
       for (const pub of room.localParticipant.videoTrackPublications.values()) {
-        if (pub.track?.mediaStreamTrack && localVideoRef.current) {
-          if (pub.source === Track.Source.ScreenShare) {
-            screenShareVideoRef.current!.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
-            screenShareVideoRef.current!.play().catch(() => {});
-          } else if (pub.source === Track.Source.Camera) {
+        if (pub.track?.mediaStreamTrack) {
+          if (pub.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
+            screenShareVideoRef.current.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
+            screenShareVideoRef.current.play().catch(() => {});
+          } else if (localVideoRef.current) {
             localVideoRef.current.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
             localVideoRef.current.play().catch(() => {});
           }
+        }
+      }
+    };
+
+    // Listen for local tracks published after initial room connection
+    const handleLocalTrackPublished = (pub: LocalTrackPublication) => {
+      if (pub.track?.kind === Track.Kind.Audio && pub.track.mediaStreamTrack) {
+        addAudioTrack(pub.track.mediaStreamTrack, "local_audio");
+      } else if (pub.track?.kind === Track.Kind.Video && pub.track.mediaStreamTrack) {
+        if (pub.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
+          screenShareVideoRef.current.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
+          screenShareVideoRef.current.play().catch(() => {});
+        } else if (localVideoRef.current) {
+          localVideoRef.current.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
+          localVideoRef.current.play().catch(() => {});
+        }
+      }
+    };
+
+    const handleLocalTrackUnpublished = (pub: LocalTrackPublication) => {
+      if (pub.track?.kind === Track.Kind.Audio) {
+        removeAudioTrack("local_audio");
+      } else if (pub.track?.kind === Track.Kind.Video) {
+        if (pub.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
+          screenShareVideoRef.current.srcObject = null;
         }
       }
     };
@@ -215,6 +307,7 @@ export function useLessonAutoRecorder({
       pub: unknown,
       participant: RemoteParticipant,
     ) => {
+      resumeAudioIfSuspended();
       if (track.kind === Track.Kind.Audio) {
         addAudioTrack(track.mediaStreamTrack, `remote_audio_${participant.identity}`);
       } else if (track.kind === Track.Kind.Video) {
@@ -240,6 +333,8 @@ export function useLessonAutoRecorder({
 
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
     room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    room.on(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+    room.on(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
 
     // 5. Canvas Compositing Engine (854x480 @ 15fps)
     const canvas = document.createElement("canvas");
@@ -410,14 +505,11 @@ export function useLessonAutoRecorder({
           }
         };
 
-        recorder.onstop = () => {
-          uploadRecording();
-        };
-
         // Slice every 10 seconds into chunks to ensure data availability
         recorder.start(10000);
         mediaRecorderRef.current = recorder;
         isRecordingRef.current = true;
+        setIsRecording(true);
         recordingStartTimeRef.current = Date.now();
 
         // Start render loop
@@ -435,7 +527,7 @@ export function useLessonAutoRecorder({
 
     // Teardown when room leaves or unmounts
     const handleBeforeUnload = () => {
-      stopRecording();
+      stopAndUpload();
     };
     window.addEventListener("beforeunload", handleBeforeUnload);
     window.addEventListener("pagehide", handleBeforeUnload);
@@ -447,23 +539,51 @@ export function useLessonAutoRecorder({
 
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      room.off(RoomEvent.LocalTrackPublished, handleLocalTrackPublished);
+      room.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
 
-      stopRecording();
+      stopAndUpload();
 
       // Clean up hidden video elements
-      if (localVideoRef.current?.parentNode) {
-        localVideoRef.current.parentNode.removeChild(localVideoRef.current);
+      if (localVideoRef.current) {
+        try {
+          localVideoRef.current.pause();
+          localVideoRef.current.srcObject = null;
+        } catch {
+          // Ignore
+        }
+        if (localVideoRef.current.parentNode) {
+          localVideoRef.current.parentNode.removeChild(localVideoRef.current);
+        }
       }
-      if (remoteVideoRef.current?.parentNode) {
-        remoteVideoRef.current.parentNode.removeChild(remoteVideoRef.current);
+      if (remoteVideoRef.current) {
+        try {
+          remoteVideoRef.current.pause();
+          remoteVideoRef.current.srcObject = null;
+        } catch {
+          // Ignore
+        }
+        if (remoteVideoRef.current.parentNode) {
+          remoteVideoRef.current.parentNode.removeChild(remoteVideoRef.current);
+        }
       }
-      if (screenShareVideoRef.current?.parentNode) {
-        screenShareVideoRef.current.parentNode.removeChild(screenShareVideoRef.current);
+      if (screenShareVideoRef.current) {
+        try {
+          screenShareVideoRef.current.pause();
+          screenShareVideoRef.current.srcObject = null;
+        } catch {
+          // Ignore
+        }
+        if (screenShareVideoRef.current.parentNode) {
+          screenShareVideoRef.current.parentNode.removeChild(screenShareVideoRef.current);
+        }
       }
     };
-  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopRecording, uploadRecording]);
+  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopAndUpload]);
 
   return {
-    stopAndUpload: stopRecording,
+    stopAndUpload,
+    isRecording,
+    isUploading,
   };
 }

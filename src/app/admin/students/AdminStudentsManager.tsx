@@ -38,6 +38,7 @@ import {
   History,
   Check,
   Receipt,
+  ChevronDown,
 } from "lucide-react";
 import {
   createStudentAction,
@@ -46,6 +47,7 @@ import {
   scheduleStudentLessonAction,
   sendStudentCommunicationAction,
   toggleStudentAccessAction,
+  updateStudentLessonStatusAction,
 } from "@/actions/student-admin";
 
 export interface StudentRecord {
@@ -249,6 +251,46 @@ export function AdminStudentsManager({
     setTimeout(() => setToastMessage(null), 3500);
   };
 
+  const [updatingLessonId, setUpdatingLessonId] = useState<string | null>(null);
+
+  const handleUpdateLessonStatus = async (
+    lessonId: string,
+    newStatus: "SCHEDULED" | "COMPLETED" | "CANCELLED" | "RESCHEDULED"
+  ) => {
+    setUpdatingLessonId(lessonId);
+    // Optimistic update across student records
+    setStudents((prev) =>
+      prev.map((s) => ({
+        ...s,
+        lessons: s.lessons.map((l) =>
+          l.id === lessonId ? { ...l, status: newStatus } : l
+        ),
+      }))
+    );
+
+    try {
+      const res = await updateStudentLessonStatusAction(lessonId, newStatus as any);
+      if (res.success) {
+        showToast(
+          res.message ||
+            `Class status updated to ${
+              newStatus === "COMPLETED"
+                ? "Complete"
+                : newStatus === "SCHEDULED"
+                ? "Upcoming"
+                : newStatus
+            }.`
+        );
+      } else {
+        showToast(res.error || "Failed to update class status.");
+      }
+    } catch {
+      showToast("An unexpected error occurred while updating class status.");
+    } finally {
+      setUpdatingLessonId(null);
+    }
+  };
+
   const selectedStudent =
     students.find((s) => s.id === selectedStudentId) || students[0];
 
@@ -335,13 +377,12 @@ export function AdminStudentsManager({
   // Filtered classes: Upcoming vs Past
   const upcomingLessons = selectedStudent
     ? selectedStudent.lessons
-        .filter(
-          (l) =>
-            l.status === "SCHEDULED" ||
-            (new Date(l.startsAt) >= new Date() &&
-              l.status !== "CANCELLED" &&
-              l.status !== "COMPLETED")
-        )
+        .filter((l) => {
+          const lDate = new Date(l.startsAt);
+          const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+          const isFuture = endTime.getTime() >= Date.now();
+          return isFuture && l.status !== "CANCELLED" && l.status !== "COMPLETED";
+        })
         .sort(
           (a, b) =>
             new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
@@ -350,12 +391,12 @@ export function AdminStudentsManager({
 
   const pastLessons = selectedStudent
     ? selectedStudent.lessons
-        .filter(
-          (l) =>
-            l.status === "COMPLETED" ||
-            l.status === "CANCELLED" ||
-            new Date(l.startsAt) < new Date()
-        )
+        .filter((l) => {
+          const lDate = new Date(l.startsAt);
+          const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+          const isPast = endTime.getTime() < Date.now();
+          return l.status === "COMPLETED" || l.status === "CANCELLED" || isPast;
+        })
         .sort(
           (a, b) =>
             new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()
@@ -1106,13 +1147,16 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     ) : (
                       selectedStudent.lessons.slice(0, 5).map((l, idx) => {
                         const lDate = new Date(l.startsAt);
-                        const isUpcoming = l.status === "SCHEDULED";
+                        const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+                        const isPastTime = Date.now() >= endTime.getTime();
+                        const isUpcoming = (l.status === "SCHEDULED" || l.status === "RESCHEDULED") && !isPastTime;
                         const isCompleted = l.status === "COMPLETED";
+                        const isCancelled = l.status === "CANCELLED";
 
                         return (
                           <div
                             key={l.id}
-                            className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
+                            className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3 group hover:border-[#3C096C]/20 transition-colors"
                           >
                             <div className="min-w-0">
                               <div className="font-bold text-xs text-heading truncate">
@@ -1133,18 +1177,39 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                             </div>
 
                             <div className="flex items-center gap-2 shrink-0">
-                              {isCompleted ? (
-                                <span className="px-2 py-0.5 rounded-md bg-neutral-100 text-body/70 border border-neutral-200 text-[10px] font-semibold">
-                                  Complete
-                                </span>
-                              ) : isUpcoming ? (
-                                <span className="px-2 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[10px] font-semibold">
-                                  Upcoming
-                                </span>
+                              {updatingLessonId === l.id ? (
+                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 text-body/70 text-[10px] font-semibold border border-neutral-200">
+                                  <Loader2 className="w-3 h-3 animate-spin text-[#3C096C]" />
+                                  <span>Saving...</span>
+                                </div>
                               ) : (
-                                <span className="px-2 py-0.5 rounded-md bg-neutral-100 text-body/70 text-[10px] font-semibold">
-                                  {l.status}
-                                </span>
+                                <div className="relative inline-flex items-center">
+                                  <select
+                                    value={l.status}
+                                    onChange={(e) =>
+                                      handleUpdateLessonStatus(
+                                        l.id,
+                                        e.target.value as any
+                                      )
+                                    }
+                                    className={`appearance-none pl-2.5 pr-6 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer transition-all outline-none ${
+                                      isCompleted
+                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
+                                        : isCancelled
+                                        ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
+                                        : isUpcoming
+                                        ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70"
+                                        : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70"
+                                    }`}
+                                    title="Click to update session status"
+                                  >
+                                    <option value="SCHEDULED">Upcoming</option>
+                                    <option value="COMPLETED">Complete</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                    <option value="RESCHEDULED">Rescheduled</option>
+                                  </select>
+                                  <ChevronDown className="w-3 h-3 text-body/40 absolute right-1.5 pointer-events-none" />
+                                </div>
                               )}
                             </div>
                           </div>
@@ -1374,9 +1439,28 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                 </p>
                               </div>
                             </div>
-                            <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[11px] font-bold">
-                              {l.status}
-                            </span>
+                            <div className="flex items-center gap-2">
+                              {updatingLessonId === l.id ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3C096C]" />
+                              ) : (
+                                <div className="relative inline-flex items-center">
+                                  <select
+                                    value={l.status}
+                                    onChange={(e) =>
+                                      handleUpdateLessonStatus(l.id, e.target.value as any)
+                                    }
+                                    className="appearance-none pl-2 pr-5 py-0.5 rounded-md bg-purple-50 text-purple-700 border border-purple-200 text-[11px] font-bold cursor-pointer outline-none hover:bg-purple-100/60"
+                                    title="Change class status"
+                                  >
+                                    <option value="SCHEDULED">Scheduled</option>
+                                    <option value="COMPLETED">Completed</option>
+                                    <option value="CANCELLED">Cancelled</option>
+                                    <option value="RESCHEDULED">Rescheduled</option>
+                                  </select>
+                                  <ChevronDown className="w-3 h-3 text-purple-700 absolute right-1 pointer-events-none" />
+                                </div>
+                              )}
+                            </div>
                           </div>
 
                           <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-neutral-50/70 text-xs">
@@ -1454,13 +1538,32 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                             <div>
                               <div className="flex items-center gap-2">
                                 <span className="font-bold text-heading text-sm">{l.instrument} Lesson</span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                  l.status === "COMPLETED"
-                                    ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                                    : "bg-neutral-100 text-neutral-700 border border-neutral-200"
-                                }`}>
-                                  {l.status}
-                                </span>
+                                {updatingLessonId === l.id ? (
+                                  <Loader2 className="w-3.5 h-3.5 animate-spin text-[#3C096C]" />
+                                ) : (
+                                  <div className="relative inline-flex items-center">
+                                    <select
+                                      value={l.status}
+                                      onChange={(e) =>
+                                        handleUpdateLessonStatus(l.id, e.target.value as any)
+                                      }
+                                      className={`appearance-none pl-2 pr-5 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer outline-none transition-all ${
+                                        l.status === "COMPLETED"
+                                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
+                                          : l.status === "CANCELLED"
+                                          ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
+                                          : "bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200/60"
+                                      }`}
+                                      title="Change class status"
+                                    >
+                                      <option value="COMPLETED">Completed</option>
+                                      <option value="SCHEDULED">Scheduled</option>
+                                      <option value="CANCELLED">Cancelled</option>
+                                      <option value="RESCHEDULED">Rescheduled</option>
+                                    </select>
+                                    <ChevronDown className="w-3 h-3 text-body/40 absolute right-1 pointer-events-none" />
+                                  </div>
+                                )}
                               </div>
                               <div className="text-xs text-body/60 mt-0.5">
                                 Faculty: {l.teacherName || "Assigned Maestro"} · {l.durationMinutes} mins

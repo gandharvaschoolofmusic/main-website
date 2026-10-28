@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { Role } from "@prisma/client";
+import { Role, LessonStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { AdminStudentsManager, StudentRecord } from "./AdminStudentsManager";
 
@@ -11,6 +11,24 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
+    // 0. Auto-conclude scheduled lessons whose scheduled time has elapsed (> 30 mins ago)
+    const now = new Date();
+    try {
+      await db.lesson.updateMany({
+        where: {
+          status: LessonStatus.SCHEDULED,
+          startsAt: {
+            lt: new Date(now.getTime() - 30 * 60 * 1000),
+          },
+        },
+        data: {
+          status: LessonStatus.COMPLETED,
+        },
+      });
+    } catch (e) {
+      console.warn("[getCachedAdminStudentsData] auto-conclude failed:", e);
+    }
+
     // Run ALL queries in parallel for maximum speed
     const [dbStudents, dbCourses, dbTeachers] = await Promise.all([
       // 1. Fetch students with trimmed relational data

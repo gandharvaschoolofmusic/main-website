@@ -312,3 +312,17 @@ export async function toggleStudentAccessAction(
     return { success: false, error: "Could not update student login access." };
   }
 }
+
+// 7. Update Student Lesson Status
+export async function updateStudentLessonStatusAction(
+  lessonId: string,
+  newStatus: LessonStatus
+): Promise<StudentActionResponse> {
+  const { updateLessonStatusAdminAction } = await import("@/actions/admin");
+  const res = await updateLessonStatusAdminAction(lessonId, newStatus);
+  return {
+    success: res.success,
+    error: res.error,
+    message: res.message,
+  };
+}

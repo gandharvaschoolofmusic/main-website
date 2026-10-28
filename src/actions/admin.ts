@@ -23,7 +23,7 @@ import {
 } from "@prisma/client";
 import { hashPassword } from "@/lib/password";
 import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
 import { createNotification } from "@/actions/notifications";
@@ -1348,13 +1348,101 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
     });
 
     revalidatePath("/admin/lessons");
+    revalidatePath("/admin/students");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/student/dashboard");
+    try {
+      revalidateTag("admin-students", "max");
+      revalidateTag("students", "max");
+    } catch {}
 
     return { success: true };
   } catch (error) {
     logger.error({ error }, "Error cancelling lesson via admin");
     return { success: false, error: "Failed to cancel lesson." };
+  }
+}
+
+export async function updateLessonStatusAdminAction(
+  lessonId: string,
+  newStatus: LessonStatus
+): Promise<AdminActionResponse> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const lesson = await db.lesson.findUnique({
+      where: { id: lessonId },
+    });
+
+    if (!lesson) {
+      return { success: false, error: "Lesson not found." };
+    }
+
+    if (lesson.status === newStatus) {
+      return { success: true, message: `Lesson is already ${newStatus}.` };
+    }
+
+    await db.$transaction(async (tx) => {
+      // 1. Quota adjustment: If moving to CANCELLED from another status, restore session quota
+      if (newStatus === LessonStatus.CANCELLED && lesson.status !== LessonStatus.CANCELLED) {
+        if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
+          await tx.enrollment.update({
+            where: { id: lesson.enrollmentId },
+            data: { sessionsRemaining: { increment: 1 } },
+          });
+        } else if (lesson.lessonSource === LessonSource.TRIAL) {
+          await tx.studentTrialStatus.updateMany({
+            where: { studentId: lesson.studentId, lessonsUsed: { gt: 0 } },
+            data: { lessonsUsed: { decrement: 1 } },
+          });
+        }
+      }
+      // If moving away from CANCELLED, re-consume session quota if available
+      else if (lesson.status === LessonStatus.CANCELLED && newStatus !== LessonStatus.CANCELLED) {
+        if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
+          const enr = await tx.enrollment.findUnique({ where: { id: lesson.enrollmentId } });
+          if (enr && enr.sessionsRemaining > 0) {
+            await tx.enrollment.update({
+              where: { id: lesson.enrollmentId },
+              data: { sessionsRemaining: { decrement: 1 } },
+            });
+          }
+        } else if (lesson.lessonSource === LessonSource.TRIAL) {
+          await tx.studentTrialStatus.updateMany({
+            where: { studentId: lesson.studentId },
+            data: { lessonsUsed: { increment: 1 } },
+          });
+        }
+      }
+
+      // 2. Update lesson status
+      await tx.lesson.update({
+        where: { id: lessonId },
+        data: {
+          status: newStatus,
+          cancelledBy: newStatus === LessonStatus.CANCELLED ? "ADMIN" : null,
+          cancelledAt: newStatus === LessonStatus.CANCELLED ? new Date() : null,
+        },
+      });
+    });
+
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/lessons");
+    revalidatePath("/admin/enrollments");
+    revalidatePath("/teacher/dashboard");
+    revalidatePath("/student/dashboard");
+    try {
+      revalidateTag("admin-students", "max");
+      revalidateTag("students", "max");
+    } catch {}
+
+    return {
+      success: true,
+      message: `Lesson status successfully updated to ${newStatus}.`,
+    };
+  } catch (error) {
+    logger.error({ error, lessonId, newStatus }, "Error updating lesson status via admin");
+    return { success: false, error: "Failed to update lesson status." };
   }
 }
 
@@ -2541,6 +2629,222 @@ export async function adminRecordEnrollmentPaymentAction(input: {
     };
   }
 }
+
+// ─── 17. Lesson Recordings Management ──────────────────────────────────────────
+
+export async function syncRecordingToDriveAction(
+  recordingId: string,
+): Promise<AdminActionResponse<{ fileUrl: string; fileId: string }>> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const recording = await db.lessonRecording.findUnique({
+      where: { id: recordingId },
+      include: {
+        lesson: {
+          include: {
+            teacher: { select: { name: true } },
+            student: { select: { name: true } },
+          },
+        },
+      },
+    });
+
+    if (!recording) {
+      return { success: false, error: "Recording not found." };
+    }
+
+    if (recording.storageBackend === "GOOGLE_DRIVE" && recording.fileId) {
+      return {
+        success: true,
+        message: "Recording is already stored in Google Drive.",
+        data: { fileUrl: recording.fileUrl, fileId: recording.fileId },
+      };
+    }
+
+    const { uploadToDrive, isDriveConfigured } = await import("@/lib/google-drive");
+    const fs = await import("fs");
+    const path = await import("path");
+
+    if (!isDriveConfigured()) {
+      return {
+        success: false,
+        error: "Google Drive is not configured in environment or settings.",
+      };
+    }
+
+    // Determine local disk file path
+    const localFilePath = path.join(
+      process.cwd(),
+      "public",
+      recording.fileUrl.startsWith("/") ? recording.fileUrl.slice(1) : recording.fileUrl,
+    );
+
+    if (!fs.existsSync(localFilePath)) {
+      return {
+        success: false,
+        error: `Local recording file could not be found at: ${localFilePath}`,
+      };
+    }
+
+    const fileBuffer = fs.readFileSync(localFilePath);
+    const driveResult = await uploadToDrive(
+      fileBuffer,
+      recording.fileName,
+      "video/webm",
+      { preserveExactName: true },
+    );
+
+    // Update database record
+    await db.lessonRecording.update({
+      where: { id: recordingId },
+      data: {
+        fileUrl: driveResult.fileUrl,
+        fileId: driveResult.fileId,
+        storageBackend: "GOOGLE_DRIVE",
+      },
+    });
+
+    // Update lesson
+    await db.lesson.update({
+      where: { id: recording.lessonId },
+      data: {
+        recordingUrl: driveResult.fileUrl,
+        recordingFileId: driveResult.fileId,
+      },
+    });
+
+    if (recording.lesson.groupRoomId) {
+      await db.lesson.updateMany({
+        where: { groupRoomId: recording.lesson.groupRoomId },
+        data: {
+          recordingUrl: driveResult.fileUrl,
+          recordingFileId: driveResult.fileId,
+        },
+      });
+    }
+
+    // Optionally remove local file now that it's in Drive
+    try {
+      fs.unlinkSync(localFilePath);
+    } catch {
+      // Non-fatal if local unlinking fails
+    }
+
+    revalidateTag("admin-recordings", "max");
+    revalidateTag("admin-lessons", "max");
+    revalidatePath("/admin/recordings");
+    revalidatePath("/admin/lessons");
+
+    return {
+      success: true,
+      message: "Recording successfully synced to Google Drive.",
+      data: { fileUrl: driveResult.fileUrl, fileId: driveResult.fileId },
+    };
+  } catch (error) {
+    logger.error({ error, recordingId }, "Failed to sync recording to Google Drive");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to sync recording to Drive.",
+    };
+  }
+}
+
+export async function deleteRecordingAdminAction(
+  recordingId: string,
+): Promise<AdminActionResponse> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const recording = await db.lessonRecording.findUnique({
+      where: { id: recordingId },
+      include: { lesson: true },
+    });
+
+    if (!recording) {
+      return { success: false, error: "Recording not found." };
+    }
+
+    // Delete from Google Drive if stored there
+    if (recording.fileId) {
+      try {
+        const { deleteFromDrive } = await import("@/lib/google-drive");
+        await deleteFromDrive(recording.fileId);
+      } catch (e) {
+        logger.warn({ error: e, fileId: recording.fileId }, "Could not delete from Drive");
+      }
+    }
+
+    // Delete from local disk if stored locally
+    if (recording.storageBackend === "LOCAL" && recording.fileUrl) {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const localFilePath = path.join(
+          process.cwd(),
+          "public",
+          recording.fileUrl.startsWith("/") ? recording.fileUrl.slice(1) : recording.fileUrl,
+        );
+        if (fs.existsSync(localFilePath)) {
+          fs.unlinkSync(localFilePath);
+        }
+      } catch (e) {
+        logger.warn({ error: e, fileUrl: recording.fileUrl }, "Could not delete local file");
+      }
+    }
+
+    // Delete the database recording record
+    await db.lessonRecording.delete({
+      where: { id: recordingId },
+    });
+
+    // Update the lesson with the latest remaining recording (if any)
+    const remainingRecordings = await db.lessonRecording.findMany({
+      where: { lessonId: recording.lessonId },
+      orderBy: { createdAt: "desc" },
+    });
+
+    const latestRemaining = remainingRecordings[0] || null;
+    const remainingDuration = remainingRecordings.reduce(
+      (sum, r) => sum + (r.durationSeconds || 0),
+      0,
+    );
+
+    await db.lesson.update({
+      where: { id: recording.lessonId },
+      data: {
+        recordingUrl: latestRemaining?.fileUrl || null,
+        recordingFileId: latestRemaining?.fileId || null,
+        recordingDurationSeconds: latestRemaining ? remainingDuration : null,
+      },
+    });
+
+    if (recording.lesson.groupRoomId) {
+      await db.lesson.updateMany({
+        where: { groupRoomId: recording.lesson.groupRoomId },
+        data: {
+          recordingUrl: latestRemaining?.fileUrl || null,
+          recordingFileId: latestRemaining?.fileId || null,
+          recordingDurationSeconds: latestRemaining ? remainingDuration : null,
+        },
+      });
+    }
+
+    revalidateTag("admin-recordings", "max");
+    revalidateTag("admin-lessons", "max");
+    revalidatePath("/admin/recordings");
+    revalidatePath("/admin/lessons");
+
+    return { success: true, message: "Recording deleted successfully." };
+  } catch (error) {
+    logger.error({ error, recordingId }, "Failed to delete recording");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to delete recording.",
+    };
+  }
+}
+
 
 
 
