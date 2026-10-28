@@ -2,6 +2,8 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useChat } from "@livekit/components-react";
+import { X, Send } from "lucide-react";
+import { RoomIconButton } from "./MeetPrimitives";
 
 interface LessonChatProps {
   isOpen: boolean;
@@ -72,19 +74,19 @@ function checkPIIViolation(text: string): string | null {
   return null;
 }
 
-const QUICK_EMOJIS = ["👏", "🎵", "👍", "🌟", "🔥", "🙏"];
+
 
 export function LessonChat({
   isOpen,
   onClose,
-  isTeacher,
+
   participantName,
   onNewMessage,
 }: LessonChatProps) {
   const { chatMessages, send, isSending } = useChat();
   const [inputText, setInputText] = useState("");
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
-  const [isWarningShaking, setIsWarningShaking] = useState(false);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const lastMsgCountRef = useRef(chatMessages.length);
@@ -104,10 +106,11 @@ export function LessonChat({
   // Focus input when opened
   useEffect(() => {
     if (isOpen) {
-      setTimeout(() => {
+      const timeout = setTimeout(() => {
         inputRef.current?.focus();
+        setSafetyWarning(null);
       }, 150);
-      setSafetyWarning(null);
+      return () => clearTimeout(timeout);
     }
   }, [isOpen]);
 
@@ -151,8 +154,8 @@ export function LessonChat({
       setSafetyWarning(
         `🛡️ Message blocked: Cannot share ${violation}. Personal contact details are not permitted in lesson chat.`,
       );
-      setIsWarningShaking(true);
-      setTimeout(() => setIsWarningShaking(false), 600);
+
+
       inputRef.current?.focus();
       return;
     }
@@ -167,9 +170,7 @@ export function LessonChat({
     }
   };
 
-  const handleQuickReaction = (emoji: string) => {
-    send(emoji).catch((err) => console.error("Reaction failed:", err));
-  };
+
 
   const formatTime = (timestamp: number) => {
     const date = new Date(timestamp);
@@ -179,187 +180,24 @@ export function LessonChat({
   if (!isOpen) return null;
 
   return (
-    <aside
-      aria-label="Live Lesson Chat"
-      className="absolute top-0 right-0 bottom-0 z-40 w-full sm:w-92 md:w-96 bg-[#160A29]/98 backdrop-blur-xl flex flex-col shadow-2xl animate-in slide-in-from-right duration-200 text-stone-100 border-0"
-    >
-      {/* Top Header */}
-      <div className="flex items-center justify-between px-4 py-3.5 bg-[#10061E]/90 border-0 flex-shrink-0">
-        <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-xl bg-primary/30 border-0 flex items-center justify-center text-base shadow-sm">
-            💬
-          </div>
-          <div>
-            <div className="flex items-center gap-1.5">
-              <h3 className="font-serif font-bold text-sm text-white leading-tight">
-                Studio Lesson Chat
-              </h3>
-              <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-            </div>
-            <p className="text-[10px] text-accent font-mono font-medium">
-              Live Secure Channel
-            </p>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={onClose}
-          className="p-1.5 rounded-lg text-stone-400 hover:text-white hover:bg-[#2A124A] border-0 transition-all cursor-pointer active:scale-95"
-          title="Close Chat"
-        >
-          ✕
-        </button>
+    <aside className="meet-panel meet-chat" aria-label="In-call messages">
+      <header className="meet-panel-header"><h2>In-call messages</h2><RoomIconButton label="Close messages" onClick={onClose}><X/></RoomIconButton></header>
+      <div className="meet-chat-notice"><strong>Messages are visible to everyone in this call</strong>Messages are only available during the call. Personal contact details and external links remain restricted.</div>
+      <div className="meet-chat-messages" role="log" aria-live="polite" aria-label="Messages">
+        {chatMessages.length === 0 ? <p className="meet-chat-empty">Send a message to start the conversation.</p> : chatMessages.map((message, index) => (
+          <article key={`${message.timestamp}-${index}`} className="meet-chat-message">
+            <header><strong>{!message.from || message.from.isLocal ? "You" : message.from.name || participantName}</strong><time>{formatTime(message.timestamp)}</time></header>
+            <p>{message.message}</p>
+          </article>
+        ))}
+        <div ref={messagesEndRef}/>
       </div>
-
-      {/* Safety Policy Info Banner */}
-      <div className="px-3.5 py-2 bg-[#10061E]/70 border-0 flex items-center gap-2 text-[10.5px] text-stone-400">
-        <span className="text-accent font-bold flex-shrink-0">🛡️</span>
-        <span className="leading-snug">
-          Safety Protected: Sharing phone numbers, emails, social handles, or external links is blocked.
-        </span>
-      </div>
-
-      {/* Messages Scroll Area */}
-      <div className="flex-1 p-3.5 overflow-y-auto space-y-3 min-h-0">
-        {chatMessages.length === 0 ? (
-          <div className="h-full flex flex-col items-center justify-center text-center p-6 text-stone-400 space-y-2">
-            <span className="text-3xl">🎵</span>
-            <p className="text-xs font-serif font-bold text-stone-200">
-              Welcome to the Studio Chat!
-            </p>
-            <p className="text-[11px] text-stone-400 leading-relaxed max-w-[220px]">
-              Ask questions about ragas, notes, finger positions, or request sheet reviews during your lesson.
-            </p>
-          </div>
-        ) : (
-          chatMessages.map((msg, index) => {
-            const isSelf = !msg.from || msg.from.isLocal;
-            const senderName = isSelf
-              ? "You"
-              : msg.from?.name || participantName || "Partner";
-            const role = isSelf
-              ? isTeacher
-                ? "Teacher"
-                : "Student"
-              : isTeacher
-              ? "Student"
-              : "Teacher";
-
-            return (
-              <div
-                key={msg.timestamp || index}
-                className={`flex flex-col ${isSelf ? "items-end" : "items-start"} space-y-1`}
-              >
-                {/* Sender name + Role badge + Timestamp */}
-                <div className="flex items-center gap-1.5 text-[10px] px-1">
-                  <span className="font-semibold text-stone-300">{senderName}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full font-mono text-[9px] font-bold border-0 ${
-                      role === "Teacher"
-                        ? "bg-accent/15 text-accent"
-                        : "bg-cta/20 text-purple-300"
-                    }`}
-                  >
-                    {role}
-                  </span>
-                  <span className="text-stone-500 font-mono">
-                    {formatTime(msg.timestamp)}
-                  </span>
-                </div>
-
-                {/* Message Bubble */}
-                <div
-                  className={`max-w-[85%] px-3.5 py-2 rounded-2xl text-xs sm:text-[13px] leading-relaxed break-words shadow-md border-0 ${
-                    isSelf
-                      ? "bg-gradient-to-r from-cta to-cta-hover text-white rounded-tr-none shadow-cta/25"
-                      : "bg-[#241040] text-stone-100 rounded-tl-none shadow-black/40"
-                  }`}
-                >
-                  {msg.message}
-                </div>
-              </div>
-            );
-          })
-        )}
-        <div ref={messagesEndRef} />
-      </div>
-
-      {/* Quick Reactions Bar */}
-      <div className="px-3.5 py-1.5 bg-[#10061E]/60 border-0 flex items-center justify-between gap-1 flex-shrink-0">
-        <span className="text-[10px] font-mono text-stone-400 font-semibold">Quick:</span>
-        <div className="flex items-center gap-1">
-          {QUICK_EMOJIS.map((emoji) => (
-            <button
-              key={emoji}
-              type="button"
-              onClick={() => handleQuickReaction(emoji)}
-              className="p-1 text-sm hover:scale-125 transition-transform cursor-pointer rounded hover:bg-[#2A124A] active:scale-95 border-0"
-              title={`Send ${emoji}`}
-            >
-              {emoji}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Safety Warning Notification */}
-      {safetyWarning && (
-        <div
-          className={`mx-3.5 mb-2 px-3 py-2 rounded-xl bg-rose-950/80 border-0 text-rose-200 text-xs shadow-lg flex items-start gap-2 backdrop-blur-md transition-all ${
-            isWarningShaking ? "animate-bounce" : ""
-          }`}
-        >
-          <span className="text-rose-400 font-bold text-sm">⚠️</span>
-          <div className="flex-1 leading-snug">
-            <p className="font-semibold">{safetyWarning}</p>
-          </div>
-          <button
-            type="button"
-            onClick={() => setSafetyWarning(null)}
-            className="text-rose-400 hover:text-white text-xs p-0.5 cursor-pointer"
-          >
-            ✕
-          </button>
-        </div>
-      )}
-
-      {/* Input Form */}
-      <form
-        onSubmit={handleSendMessage}
-        className="p-3 bg-[#10061E]/95 border-0 flex-shrink-0 space-y-1.5"
-      >
-        <div className="flex items-center gap-2">
-          <input
-            ref={inputRef}
-            type="text"
-            value={inputText}
-            onChange={handleInputChange}
-            placeholder={
-              isTeacher ? "Message student..." : "Ask your teacher a question..."
-            }
-            maxLength={500}
-            className="flex-1 bg-[#241040] text-stone-100 placeholder-stone-400 text-xs sm:text-sm px-3.5 py-2.5 rounded-xl border-0 ring-1 ring-white/10 outline-none focus:ring-2 focus:ring-cta/50 transition-all"
-          />
-
-          <button
-            type="submit"
-            disabled={!inputText.trim() || isSending || !!safetyWarning}
-            className={`px-4 py-2.5 rounded-xl font-bold text-xs transition-all flex items-center justify-center cursor-pointer active:scale-95 shadow-md border-0 ${
-              !inputText.trim() || isSending || !!safetyWarning
-                ? "bg-[#241040] text-stone-500 cursor-not-allowed opacity-60"
-                : "bg-cta hover:bg-cta-hover text-white shadow-lg shadow-cta/30"
-            }`}
-          >
-            {isSending ? "..." : "Send"}
-          </button>
-        </div>
-
-        <div className="flex items-center justify-between text-[10px] text-stone-400 px-1 font-mono">
-          <span>Protected Live Channel</span>
-          <span>{inputText.length}/500</span>
-        </div>
+      {safetyWarning && <div className="meet-chat-warning" role="alert"><span>{safetyWarning}</span><RoomIconButton label="Dismiss message warning" onClick={() => setSafetyWarning(null)}><X size={16}/></RoomIconButton></div>}
+      <form className="meet-chat-compose" onSubmit={handleSendMessage}>
+        <input ref={inputRef} aria-label="Send a message" value={inputText} onChange={handleInputChange} placeholder="Send a message" maxLength={500}/>
+        <button type="submit" className="meet-icon-button" aria-label="Send message" disabled={!inputText.trim() || isSending || !!safetyWarning}><Send size={21}/></button>
       </form>
     </aside>
   );
 }
+

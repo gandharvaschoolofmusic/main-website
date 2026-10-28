@@ -119,24 +119,22 @@ export function MultiCameraModal({
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 overflow-y-auto animate-in fade-in duration-200">
       <div
-        className="relative w-full max-w-3xl overflow-hidden rounded-3xl bg-[#140A26] border-0 shadow-2xl text-stone-100 flex flex-col my-auto max-h-[92vh]"
+        className="relative w-full max-w-3xl overflow-hidden rounded-3xl bg-[#202124] border-0 shadow-2xl text-stone-100 flex flex-col my-auto max-h-[92vh]"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* Top Accent Gradient Bar */}
-        <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
 
         {/* Modal Header */}
         <div className="px-5 sm:px-7 pt-6 pb-4 border-0 flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-gradient-to-br from-primary to-cta text-white flex items-center justify-center shadow-lg shadow-primary/30">
+            <div className="w-10 h-10 rounded-2xl bg-[#1a73e8] text-white flex items-center justify-center shadow-lg shadow-primary/30">
               <Camera className="w-5 h-5 text-white" />
             </div>
             <div>
               <div className="flex items-center gap-2">
-                <h2 className="font-serif text-lg sm:text-xl font-bold text-white tracking-tight">
-                  Studio Multi-Camera Director
+                <h2 className="text-lg sm:text-xl font-medium text-white tracking-tight">
+                  Multi-camera studio
                 </h2>
-                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cta/20 text-cta border-0">
+                <span className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-cta/20 text-[#a8c7fa] border-0">
                   Dual Angle
                 </span>
               </div>
@@ -149,7 +147,8 @@ export function MultiCameraModal({
           <button
             type="button"
             onClick={onClose}
-            className="w-8 h-8 rounded-full bg-[#20103B] hover:bg-[#2F1757] text-stone-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+            aria-label="Close multi-camera studio"
+            className="w-8 h-8 rounded-full bg-[#303134] hover:bg-[#44474b] text-stone-300 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
           >
             <X className="w-4 h-4" />
           </button>
@@ -168,12 +167,12 @@ export function MultiCameraModal({
           {/* Dual Camera Cards Grid */}
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-5">
             {/* ─── CARD 1: PRIMARY CAMERA (FACE / POSTURE) ──────────────────── */}
-            <div className="rounded-2xl bg-[#1B0D33]/90 border-0 p-4 space-y-3.5 flex flex-col justify-between shadow-lg">
+            <div className="rounded-2xl bg-[#303134] border-0 p-4 space-y-3.5 flex flex-col justify-between shadow-lg">
               <div>
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold uppercase tracking-wider text-purple-300 flex items-center gap-1.5">
-                      <Camera className="w-3.5 h-3.5 text-cta" />
+                    <span className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-1.5">
+                      <Camera className="w-3.5 h-3.5 text-[#a8c7fa]" />
                       Camera 1 (Primary)
                     </span>
                   </div>
@@ -192,8 +191,8 @@ export function MultiCameraModal({
                     className="w-full h-full object-cover scale-x-[-1]"
                   />
                   {(!primaryTrack || !primaryTrack.mediaStreamTrack) && (
-                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#150B28]/90 text-stone-400 p-2 text-center">
-                      <Camera className="w-5 h-5 mb-1 text-purple-400 opacity-60" />
+                    <div className="absolute inset-0 flex flex-col items-center justify-center bg-[#202124] text-stone-400 p-2 text-center">
+                      <Camera className="w-5 h-5 mb-1 text-[#a8c7fa] opacity-60" />
                       <p className="text-[11px] font-medium text-stone-300">Camera 1</p>
                       <p className="text-[10px] text-stone-500">Live in Room</p>
                     </div>
@@ -214,10 +213,10 @@ export function MultiCameraModal({
                     onChange={(e) => {
                       onPrimaryDeviceSwitch(e.target.value);
                     }}
-                    className="w-full rounded-xl bg-[#251245] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
+                    className="w-full rounded-xl bg-[#3c4043] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
                   >
                     {availableCameras.map((cam, idx) => (
-                      <option key={cam.deviceId} value={cam.deviceId} className="bg-[#1A0B2E]">
+                      <option key={cam.deviceId} value={cam.deviceId} className="bg-[#202124]">
                         {cam.label || `Camera Device ${idx + 1}`}
                       </option>
                     ))}
@@ -232,10 +231,10 @@ export function MultiCameraModal({
                   <select
                     value={primaryAnglePreset}
                     onChange={(e) => setPrimaryAnglePreset(e.target.value as CameraAnglePreset)}
-                    className="w-full rounded-xl bg-[#251245] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
+                    className="w-full rounded-xl bg-[#3c4043] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
                   >
                     {CAMERA_ANGLE_PRESETS.map((p) => (
-                      <option key={p.id} value={p.id} className="bg-[#1A0B2E]">
+                      <option key={p.id} value={p.id} className="bg-[#202124]">
                         {p.icon} {p.label}
                       </option>
                     ))}
@@ -252,14 +251,14 @@ export function MultiCameraModal({
             <div
               className={`rounded-2xl border-0 p-4 space-y-3.5 flex flex-col justify-between shadow-lg transition-all ${
                 isSecondaryCameraActive
-                  ? "bg-[#1E0D38] shadow-cta/20"
-                  : "bg-[#160B29]/70 opacity-90"
+                  ? "bg-[#303134] shadow-cta/20"
+                  : "bg-[#303134] opacity-90"
               }`}
             >
               <div>
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-bold uppercase tracking-wider text-accent flex items-center gap-1.5">
-                    <Layers className="w-3.5 h-3.5 text-accent" />
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#a8c7fa] flex items-center gap-1.5">
+                    <Layers className="w-3.5 h-3.5 text-[#a8c7fa]" />
                     Camera 2 (Instrument / Hands)
                   </span>
 
@@ -271,7 +270,7 @@ export function MultiCameraModal({
                     className={`btn-tactile px-3 py-1 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs ${
                       isSecondaryCameraActive
                         ? "bg-rose-600 hover:bg-rose-500 text-white shadow-rose-900/30"
-                        : "bg-gradient-to-r from-primary via-cta to-accent text-white shadow-primary/30"
+                        : "bg-[#1a73e8] text-white shadow-primary/30"
                     }`}
                   >
                     {isStartingSecondary ? (
@@ -304,7 +303,7 @@ export function MultiCameraModal({
                     />
                   ) : (
                     <div className="text-center p-3 space-y-1 text-stone-400">
-                      <Layers className="w-6 h-6 mx-auto text-purple-400 opacity-60" />
+                      <Layers className="w-6 h-6 mx-auto text-[#a8c7fa] opacity-60" />
                       <p className="text-[11px] font-medium">Secondary camera is off</p>
                       <p className="text-[10px] text-stone-500">
                         Click &quot;Enable&quot; above to broadcast overhead or instrument view
@@ -313,7 +312,7 @@ export function MultiCameraModal({
                   )}
 
                   {isSecondaryCameraActive && (
-                    <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-accent">
+                    <div className="absolute top-2 left-2 bg-black/70 backdrop-blur-md px-2 py-0.5 rounded-md text-[10px] font-mono text-[#a8c7fa]">
                       {CAMERA_ANGLE_PRESETS.find((p) => p.id === secondaryAnglePreset)?.icon}{" "}
                       {CAMERA_ANGLE_PRESETS.find((p) => p.id === secondaryAnglePreset)?.shortLabel}
                     </div>
@@ -330,7 +329,7 @@ export function MultiCameraModal({
                       <button
                         type="button"
                         onClick={() => refreshDevices && refreshDevices()}
-                        className="text-[10px] text-accent hover:text-white font-mono flex items-center gap-1 cursor-pointer transition-colors border-0"
+                        className="text-[10px] text-[#a8c7fa] hover:text-white font-mono flex items-center gap-1 cursor-pointer transition-colors border-0"
                         title="Rescan video devices"
                       >
                         <RefreshCw className="w-2.5 h-2.5" />
@@ -346,7 +345,7 @@ export function MultiCameraModal({
                   <select
                     value={secondaryCameraId}
                     onChange={(e) => switchSecondaryCamera(e.target.value)}
-                    className="w-full rounded-xl bg-[#251245] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
+                    className="w-full rounded-xl bg-[#3c4043] border-0 px-3 py-2 text-xs text-white focus:outline-none focus:ring-1 focus:ring-cta font-medium cursor-pointer"
                   >
                     {availableCameras.map((cam, idx) => {
                       const isInUse = cam.deviceId === primaryCameraId;
@@ -358,7 +357,7 @@ export function MultiCameraModal({
                         <option
                           key={cam.deviceId}
                           value={cam.deviceId}
-                          className="bg-[#1A0B2E]"
+                          className="bg-[#202124]"
                           disabled={isInUse}
                         >
                           {cam.label || `Camera Device ${idx + 1}`}
@@ -367,7 +366,7 @@ export function MultiCameraModal({
                         </option>
                       );
                     })}
-                    <option value={DEMO_CAMERA_DEVICE_ID} className="bg-[#1A0B2E] text-amber-300">
+                    <option value={DEMO_CAMERA_DEVICE_ID} className="bg-[#202124] text-amber-300">
                       🎹 Studio Overhead Angle (Simulated Multi-Cam Demo)
                     </option>
                   </select>
@@ -388,8 +387,8 @@ export function MultiCameraModal({
                           onClick={() => setSecondaryAnglePreset(preset.id)}
                           className={`btn-tactile py-1.5 px-2 rounded-xl text-[11px] font-medium text-left flex items-center gap-1.5 transition-all cursor-pointer border-0 ${
                             isSelected
-                              ? "bg-cta text-white shadow-xs font-bold"
-                              : "bg-[#251245]/70 hover:bg-[#251245] text-stone-300"
+                              ? "bg-[#1a73e8] text-white shadow-xs font-bold"
+                              : "bg-[#3c4043]/70 hover:bg-[#3c4043] text-stone-300"
                           }`}
                         >
                           <span>{preset.icon}</span>
@@ -408,8 +407,8 @@ export function MultiCameraModal({
                     onClick={() => setIsMirroredSecondary((prev) => !prev)}
                     className={`btn-tactile px-2.5 py-1 rounded-lg text-[11px] font-semibold flex items-center gap-1 cursor-pointer transition-colors border-0 ${
                       isMirroredSecondary
-                        ? "bg-accent/20 text-accent"
-                        : "bg-[#251245] text-stone-400"
+                        ? "bg-accent/20 text-[#a8c7fa]"
+                        : "bg-[#3c4043] text-stone-400"
                     }`}
                   >
                     <FlipHorizontal className="w-3 h-3" />
@@ -425,10 +424,10 @@ export function MultiCameraModal({
           </div>
 
           {/* ─── STAGE LAYOUT & MULTI-VIEW SETTINGS ─────────────────────────── */}
-          <div className="rounded-2xl bg-[#1B0D33]/90 border-0 p-4 space-y-3 shadow-lg">
+          <div className="rounded-2xl bg-[#303134] border-0 p-4 space-y-3 shadow-lg">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Sliders className="w-4 h-4 text-cta" />
+                <Sliders className="w-4 h-4 text-[#a8c7fa]" />
                 <span className="text-xs font-bold uppercase tracking-wider text-stone-200">
                   Stage Multi-View Layout
                 </span>
@@ -436,10 +435,10 @@ export function MultiCameraModal({
               <button
                 type="button"
                 onClick={swapAngles}
-                className="btn-tactile px-2.5 py-1 rounded-xl bg-[#251245] hover:bg-[#341A5E] text-stone-200 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs border-0"
+                className="btn-tactile px-2.5 py-1 rounded-xl bg-[#3c4043] hover:bg-[#341A5E] text-stone-200 hover:text-white text-xs font-semibold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs border-0"
                 title="Swap primary and secondary angle roles"
               >
-                <ArrowRightLeft className="w-3.5 h-3.5 text-accent" />
+                <ArrowRightLeft className="w-3.5 h-3.5 text-[#a8c7fa]" />
                 <span>Swap Angle Roles</span>
               </button>
             </div>
@@ -451,13 +450,13 @@ export function MultiCameraModal({
                 className={`btn-tactile p-3 rounded-xl border-0 text-left transition-all cursor-pointer ${
                   layoutMode === "SIDE_BY_SIDE"
                     ? "bg-cta/25 text-white shadow-md shadow-cta/20"
-                    : "bg-[#251245]/60 text-stone-300 hover:bg-[#251245]"
+                    : "bg-[#3c4043]/60 text-stone-300 hover:bg-[#3c4043]"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold">Side-by-Side Dual View (50/50)</span>
                   {layoutMode === "SIDE_BY_SIDE" && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-cta shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#a8c7fa] shrink-0" />
                   )}
                 </div>
                 <p className="text-[11px] text-stone-400 leading-snug">
@@ -471,13 +470,13 @@ export function MultiCameraModal({
                 className={`btn-tactile p-3 rounded-xl border-0 text-left transition-all cursor-pointer ${
                   layoutMode === "PIP"
                     ? "bg-cta/25 text-white shadow-md shadow-cta/20"
-                    : "bg-[#251245]/60 text-stone-300 hover:bg-[#251245]"
+                    : "bg-[#3c4043]/60 text-stone-300 hover:bg-[#3c4043]"
                 }`}
               >
                 <div className="flex items-center justify-between mb-1">
                   <span className="text-xs font-bold">Picture-in-Picture (PiP Inset)</span>
                   {layoutMode === "PIP" && (
-                    <CheckCircle2 className="w-3.5 h-3.5 text-cta shrink-0" />
+                    <CheckCircle2 className="w-3.5 h-3.5 text-[#a8c7fa] shrink-0" />
                   )}
                 </div>
                 <p className="text-[11px] text-stone-400 leading-snug">
@@ -502,7 +501,7 @@ export function MultiCameraModal({
           <button
             type="button"
             onClick={onClose}
-            className="btn-tactile px-5 py-2 rounded-xl bg-gradient-to-r from-primary via-cta to-accent hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-primary/30 transition-all cursor-pointer active:scale-95"
+            className="btn-tactile px-5 py-2 rounded-xl bg-[#1a73e8] hover:opacity-95 text-white text-xs font-bold shadow-lg shadow-primary/30 transition-all cursor-pointer active:scale-95"
           >
             Apply & Return to Classroom
           </button>

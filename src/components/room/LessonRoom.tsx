@@ -1,8 +1,8 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef } from "react";
+import { useEffect, useState, useRef } from "react";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+
 import {
   LiveKitRoom,
   RoomAudioRenderer,
@@ -13,17 +13,15 @@ import {
   DisconnectReason,
   LocalAudioTrack,
   LocalTrackPublication,
-  Room,
   RoomEvent,
   Track,
 } from "livekit-client";
 import { AudioMode, switchLocalAudioMode } from "@/lib/audio-engine";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
-import { StageVideoLayout } from "./StageVideoLayout";
-import { RoomControls } from "./RoomControls";
-import { TurnTakingControls, TurnTakingState } from "./TurnTakingControls";
-import { ConnectionQualityBadge } from "./ConnectionQualityBadge";
-import { LessonChat } from "./LessonChat";
+import { MeetRoomUI } from "./MeetRoomUI";
+
+import { TurnTakingState } from "./TurnTakingControls";
+
 import { getSyncedInternetTime } from "@/lib/synced-time";
 import { useMultiCamera } from "@/hooks/useMultiCamera";
 import { MultiCameraModal } from "./MultiCameraModal";
@@ -77,7 +75,7 @@ export function LessonRoom(props: LessonRoomProps) {
   };
 
   return (
-    <div className="fixed inset-0 bg-[#0E0C18] text-stone-100 flex flex-col z-50 overflow-hidden select-none">
+    <div className="fixed inset-0 bg-[#111111] text-stone-100 flex flex-col z-50 overflow-hidden">
       <LiveKitRoom
         token={token}
         serverUrl={serverUrl}
@@ -191,7 +189,6 @@ export function LessonRoom(props: LessonRoomProps) {
   );
 }
 
-
 function LessonRoomContent({
   lesson,
   initialConfig,
@@ -202,7 +199,6 @@ function LessonRoomContent({
   onLeave: () => void;
 }) {
   const room = useRoomContext();
-  const router = useRouter();
 
   // Reference to manually managed local audio track to guarantee track.stop() on teardown
   const currentAudioTrackRef = useRef<LocalAudioTrack | null>(null);
@@ -235,9 +231,6 @@ function LessonRoomContent({
   const multiCam = useMultiCamera(room, isVideoOff);
   const [isMultiCamModalOpen, setIsMultiCamModalOpen] = useState(false);
 
-  const [isChatOpen, setIsChatOpen] = useState(false);
-  const [unreadChatCount, setUnreadChatCount] = useState(0);
-
   // Automatic silent lesson recording (optimized for zero server lag, saves to Google Drive)
   const autoRecorder = useLessonAutoRecorder({
     room,
@@ -246,14 +239,6 @@ function LessonRoomContent({
     partnerName: lesson.partnerName,
     instrument: lesson.instrument,
   });
-
-  const handleNewChatMessage = useCallback((count: number) => {
-    if (count === 0) {
-      setUnreadChatCount(0);
-    } else {
-      setUnreadChatCount((prev) => prev + count);
-    }
-  }, []);
 
   // Lesson timer
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
@@ -287,7 +272,6 @@ function LessonRoomContent({
     }, 1000);
     return () => clearInterval(interval);
   }, [lesson.endsAt]);
-
 
   // 3. Initialize Audio Track with specified constraints
   const initializedAudioRef = useRef(false);
@@ -533,137 +517,41 @@ function LessonRoomContent({
   const timeFormatted = `${minutes}:${seconds.toString().padStart(2, "0")}`;
 
   return (
-    <div className="w-full h-full flex flex-col justify-between overflow-hidden">
-      {/* Top Header Bar */}
-      <header className="h-14 bg-[#0E0C18]/95 backdrop-blur-md px-3 sm:px-4 flex items-center justify-between flex-shrink-0 z-30 shadow-md shadow-black/40">
-        {/* Left: Brand + Lesson Metadata */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          <div className="flex items-center">
-            <Image
-              src="/cropped-Add-a-subheading-5-png-scaled.webp"
-              alt="Gandharva School of Music"
-              width={140}
-              height={36}
-              className="h-7 sm:h-8 w-auto object-contain"
-              priority
-            />
-          </div>
-
-          <div className="h-4 w-px bg-purple-900/30 hidden sm:block" />
-
-          <div className="flex items-center gap-1.5 sm:gap-2 text-xs">
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-500/15 text-amber-300 font-bold text-[11px] shadow-sm">
-              {lesson.instrument}
-            </span>
-
-            {/* Trial vs Course badge */}
-            {lesson.lessonSource?.toLowerCase().includes("trial") ? (
-              <span className="px-2.5 py-0.5 rounded-full bg-accent/15 text-accent font-bold uppercase tracking-wider text-[10px] hidden sm:inline-flex items-center gap-1 border-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
-                Free Trial
-              </span>
-            ) : (
-              <span className="px-2.5 py-0.5 rounded-full bg-primary/25 text-purple-300 font-bold uppercase tracking-wider text-[10px] hidden sm:inline-flex items-center gap-1 border-0">
-                <span className="w-1.5 h-1.5 rounded-full bg-cta" />
-                Course Lesson
-              </span>
-            )}
-
-            <span className="font-serif font-bold text-stone-200 text-xs hidden md:inline truncate max-w-[180px]">
-              with {lesson.partnerName}
-            </span>
-          </div>
-        </div>
-
-        {/* Center: Turn Taking Pedagogy Controls */}
-        <div className="flex items-center">
-          <TurnTakingControls
-            isTeacher={lesson.isTeacher}
-            activeState={activeFloorState}
-            onStateChange={setActiveFloorState}
-          />
-        </div>
-
-        {/* Right: Timer & Connection Quality */}
-        <div className="flex items-center gap-2 sm:gap-3">
-          {/* Countdown Clock */}
-          <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-[#241040] border-0 text-xs font-mono shadow-xs">
-            <span className="text-accent font-bold">⏱</span>
-            <span className="tabular-nums font-bold text-white">{timeFormatted}</span>
-          </div>
-
-          <ConnectionQualityBadge
-            quality={connectionQuality}
-            isReconnecting={isReconnecting}
-            onTurnOffVideo={() => handleToggleVideo()}
-          />
-        </div>
-      </header>
-
-      {/* Main Video Stage Area */}
-      <main className="relative flex-1 w-full overflow-hidden bg-[#0D0517]">
-        <StageVideoLayout
-          activeFloorState={activeFloorState}
-          isTeacher={lesson.isTeacher}
-          audioMode={audioMode}
-          availableCameras={availableCameras}
-          selectedCameraId={selectedCameraId}
-          onCameraDeviceSwitch={handleCameraDeviceSwitch}
-          multiCam={multiCam}
-        />
-
-        {/* Studio Multi-Camera Director Modal */}
-        <MultiCameraModal
-          isOpen={isMultiCamModalOpen}
-          onClose={() => setIsMultiCamModalOpen(false)}
-          multiCam={multiCam}
-          primaryTrack={
-            room?.localParticipant
-              ? Array.from(room.localParticipant.videoTrackPublications.values()).find(
-                  (pub) => pub.source === Track.Source.Camera && pub.trackName !== "secondary-camera",
-                )?.videoTrack
-              : null
-          }
-          onPrimaryDeviceSwitch={handleCameraDeviceSwitch}
-          isTeacher={lesson.isTeacher}
-        />
-
-        {/* Live Studio Safe Chat Panel */}
-        <LessonChat
-          isOpen={isChatOpen}
-          onClose={() => setIsChatOpen(false)}
-          isTeacher={lesson.isTeacher}
-          participantName={lesson.partnerName}
-          onNewMessage={handleNewChatMessage}
-        />
-      </main>
-
-      {/* Bottom Floating Control Bar */}
-      <footer className="p-2 sm:p-3 bg-[#160A29]/95 backdrop-blur-md border-0 shadow-2xl flex-shrink-0 z-30">
-        <RoomControls
-          isMuted={isMuted}
-          isVideoOff={isVideoOff}
-          isScreenSharing={isScreenSharing}
-          audioMode={audioMode}
-          isSwitchingAudioMode={isSwitchingAudioMode}
-          isMultiCamActive={multiCam.isSecondaryCameraActive}
-          onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
-          isChatOpen={isChatOpen}
-          unreadChatCount={unreadChatCount}
-          onToggleMic={handleToggleMic}
-          onToggleVideo={handleToggleVideo}
-          onToggleScreenShare={handleToggleScreenShare}
-          onSwitchAudioMode={handleSwitchAudioMode}
-          onToggleChat={() => {
-            setIsChatOpen((o) => {
-              const next = !o;
-              if (next) setUnreadChatCount(0);
-              return next;
-            });
-          }}
-          onLeave={handleLeaveRoom}
-        />
-      </footer>
-    </div>
+    <MeetRoomUI
+      lesson={lesson}
+      audioMode={audioMode}
+      isSwitchingAudioMode={isSwitchingAudioMode}
+      isMuted={isMuted}
+      isVideoOff={isVideoOff}
+      isScreenSharing={isScreenSharing}
+      activeFloorState={activeFloorState}
+      onFloorChange={setActiveFloorState}
+      connectionQuality={connectionQuality}
+      isReconnecting={isReconnecting}
+      timeFormatted={timeFormatted}
+      availableCameras={availableCameras}
+      selectedCameraId={selectedCameraId}
+      audioDeviceId={initialConfig.audioDeviceId}
+      multiCam={multiCam}
+      onToggleMic={handleToggleMic}
+      onToggleVideo={handleToggleVideo}
+      onToggleScreenShare={handleToggleScreenShare}
+      onSwitchAudioMode={handleSwitchAudioMode}
+      onCameraDeviceSwitch={handleCameraDeviceSwitch}
+      onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
+      onLeave={handleLeaveRoom}
+    >
+      <MultiCameraModal
+        isOpen={isMultiCamModalOpen}
+        onClose={() => setIsMultiCamModalOpen(false)}
+        multiCam={multiCam}
+        primaryTrack={Array.from(room.localParticipant.videoTrackPublications.values()).find(
+          (publication) => publication.source === Track.Source.Camera && publication.trackName !== "secondary-camera",
+        )?.videoTrack}
+        onPrimaryDeviceSwitch={handleCameraDeviceSwitch}
+        isTeacher={lesson.isTeacher}
+      />
+    </MeetRoomUI>
   );
 }
+
