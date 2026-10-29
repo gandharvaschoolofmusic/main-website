@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
+
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import {
@@ -2749,11 +2751,9 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
 
               <div>
                 <label className="block font-semibold text-heading mb-1">Date & Time *</label>
-                <input
-                  type="datetime-local"
+                <DateTimePicker
                   name="datetime"
                   required
-                  className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-heading focus:outline-none focus:border-[#3C096C]"
                 />
               </div>
 

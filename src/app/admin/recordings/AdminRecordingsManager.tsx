@@ -29,6 +29,7 @@ import {
   Layers,
 } from "lucide-react";
 import {
+  syncRecordingToSupabaseAction,
   syncRecordingToDriveAction,
   deleteRecordingAdminAction,
 } from "@/actions/admin";
@@ -41,7 +42,7 @@ export interface RecordingFileItem {
   fileId: string | null;
   fileSizeBytes: number;
   durationSeconds: number | null;
-  storageBackend: "GOOGLE_DRIVE" | "LOCAL" | string;
+  storageBackend: "SUPABASE" | "LOCAL" | string;
   createdAt: string;
   formattedDate: string;
   partNumber?: number;
@@ -190,7 +191,7 @@ export function AdminRecordingsManager({
           l.recordings.forEach((r) => {
             totalRecordings++;
             totalSeconds += r.durationSeconds || 0;
-            if (r.storageBackend === "GOOGLE_DRIVE") {
+            if (r.storageBackend === "SUPABASE") {
               driveCount++;
             }
           });
@@ -262,10 +263,10 @@ export function AdminRecordingsManager({
   const handleSyncToDrive = (recordingId: string) => {
     setSyncingId(recordingId);
     startTransition(async () => {
-      const res = await syncRecordingToDriveAction(recordingId);
+      const res = await syncRecordingToSupabaseAction(recordingId);
       setSyncingId(null);
       if (!res.success) {
-        alert(res.error || "Failed to sync recording to Google Drive.");
+        alert(res.error || "Failed to sync recording to Supabase.");
       } else if (res.data) {
         setCourses((prevCourses) =>
           prevCourses.map((c) => ({
@@ -278,7 +279,7 @@ export function AdminRecordingsManager({
                   r.id === recordingId
                     ? {
                         ...r,
-                        storageBackend: "GOOGLE_DRIVE",
+                        storageBackend: "SUPABASE",
                         fileUrl: res.data!.fileUrl,
                         fileId: res.data!.fileId,
                       }
@@ -549,7 +550,7 @@ export function AdminRecordingsManager({
 
             <div className="p-4 sm:p-5 rounded-2xl bg-white border border-primary/10 shadow-xs space-y-1.5">
               <div className="flex items-center justify-between text-body">
-                <span className="text-xs font-medium">Drive Sync Vault</span>
+                <span className="text-xs font-medium">Supabase Vault</span>
                 <div className="w-7 h-7 rounded-lg bg-emerald-500/10 text-emerald-600 flex items-center justify-center">
                   <Cloud className="w-3.5 h-3.5" />
                 </div>
@@ -558,7 +559,7 @@ export function AdminRecordingsManager({
                 {globalStats.drivePercent}%
               </div>
               <p className="text-[11px] text-emerald-700 font-medium">
-                {driveStatus.accessible ? "Google Drive Connected" : "Local Disk Storage"}
+                {driveStatus.accessible ? "Supabase Cloud Connected" : "Local Disk Storage"}
               </p>
             </div>
           </div>
@@ -1003,7 +1004,7 @@ export function AdminRecordingsManager({
                   No Recordings Archived for This Session Yet
                 </h4>
                 <p className="text-xs text-body leading-relaxed">
-                  When the teacher and student conduct this lesson in the classroom, the video and mixed audio will automatically record. Once the instructor exits the room, the finalized recording will upload to Google Drive and appear here.
+                  When the teacher and student conduct this lesson in the classroom, the video and mixed audio will automatically record. Once the instructor exits the room, the finalized recording will upload to Supabase Cloud and appear here.
                 </p>
               </div>
               <button
@@ -1023,13 +1024,13 @@ export function AdminRecordingsManager({
                   Archived Session Recordings ({selectedSession.recordings.length})
                 </h3>
                 <span className="text-xs text-body-muted">
-                  Click &apos;Watch&apos; to view in high definition or open in Google Drive
+                  Click &apos;Watch&apos; to view in high definition or open in Supabase Cloud
                 </span>
               </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
                 {selectedSession.recordings.map((recording, idx) => {
-                  const isGoogleDrive = recording.storageBackend === "GOOGLE_DRIVE";
+                  const isSupabaseCloud = recording.storageBackend === "SUPABASE";
                   const isSyncing = syncingId === recording.id;
                   const isCopied = copiedId === recording.id;
 
@@ -1059,10 +1060,10 @@ export function AdminRecordingsManager({
 
                           {/* Storage Backend Badge */}
                           <div className="absolute bottom-2.5 left-3">
-                            {isGoogleDrive ? (
+                            {isSupabaseCloud ? (
                               <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1">
                                 <Cloud className="w-2.5 h-2.5" />
-                                Google Drive
+                                Supabase Cloud
                               </span>
                             ) : (
                               <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-950/80 text-amber-400 border border-amber-500/30 backdrop-blur-md flex items-center gap-1">
@@ -1114,13 +1115,13 @@ export function AdminRecordingsManager({
                           </button>
 
                           {/* Open in Drive */}
-                          {isGoogleDrive && recording.fileUrl && (
+                          {isSupabaseCloud && recording.fileUrl && (
                             <a
                               href={recording.fileUrl}
                               target="_blank"
                               rel="noreferrer"
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-bg-alt text-heading border border-primary/10 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer"
-                              title="Open in Google Drive"
+                              title="Open in Supabase Cloud"
                             >
                               <ExternalLink className="w-3 h-3" />
                               Drive
@@ -1128,16 +1129,16 @@ export function AdminRecordingsManager({
                           )}
 
                           {/* Sync to Drive button (if stored locally) */}
-                          {!isGoogleDrive && (
+                          {!isSupabaseCloud && (
                             <button
                               type="button"
                               onClick={() => handleSyncToDrive(recording.id)}
                               disabled={isSyncing || isPending}
                               className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/30 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                              title="Sync to Google Drive"
+                              title="Sync to Supabase Cloud"
                             >
                               <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin" : ""}`} />
-                              {isSyncing ? "Syncing..." : "Sync to Drive"}
+                              {isSyncing ? "Syncing..." : "Sync to Supabase"}
                             </button>
                           )}
 
@@ -1269,10 +1270,10 @@ export function AdminRecordingsManager({
               </div>
 
               <div className="flex items-center gap-2">
-                {playingRecording.storageBackend === "GOOGLE_DRIVE" ? (
+                {playingRecording.storageBackend === "SUPABASE" || playingRecording.storageBackend === "GOOGLE_DRIVE" ? (
                   <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-[11px]">
                     <Cloud className="w-3 h-3" />
-                    Stored in Google Drive (chat_storage)
+                    Stored in Supabase Cloud Storage
                   </span>
                 ) : (
                   <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-[11px]">

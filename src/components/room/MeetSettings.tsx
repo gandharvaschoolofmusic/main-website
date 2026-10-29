@@ -73,4 +73,3 @@ export function MeetSettings({ tab, setTab, onClose, audioMode, switchingAudio, 
     </div>
   </RoomDialog>;
 }
-

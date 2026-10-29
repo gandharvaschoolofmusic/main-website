@@ -1,0 +1,79 @@
+/* Form surfaces share the existing school identity; no global theme overrides. */
+.entry-page,.trial-page{--entry-line:#e5deec;--entry-muted:#625b70;--entry-soft:#f8f5fb;min-height:100dvh;background:#fff;color:var(--color-heading);font-family:var(--font-dm-sans),sans-serif;color-scheme:light;padding-top:80px}
+.entry-layout{display:grid;grid-template-columns:minmax(0,44fr) minmax(0,56fr);min-height:calc(100dvh - 80px);align-items:center}
+.entry-layout-signup{align-items:start}
+.entry-story{position:sticky;top:80px;align-self:start;height:calc(100dvh - 80px);overflow:hidden;background:var(--color-primary)}
+.entry-story img{object-fit:cover;object-position:center 42%}
+.entry-eyebrow{display:block;color:var(--color-accent-dark);font-size:12px;line-height:1.5;font-weight:700;letter-spacing:.06em;margin-bottom:16px}
+.entry-form-column{min-width:0;padding:56px clamp(32px,5vw,88px)}
+.entry-form{width:100%;max-width:520px;margin:auto}
+.entry-form-header{margin-bottom:28px}
+.entry-form-header h1,.entry-form-header h2{font-family:inherit;font-size:32px;line-height:1.2;letter-spacing:-1px;font-weight:600;color:var(--color-heading);margin:0 0 10px}
+.entry-form-header p{font-size:14px;line-height:1.65;color:var(--entry-muted);margin:0}
+.entry-footnote{display:flex;justify-content:center;align-items:center;gap:8px;color:var(--entry-muted);font-size:12px;margin:28px 0 0}
+.entry-segmented{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:4px;background:var(--entry-soft);border:1px solid var(--entry-line);border-radius:12px;margin-bottom:28px}
+.entry-segmented button{min-height:44px;border:1px solid transparent;border-radius:8px;display:flex;align-items:center;justify-content:center;gap:8px;font-size:14px;font-weight:600;color:var(--entry-muted);cursor:pointer}
+.entry-segmented button[aria-pressed=true]{background:white;border-color:var(--entry-line);color:var(--color-primary);box-shadow:0 1px 3px #3c096c0a}
+.entry-fields{font-size:14px;line-height:1.6}
+.entry-fields :is(input:not([type=hidden]):not([type=radio]):not([type=checkbox]),select,textarea){min-width:0;min-height:50px;border-radius:10px;font-size:16px;line-height:1.4;color:var(--color-heading);box-shadow:none;outline:none;transition:border-color .15s,box-shadow .15s}
+.entry-fields input:not([type=hidden]):not([type=radio]):not([type=checkbox]):not([type=tel]):not([type=number]),.entry-fields select,.entry-fields textarea{border:1px solid #cfc5da;background:#fff}
+.entry-fields input::placeholder,.entry-fields textarea::placeholder{color:#756c80;opacity:1;font-size:14px}
+.entry-fields :is(input,textarea,select):focus-visible{border-color:var(--color-primary);box-shadow:0 0 0 3px #3c096c12;outline:2px solid transparent}
+.entry-fields label{font-size:13px;text-transform:none;letter-spacing:0;font-weight:600;line-height:1.5}
+.entry-fields button,.entry-fields a{touch-action:manipulation;transition:background-color .15s,color .15s,transform .12s}
+.entry-fields :is(button,a):focus-visible{outline:2px solid var(--color-primary);outline-offset:4px}
+.entry-fields button:active:not(:disabled){transform:scale(.98)}
+.entry-fields button:disabled{cursor:not-allowed}
+.entry-fields button[type=submit],.entry-primary{min-height:50px;border-radius:10px;box-shadow:none;font-size:14px;font-weight:700;display:flex;align-items:center;justify-content:center;gap:8px;background:var(--color-primary);color:#fff;padding:12px 20px;border:1px solid transparent;cursor:pointer}
+.entry-fields button[type=submit]:hover:not(:disabled),.entry-primary:hover:not(:disabled){background:var(--color-primary-hover)}
+.entry-fields button[type=submit]:disabled,.entry-primary:disabled{background:#e8e2ed;color:#686071;opacity:1}
+.entry-fields :is(.text-body-muted,.text-body\/60,.text-body\/50,.text-gray-400){color:var(--entry-muted)}
+.entry-fields .text-cta,.entry-fields .text-blue-600,.entry-fields .text-blue-500{color:var(--color-primary)}
+.entry-fields .rounded-xl{border-radius:10px}.entry-fields .rounded-2xl{border-radius:14px}
+.entry-fields .entry-phone{border:1px solid #cfc5da;border-radius:10px;background:#fff;min-width:0;box-shadow:none}
+.entry-fields .entry-phone:focus-within{border-color:var(--color-primary);box-shadow:0 0 0 3px #3c096c12}
+.entry-fields .entry-phone input{width:100%;box-shadow:none;border:0;outline:0}
+.entry-fields .entry-phone button[aria-haspopup]{min-height:48px;border-radius:10px 0 0 10px}
+.entry-fields .entry-phone [role=listbox]{width:min(288px,calc(100vw - 64px));box-shadow:0 12px 32px #3c096c18;background:white}
+.entry-fields .entry-phone [role=listbox] input{min-height:40px;padding-left:32px}
+.entry-fields .entry-phone [role=listbox] button{min-height:40px}
+.entry-fields .entry-phone [role=listbox] input::placeholder{font-size:12px}
+.entry-fields .entry-verification{padding:18px;background:var(--entry-soft);border:1px solid var(--entry-line);border-radius:14px;box-shadow:none}
+.entry-fields .entry-verification-title{font-size:13px;font-weight:600;letter-spacing:0;text-transform:none}
+.entry-fields .entry-teacher-profile{padding:20px;background:var(--entry-soft);border:1px solid var(--entry-line);border-radius:14px;box-shadow:none}
+.entry-fields .entry-role{min-height:88px;border:1px solid var(--entry-line);border-radius:12px;padding:14px;background:white;box-shadow:none;outline:0;cursor:pointer}
+.entry-fields .entry-role[aria-pressed=true]{border-color:var(--color-primary);background:var(--color-primary-subtle);box-shadow:inset 0 0 0 1px var(--color-primary)}
+.entry-fields .entry-role span{font-size:13px}.entry-fields .entry-role>span{font-size:12px;color:var(--entry-muted);line-height:1.5;margin-top:6px}
+.entry-fields .entry-otp-digits{display:grid;grid-template-columns:repeat(6,minmax(0,1fr));gap:8px}
+.entry-fields .entry-otp-digits input{width:100%;min-height:54px;border-radius:10px;padding:8px;font-size:22px;text-align:center}
+.entry-form-footer{text-align:center;padding-top:24px;margin-top:24px;border-top:1px solid var(--entry-line);font-size:13px;color:var(--entry-muted)}
+.entry-form-footer a{color:var(--color-primary);font-weight:700}
+.entry-legacy-progress{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:10px;margin-bottom:32px}
+.entry-legacy-progress>span{display:flex;gap:7px;align-items:center;font-size:11px;color:var(--entry-muted);border-bottom:2px solid var(--entry-line);padding-bottom:12px}
+.entry-legacy-progress b{font-weight:500;width:24px;height:24px;border:1px solid var(--entry-line);border-radius:50%;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.entry-legacy-progress [aria-current=step]{color:var(--color-primary);border-color:var(--color-primary)}.entry-legacy-progress [aria-current=step] b{background:var(--color-primary);color:white}
+.entry-legacy-step>h1,.entry-legacy-step>h2{font-family:inherit;font-size:28px;font-weight:600!important;line-height:1.2;letter-spacing:-.7px;text-align:left;margin-bottom:10px}
+.entry-legacy-step>p{text-align:left;font-size:14px;color:var(--entry-muted);margin-bottom:28px}
+.entry-legacy-step button[aria-label=Next],.entry-legacy-step button[type=submit]{min-height:48px;border-radius:10px;background:var(--color-primary);font-size:14px;box-shadow:none}
+.entry-legacy-step button[aria-label=Previous]{min-height:48px;border-radius:10px;background:var(--entry-soft);color:var(--color-primary);font-size:14px}
+.entry-legacy-step input:is([type=radio],[type=checkbox]){accent-color:var(--color-primary);width:17px;height:17px}
+.entry-legacy-step .entry-select__control{border-radius:10px;min-height:50px;box-shadow:none}.entry-legacy-step .entry-select__input{min-height:0!important;border:0!important;box-shadow:none!important}.entry-legacy-step .entry-select__input-container{margin:0}.entry-legacy-step .entry-select__option--is-selected{background:var(--color-primary)}
+.entry-legacy-step[hidden]{display:none}
+.booking-summary{border:1px solid var(--entry-line);border-radius:16px;background:var(--entry-soft);padding:24px;color:var(--color-heading)}
+.booking-summary h2{font:600 18px/1.4 var(--font-dm-sans),sans-serif;letter-spacing:-.3px;margin:0 0 24px}
+.booking-summary-row{display:flex;align-items:flex-start;gap:12px;margin:24px 0;color:var(--color-primary)}
+.booking-summary-row>svg{flex-shrink:0;margin-top:3px}
+.booking-summary p{margin:0;flex:1;min-width:0;font-size:14px;line-height:1.7}
+.booking-summary p>span{display:block;color:var(--entry-muted);font-size:12px;margin-bottom:5px}
+.booking-summary strong{font-weight:600}
+.booking-summary button{border:0;background:none;color:var(--color-primary);text-decoration:underline;text-underline-offset:3px;font-size:12px;cursor:pointer;padding:4px 0;min-height:32px}
+.booking-summary footer{display:flex;align-items:center;justify-content:space-between;border-top:1px solid var(--entry-line);padding-top:20px;margin-top:24px;font-size:13px}
+.booking-summary footer strong{font-size:20px;color:var(--color-primary)}
+.entry-layout-summary{grid-template-columns:300px minmax(0,1fr);gap:72px;max-width:1120px;padding:48px 32px 64px;margin:auto}
+.entry-summary-column{position:sticky;top:112px;min-width:0}
+.entry-layout-summary .entry-form-column{padding:0}
+@media(max-width:900px){.entry-layout,.entry-layout-signup{display:block;max-width:620px;margin:auto;padding:40px 28px}.entry-story{display:none}.entry-form-column{padding:0;border:0}.entry-form{max-width:none}}
+@media(max-width:480px){.entry-layout,.entry-layout-signup{padding:32px 20px}.entry-form-header h1{font-size:28px}.entry-form-header{margin-bottom:24px}.entry-fields .entry-verification,.entry-fields .entry-teacher-profile{padding:14px}.entry-segmented{margin-bottom:24px}.entry-fields .entry-otp-digits{gap:6px}.entry-fields .entry-role{padding:12px}.entry-form-footer{line-height:1.8}.entry-footnote{font-size:11px}}
+@media(prefers-reduced-motion:reduce){.entry-page *,.trial-page *{animation:none!important;transition:none!important;scroll-behavior:auto!important}}
+
+@media(max-width:900px){.entry-layout-summary{max-width:620px}.entry-summary-column{position:static;margin-bottom:32px}}

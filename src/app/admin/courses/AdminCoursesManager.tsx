@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
+
 import { useState, useTransition, useMemo } from "react";
 import { Discipline, CourseLevel } from "@prisma/client";
 import {
@@ -1707,11 +1709,9 @@ export function AdminCoursesManager({
                       <Calendar className="w-3.5 h-3.5 text-accent-dark" />
                       <span>Scheduled Date & Time</span>
                     </label>
-                    <input
-                      type="datetime-local"
+                    <DateTimePicker
                       value={lessonStartsAt}
-                      onChange={(e) => setLessonStartsAt(e.target.value)}
-                      className="w-full rounded-xl bg-white border border-border-default px-3 py-1.5 text-xs text-heading"
+                      onChange={setLessonStartsAt}
                     />
                     <span className="text-[10px] text-body-muted block">
                       Syncs automatically to student & teacher calendar upon course purchase

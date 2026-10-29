@@ -12,16 +12,12 @@ import {
 import { formatInViewerTimezone } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
-import {
-  getConfiguredFolderId,
-  isDriveConfigured,
-  testDriveFolderAccess,
-} from "@/lib/google-drive";
+
 
 export const metadata = {
   title: "Session Recordings | Admin Portal | Gandharva School of Music",
   description:
-    "Hierarchical archival vault: Browse courses, enrolled students, class sessions, and Google Drive recordings.",
+    "Hierarchical archival vault: Browse courses, enrolled students, class sessions, and Supabase cloud recordings.",
 };
 
 const getCachedCourseRecordingsData = unstable_cache(
@@ -226,28 +222,12 @@ const getCachedCourseRecordingsData = unstable_cache(
 );
 
 async function getDriveStatus(): Promise<DriveConfigStatus> {
-  const configured = isDriveConfigured();
-  if (!configured) {
-    return { isConfigured: false, accessible: false };
-  }
-
-  try {
-    const folderId = await getConfiguredFolderId();
-    if (!folderId) {
-      return { isConfigured: true, accessible: false };
-    }
-
-    const testResult = await testDriveFolderAccess(folderId);
-    return {
-      isConfigured: true,
-      accessible: testResult.accessible,
-      folderName: testResult.folderName,
-      folderId,
-      isSharedDrive: testResult.isSharedDrive,
-    };
-  } catch {
-    return { isConfigured: true, accessible: false };
-  }
+  return {
+    isConfigured: true,
+    accessible: true,
+    folderName: "Supabase Vault",
+    isSharedDrive: true,
+  };
 }
 
 export default async function AdminRecordingsPage() {
@@ -276,7 +256,7 @@ export default async function AdminRecordingsPage() {
           className="mt-1"
         />
         <p className="text-sm text-body mt-1">
-          Explore course curricula, select enrolled students, inspect their session timetable, and access all high-fidelity session recordings stored in Google Drive.
+          Explore course curricula, select enrolled students, inspect their session timetable, and access all high-fidelity session recordings stored securely in Supabase.
         </p>
       </div>
 

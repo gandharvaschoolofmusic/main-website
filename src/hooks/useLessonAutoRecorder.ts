@@ -22,7 +22,7 @@ interface UseLessonAutoRecorderProps {
  * - Silent & discreet background operation with zero frame drops.
  * - Dynamic composite layout: auto-adapts to screen share or side-by-side video feeds.
  * - Mixed AudioContext engine combining local and remote audio.
- * - Safely stops and uploads recording to Google Drive when lesson ends.
+ * - Safely stops and uploads recording to Supabase when lesson ends.
  */
 export function useLessonAutoRecorder({
   room,

@@ -180,13 +180,30 @@ const LEAD_SOURCES = [
   "Phone Inquiry",
 ];
 
+export type TrialLeadStageKey =
+  | "NEW"
+  | "CONTACTED"
+  | "CONFIRMED"
+  | "COMPLETED"
+  | "FOLLOW_UP"
+  | "CONVERTED";
+
+export function getLeadStageKey(lead: AdminTrialRequestItem): TrialLeadStageKey {
+  if (lead.isConverted) return "CONVERTED";
+  if (lead.followUpAt && lead.lessonStatus === "COMPLETED") return "FOLLOW_UP";
+  if (lead.lessonStatus === "COMPLETED") return "COMPLETED";
+  if (lead.status === TrialRequestStatus.ALLOTTED) return "CONFIRMED";
+  if (lead.isContacted) return "CONTACTED";
+  return "NEW";
+}
+
 export const PIPELINE_STEPS = [
-  { id: "NEW", label: "New", description: "Lead inquiry registered" },
+  { id: "NEW", label: "New Inquiry", description: "Lead inquiry registered" },
   { id: "CONTACTED", label: "Contacted", description: "WhatsApp or phone outreach recorded" },
-  { id: "CONFIRMED", label: "Confirmed", description: "Faculty allotted & trial schedule locked" },
-  { id: "COMPLETED", label: "Completed", description: "Trial session attended with evaluation" },
+  { id: "CONFIRMED", label: "Trial Scheduled", description: "Faculty allotted & trial schedule locked" },
+  { id: "COMPLETED", label: "Trial Completed", description: "Trial session attended with evaluation" },
   { id: "FOLLOW_UP", label: "Follow-up", description: "Post-trial package consultation" },
-  { id: "CONVERTED", label: "Converted", description: "Student enrolled in full course" },
+  { id: "CONVERTED", label: "Enrolled", description: "Student enrolled in full course" },
 ];
 
 function getInitials(name: string): string {
@@ -260,12 +277,22 @@ function getCountdownPill(targetIso: string, isMounted = true): { label: string;
 }
 
 function getLeadStepIndex(lead: AdminTrialRequestItem): number {
-  if (lead.isConverted) return 5;
-  if (lead.followUpAt && new Date(lead.followUpAt) <= new Date() && lead.lessonStatus === "COMPLETED") return 4;
-  if (lead.lessonStatus === "COMPLETED") return 3;
-  if (lead.status === TrialRequestStatus.ALLOTTED) return 2;
-  if (lead.isContacted) return 1;
-  return 0; // New
+  const stage = getLeadStageKey(lead);
+  switch (stage) {
+    case "CONVERTED":
+      return 5;
+    case "FOLLOW_UP":
+      return 4;
+    case "COMPLETED":
+      return 3;
+    case "CONFIRMED":
+      return 2;
+    case "CONTACTED":
+      return 1;
+    case "NEW":
+    default:
+      return 0;
+  }
 }
 
 export function AdminTrialsManager({
@@ -428,25 +455,58 @@ export function AdminTrialsManager({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [isDrawerOpen]);
 
-  // KPIs
+  // Mutually Exclusive Stage Counts
+  const stageCounts = useMemo(() => {
+    let newCount = 0;
+    let contactedCount = 0;
+    let confirmedCount = 0;
+    let completedCount = 0;
+    let followUpCount = 0;
+    let convertedCount = 0;
+
+    requests.forEach((r) => {
+      const stage = getLeadStageKey(r);
+      if (stage === "NEW") newCount++;
+      else if (stage === "CONTACTED") contactedCount++;
+      else if (stage === "CONFIRMED") confirmedCount++;
+      else if (stage === "COMPLETED") completedCount++;
+      else if (stage === "FOLLOW_UP") followUpCount++;
+      else if (stage === "CONVERTED") convertedCount++;
+    });
+
+    return {
+      newCount,
+      contactedCount,
+      confirmedCount,
+      completedCount,
+      followUpCount,
+      convertedCount,
+      activeCount: requests.length - convertedCount,
+      total: requests.length,
+    };
+  }, [requests]);
+
+  // KPIs (Excluding converted students from in-progress funnel stages)
   const kpis = useMemo(() => {
     const total = requests.length;
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
 
     const newLeads = requests.filter(
-      (r) => r.status === TrialRequestStatus.PENDING && !r.isContacted
+      (r) => r.status === TrialRequestStatus.PENDING && !r.isContacted && !r.isConverted
     );
     const newToday = requests.filter(
-      (r) => new Date(r.createdAt) >= startOfToday
+      (r) => new Date(r.createdAt) >= startOfToday && !r.isConverted
     ).length;
 
-    const contacted = requests.filter((r) => r.isContacted);
+    const contacted = requests.filter(
+      (r) => r.isContacted && r.status === TrialRequestStatus.PENDING && !r.isConverted
+    );
     const trialBooked = requests.filter(
-      (r) => r.status === TrialRequestStatus.ALLOTTED
+      (r) => r.status === TrialRequestStatus.ALLOTTED && r.lessonStatus !== "COMPLETED" && !r.isConverted
     );
     const trialComplete = requests.filter(
-      (r) => r.lessonStatus === "COMPLETED"
+      (r) => r.lessonStatus === "COMPLETED" && !r.isConverted
     );
     const converted = requests.filter((r) => r.isConverted);
 
@@ -493,23 +553,32 @@ export function AdminTrialsManager({
       }
 
       if (pipelineStageFilter !== "ALL") {
-        if (
-          pipelineStageFilter === "NEW_LEADS" &&
-          (r.status !== TrialRequestStatus.PENDING || r.isContacted)
-        )
-          return false;
-        if (pipelineStageFilter === "CONTACTED" && !r.isContacted) return false;
-        if (
-          pipelineStageFilter === "TRIAL_BOOKED" &&
-          r.status !== TrialRequestStatus.ALLOTTED
-        )
-          return false;
-        if (
-          pipelineStageFilter === "TRIAL_COMPLETE" &&
-          r.lessonStatus !== "COMPLETED"
-        )
-          return false;
-        if (pipelineStageFilter === "CONVERTED" && !r.isConverted) return false;
+        const stage = getLeadStageKey(r);
+        if (pipelineStageFilter === "ALL_ACTIVE") {
+          // All active in-progress stages (excluding converted students)
+          if (r.isConverted || stage === "CONVERTED") return false;
+        } else if (
+          pipelineStageFilter === "NEW_LEADS" ||
+          pipelineStageFilter === "NEW"
+        ) {
+          if (stage !== "NEW") return false;
+        } else if (pipelineStageFilter === "CONTACTED") {
+          if (stage !== "CONTACTED") return false;
+        } else if (
+          pipelineStageFilter === "TRIAL_BOOKED" ||
+          pipelineStageFilter === "CONFIRMED"
+        ) {
+          if (stage !== "CONFIRMED") return false;
+        } else if (
+          pipelineStageFilter === "TRIAL_COMPLETE" ||
+          pipelineStageFilter === "COMPLETED"
+        ) {
+          if (stage !== "COMPLETED") return false;
+        } else if (pipelineStageFilter === "FOLLOW_UP") {
+          if (stage !== "FOLLOW_UP") return false;
+        } else if (pipelineStageFilter === "CONVERTED") {
+          if (stage !== "CONVERTED") return false;
+        }
       }
 
       if (
@@ -569,7 +638,8 @@ export function AdminTrialsManager({
     const confirmed = requests.filter(
       (r) =>
         r.status === TrialRequestStatus.ALLOTTED &&
-        r.lessonStatus !== "COMPLETED"
+        r.lessonStatus !== "COMPLETED" &&
+        !r.isConverted
     );
 
     const todayList = confirmed.filter((r) => {
@@ -1687,19 +1757,21 @@ export function AdminTrialsManager({
 
         <div className="space-y-1">
           <label className="text-[11px] font-semibold text-body/70 block">
-            Pipeline stage
+            Trial Status
           </label>
           <select
             value={pipelineStageFilter}
             onChange={(e) => setPipelineStageFilter(e.target.value)}
             className="w-full rounded-xl bg-neutral-50/60 border border-neutral-200/80 px-3 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:bg-white transition-all shadow-2xs"
           >
-            <option value="ALL">All active stages</option>
-            <option value="NEW_LEADS">New leads</option>
-            <option value="CONTACTED">Contacted</option>
-            <option value="TRIAL_BOOKED">Confirmed / Booked</option>
-            <option value="TRIAL_COMPLETE">Trial complete</option>
-            <option value="CONVERTED">Converted</option>
+            <option value="ALL">All Students ({stageCounts.total})</option>
+            <option value="ALL_ACTIVE">Active Trials Only ({stageCounts.activeCount})</option>
+            <option value="NEW_LEADS">New Inquiries ({stageCounts.newCount})</option>
+            <option value="CONTACTED">Contacted ({stageCounts.contactedCount})</option>
+            <option value="TRIAL_BOOKED">Trial Scheduled ({stageCounts.confirmedCount})</option>
+            <option value="TRIAL_COMPLETE">Trial Completed ({stageCounts.completedCount})</option>
+            <option value="FOLLOW_UP">Needs Follow-up ({stageCounts.followUpCount})</option>
+            <option value="CONVERTED">Enrolled / Converted ({stageCounts.convertedCount})</option>
           </select>
         </div>
 
@@ -1786,7 +1858,7 @@ export function AdminTrialsManager({
                     <th className="py-3 px-4">Lead / source</th>
                     <th className="py-3 px-4">Course / schedule</th>
                     <th className="py-3 px-4">Teacher</th>
-                    <th className="py-3 px-4">Pipeline stage</th>
+                    <th className="py-3 px-4">Trial Status</th>
                     <th className="py-3 px-4 text-right">Action</th>
                   </tr>
                 </thead>
@@ -2038,7 +2110,7 @@ export function AdminTrialsManager({
               {/* Stepper Preview */}
               <div className="pt-2 border-t border-neutral-100">
                 <div className="text-[11px] font-semibold text-body/70 mb-2">
-                  Workflow Pipeline Progress
+                  Student Trial Progress
                 </div>
                 <div className="grid grid-cols-6 gap-1">
                   {PIPELINE_STEPS.map((s, idx) => {
@@ -2167,7 +2239,7 @@ export function AdminTrialsManager({
                 {/* Vertical Stepper Pipeline */}
                 <div>
                   <div className="text-[10px] font-bold uppercase tracking-wider text-body/60 mb-2.5 px-1">
-                    Workflow Pipeline
+                    Trial Journey
                   </div>
 
                   <div className="relative pl-1 space-y-1">

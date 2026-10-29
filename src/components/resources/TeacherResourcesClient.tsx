@@ -387,14 +387,14 @@ export function TeacherResourcesClient({
             </span>
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-subtle text-primary border border-primary/20">
               <HardDrive className="w-3 h-3" />
-              Google Drive Cloud Storage
+              Supabase Cloud Storage
             </span>
           </div>
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-heading mt-1">
             Learning Resources & Studio Materials
           </h1>
           <p className="text-xs sm:text-sm text-body mt-1.5 max-w-2xl leading-relaxed">
-            Upload sheet music, reference audio, and practice exercises to your Google Drive library. Instantly share materials with your course-allotted students.
+            Upload sheet music, reference audio, and practice exercises to your Supabase library. Instantly share materials with your course-allotted students.
           </p>
         </div>
 
@@ -421,7 +421,7 @@ export function TeacherResourcesClient({
             </div>
             <div className="space-y-1">
               <h4 className="text-xs font-bold text-amber-900">
-                Google Drive Storage Folder Not Configured
+                Storage Not Configured
               </h4>
               <p className="text-xs text-amber-800 leading-relaxed max-w-2xl">
                 An administrator must set the Google Drive folder link in{" "}
@@ -452,7 +452,7 @@ export function TeacherResourcesClient({
             </div>
           </div>
           <p className="text-2xl font-bold font-serif text-heading mt-2">{totalUploads}</p>
-          <p className="text-[11px] text-body-muted mt-0.5">Uploaded to Google Drive</p>
+          <p className="text-[11px] text-body-muted mt-0.5">Uploaded to Supabase</p>
         </div>
 
         <div className="rounded-2xl border border-border-default bg-white p-5 shadow-xs">
@@ -626,7 +626,7 @@ export function TeacherResourcesClient({
                     rel="noopener noreferrer"
                     className="inline-flex items-center gap-1 text-xs font-semibold text-primary hover:text-primary-hover transition-colors"
                   >
-                    <span>Open Drive</span>
+                    <span>Open File</span>
                     <ExternalLink className="w-3 h-3" />
                   </a>
 
@@ -673,7 +673,7 @@ export function TeacherResourcesClient({
                     Upload Learning Resource
                   </h3>
                   <p className="text-[11px] text-body-muted">
-                    Stored securely on Gandharva Google Drive
+                    Stored securely on Supabase Cloud
                   </p>
                 </div>
               </div>
@@ -698,7 +698,7 @@ export function TeacherResourcesClient({
               <div className="mt-4 p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-800 space-y-1">
                 <p className="font-bold flex items-center gap-1.5 text-amber-900">
                   <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
-                  Google Drive Folder Link Not Configured
+                  Storage Status
                 </p>
                 <p className="leading-relaxed">
                   Before files can be stored, an administrator must set the folder link in{" "}
@@ -815,7 +815,7 @@ export function TeacherResourcesClient({
                   className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl text-xs font-bold bg-primary hover:bg-primary-hover active:scale-95 text-white shadow-md disabled:opacity-50 transition-all btn-tactile cursor-pointer"
                 >
                   {isPending && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                  <span>{isPending ? "Uploading to Drive..." : "Upload & Save"}</span>
+                  <span>{isPending ? "Uploading to Supabase..." : "Upload & Save"}</span>
                 </button>
               </div>
             </form>

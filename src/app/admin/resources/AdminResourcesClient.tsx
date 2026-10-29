@@ -263,7 +263,7 @@ export function AdminResourcesClient({
     startTransition(async () => {
       const res = await uploadResourceAction(formData);
       if (res.success && res.data) {
-        showToast(`"${uploadTitle}" uploaded to Google Drive repository.`);
+        showToast(`"${uploadTitle}" uploaded to Supabase repository.`);
         setIsUploadOpen(false);
         setUploadTitle("");
         setUploadDescription("");
@@ -427,7 +427,7 @@ export function AdminResourcesClient({
           <span className="font-bold text-heading">Learning Resources Repository</span>
         </div>
 
-        {/* Google Drive Status Pill */}
+        {/* Cloud Storage Status Pill */}
         <div className="flex items-center gap-2.5 self-end sm:self-auto">
           <div
             className={`flex items-center gap-2 px-3 py-1.5 rounded-full border text-[11px] font-semibold shadow-2xs ${
@@ -733,7 +733,7 @@ export function AdminResourcesClient({
                         rel="noopener noreferrer"
                         className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3C096C] hover:text-[#2F0755] hover:underline"
                       >
-                        <span>View in Drive</span>
+                        <span>View File</span>
                         <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
@@ -781,7 +781,7 @@ export function AdminResourcesClient({
                   Upload Learning Resource
                 </h3>
                 <p className="text-xs text-body/70 mt-0.5">
-                  Direct upload to Gandharva Google Drive cloud vault (up to 25 MB)
+                  Direct upload to Gandharva Supabase cloud vault (up to 25 MB)
                 </p>
               </div>
               <button
@@ -823,7 +823,7 @@ export function AdminResourcesClient({
                           {selectedFile.name}
                         </p>
                         <p className="text-[11px] text-body/60">
-                          {formatBytes(selectedFile.size)} · ready for Drive sync
+                          {formatBytes(selectedFile.size)} · ready for upload
                         </p>
                       </div>
                     ) : (
@@ -905,7 +905,7 @@ export function AdminResourcesClient({
                   {isPending ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Syncing to Google Drive...</span>
+                      <span>Syncing to Supabase...</span>
                     </>
                   ) : (
                     <>
@@ -1184,7 +1184,7 @@ export function AdminResourcesClient({
               </h3>
               <p className="text-xs text-body/70 mt-1 leading-relaxed">
                 Are you sure you want to delete &ldquo;{deletingResource.title}&rdquo;?
-                This will permanently remove the file from Google Drive and revoke access for all {deletingResource.shares.length} student(s).
+                This will permanently remove the file from Supabase and revoke access for all {deletingResource.shares.length} student(s).
               </p>
             </div>
             <div className="pt-2 flex items-center justify-end gap-2.5">

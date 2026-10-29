@@ -3,7 +3,7 @@
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { Role, ResourceCategory, NotificationType } from "@prisma/client";
-import { uploadToDrive, deleteFromDrive, isDriveConfigured } from "@/lib/google-drive";
+import { uploadToSupabase, deleteFromSupabase, isStorageConfigured } from "@/lib/supabase-storage";
 import { createNotification } from "@/actions/notifications";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
@@ -85,22 +85,23 @@ export async function uploadResourceAction(
       };
     }
 
-    if (!isDriveConfigured()) {
+    if (!isStorageConfigured()) {
       return {
         success: false,
         error:
-          "Google Drive storage is not configured on this platform. Please contact administration.",
+          "Supabase storage is not configured on this platform. Please contact administration.",
       };
     }
 
-    // Convert file to buffer and upload to Google Drive
+    // Convert file to buffer and upload to Supabase
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const driveResult = await uploadToDrive(
+    const uploadResult = await uploadToSupabase(
       buffer,
       file.name,
-      file.type || "application/octet-stream"
+      file.type || "application/octet-stream",
+      { bucket: "resources" }
     );
 
     // Save resource record in DB
@@ -115,16 +116,16 @@ export async function uploadResourceAction(
         description,
         category,
         fileName: file.name,
-        fileUrl: driveResult.fileUrl,
-        fileId: driveResult.fileId,
-        fileSizeBytes: driveResult.fileSizeBytes,
-        mimeType: driveResult.mimeType,
+        fileUrl: uploadResult.fileUrl,
+        fileId: uploadResult.fileId,
+        fileSizeBytes: uploadResult.fileSizeBytes,
+        mimeType: uploadResult.mimeType,
       },
     });
 
     logger.info(
       { teacherId: session.user.id, resourceId: resource.id, fileName: file.name },
-      "Teacher uploaded new learning resource to Google Drive"
+      "Teacher uploaded new learning resource to Supabase"
     );
 
     revalidatePath("/teacher/dashboard/resources");
@@ -133,7 +134,7 @@ export async function uploadResourceAction(
 
     return {
       success: true,
-      message: `"${title}" successfully uploaded to Google Drive!`,
+      message: `"${title}" successfully uploaded to Supabase!`,
       data: {
         id: resource.id,
         title: resource.title,
@@ -176,9 +177,9 @@ export async function deleteResourceAction(
       return { success: false, error: "You do not have permission to delete this resource." };
     }
 
-    // Try deleting file from Google Drive
+    // Try deleting file from Supabase
     if (resource.fileId) {
-      await deleteFromDrive(resource.fileId).catch(() => {});
+      await deleteFromSupabase(resource.fileId, "resources").catch(() => {});
     }
 
     // Delete from DB (cascades to ResourceShare)

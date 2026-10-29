@@ -176,14 +176,14 @@ export function StudentResourcesClient({
             </span>
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-subtle text-primary border border-primary/20">
               <HardDrive className="w-3 h-3" />
-              Google Drive Cloud
+              Supabase Cloud
             </span>
           </div>
           <h1 className="font-serif text-2xl sm:text-3xl font-bold text-heading mt-1">
             Learning Resources & Practice Materials
           </h1>
           <p className="text-xs sm:text-sm text-body mt-1.5 max-w-2xl leading-relaxed">
-            Sheet music, recorded audio guides, and personalized lesson notes sent directly by your maestros. Access all files securely via Google Drive.
+            Sheet music, recorded audio guides, and personalized lesson notes sent directly by your maestros. Access all files securely via Supabase Cloud.
           </p>
         </div>
 
@@ -391,7 +391,7 @@ export function StudentResourcesClient({
                     onClick={() => handleMarkViewed(item.id, res.fileUrl)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:bg-primary-hover active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold shadow-sm transition-all btn-tactile cursor-pointer"
                   >
-                    <span>Open in Drive</span>
+                    <span>Open File</span>
                     <ExternalLink className="w-3.5 h-3.5" />
                   </button>
                 </div>

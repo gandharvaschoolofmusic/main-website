@@ -1,13 +1,13 @@
 import { NextRequest } from "next/server";
 import { auth } from "@/lib/auth";
-import { uploadToDrive, isDriveConfigured } from "@/lib/google-drive";
+import { uploadToSupabase, isStorageConfigured } from "@/lib/supabase-storage";
 import { isAllowedFileType, MAX_FILE_SIZE_BYTES } from "@/lib/pii-filter";
 import { logger } from "@/lib/logger";
 
 /**
  * POST /api/upload
  * Accepts multipart form data with a single file.
- * Uploads to Google Drive and returns the file URL.
+ * Uploads to Supabase storage/database and returns the file URL.
  *
  * Auth: requires an authenticated session.
  * Restrictions: PDF/DOC/DOCX only, 10MB max.
@@ -23,12 +23,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 2. Check Drive is configured
-    if (!isDriveConfigured()) {
+    // 2. Check Storage is configured
+    if (!isStorageConfigured()) {
       return Response.json(
         {
           error:
-            "File upload is not available. Google Drive credentials are not configured.",
+            "File upload is not available. Storage backend is not configured.",
         },
         { status: 503 },
       );
@@ -58,15 +58,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // 6. Convert to buffer and upload
+    // 6. Convert to buffer and upload to Supabase
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const result = await uploadToDrive(buffer, file.name, file.type);
+    const result = await uploadToSupabase(buffer, file.name, file.type, {
+      bucket: "chat-attachments",
+    });
 
     logger.info(
-      { userId: session.user.id, fileName: file.name, fileId: result.fileId },
-      "File uploaded via messaging",
+      { userId: session.user.id, fileName: file.name, fileId: result.fileId, backend: result.storageBackend },
+      "File uploaded via messaging to Supabase",
     );
 
     return Response.json({
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest) {
       fileUrl: result.fileUrl,
       fileSizeBytes: result.fileSizeBytes,
       mimeType: result.mimeType,
+      storageBackend: result.storageBackend,
     });
   } catch (error) {
     logger.error({ error }, "File upload failed");

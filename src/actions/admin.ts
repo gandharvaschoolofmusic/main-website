@@ -46,47 +46,23 @@ export async function updatePlatformSettingsAction(input: {
 
     const count = Math.max(0, Math.min(10, Math.floor(input.freeTrialLessonCount)));
 
-    // Process Google Drive folder link
-    let googleDriveFolderId: string | null = undefined as unknown as string | null;
-    if (input.googleDriveFolderLink !== undefined) {
-      if (input.googleDriveFolderLink === null || input.googleDriveFolderLink === "") {
-        googleDriveFolderId = null;
-      } else {
-        const { extractFolderId } = await import("@/lib/google-drive");
-        const extracted = extractFolderId(input.googleDriveFolderLink);
-        if (!extracted) {
-          return {
-            success: false,
-            error: "Invalid Google Drive folder link. Please provide a valid Drive folder URL or ID.",
-          };
-        }
-        googleDriveFolderId = extracted;
-      }
-    }
-
     const updateData: Record<string, unknown> = {
       freeTrialLessonCount: count,
+      storageProvider: "SUPABASE",
     };
-
-    // Only include googleDriveFolderId if it was provided
-    if (input.googleDriveFolderLink !== undefined) {
-      updateData.googleDriveFolderId = googleDriveFolderId;
-    }
 
     await db.platformSettings.upsert({
       where: { id: 1 },
       create: {
         id: 1,
         freeTrialLessonCount: count,
-        ...(input.googleDriveFolderLink !== undefined
-          ? { googleDriveFolderId }
-          : {}),
+        storageProvider: "SUPABASE",
       },
       update: updateData,
     });
 
     logger.info(
-      { freeTrialLessonCount: count, googleDriveFolderId },
+      { freeTrialLessonCount: count, storageProvider: "SUPABASE" },
       "Platform settings updated",
     );
     revalidatePath("/admin/settings");
@@ -105,52 +81,22 @@ export async function updatePlatformSettingsAction(input: {
  * Test whether a Google Drive folder link is accessible by the service account.
  */
 export async function testDriveFolderAction(
-  folderLink: string,
+  _folderLink?: string,
 ): Promise<AdminActionResponse<{ folderName: string; isSharedDrive?: boolean; warning?: string }>> {
   try {
     await requireRole(Role.ADMIN);
-
-    const { extractFolderId, testDriveFolderAccess, isDriveConfigured } =
-      await import("@/lib/google-drive");
-
-    if (!isDriveConfigured()) {
-      return {
-        success: false,
-        error:
-          "Google Drive service account credentials are not set in environment variables. Add GOOGLE_SERVICE_ACCOUNT_EMAIL and GOOGLE_SERVICE_ACCOUNT_PRIVATE_KEY to .env.local.",
-      };
-    }
-
-    const folderId = extractFolderId(folderLink);
-    if (!folderId) {
-      return {
-        success: false,
-        error: "Could not extract a valid folder ID from the provided link.",
-      };
-    }
-
-    const result = await testDriveFolderAccess(folderId);
-
-    if (!result.accessible) {
-      return {
-        success: false,
-        error: result.error || "Could not access the folder.",
-      };
-    }
-
     return {
       success: true,
       data: {
-        folderName: result.folderName!,
-        isSharedDrive: result.isSharedDrive,
-        warning: result.warning,
+        folderName: "Supabase Cloud Database & Storage",
+        isSharedDrive: true,
       },
     };
   } catch (error) {
-    logger.error({ error }, "Error testing Drive folder access");
+    logger.error({ error }, "Error testing storage access");
     return {
       success: false,
-      error: "Failed to test Drive folder access.",
+      error: "Failed to test storage access.",
     };
   }
 }
@@ -2632,7 +2578,7 @@ export async function adminRecordEnrollmentPaymentAction(input: {
 
 // ─── 17. Lesson Recordings Management ──────────────────────────────────────────
 
-export async function syncRecordingToDriveAction(
+export async function syncRecordingToSupabaseAction(
   recordingId: string,
 ): Promise<AdminActionResponse<{ fileUrl: string; fileId: string }>> {
   try {
@@ -2654,24 +2600,17 @@ export async function syncRecordingToDriveAction(
       return { success: false, error: "Recording not found." };
     }
 
-    if (recording.storageBackend === "GOOGLE_DRIVE" && recording.fileId) {
+    if (recording.storageBackend === "SUPABASE" && recording.fileId) {
       return {
         success: true,
-        message: "Recording is already stored in Google Drive.",
+        message: "Recording is already stored in Supabase.",
         data: { fileUrl: recording.fileUrl, fileId: recording.fileId },
       };
     }
 
-    const { uploadToDrive, isDriveConfigured } = await import("@/lib/google-drive");
+    const { uploadToSupabase } = await import("@/lib/supabase-storage");
     const fs = await import("fs");
     const path = await import("path");
-
-    if (!isDriveConfigured()) {
-      return {
-        success: false,
-        error: "Google Drive is not configured in environment or settings.",
-      };
-    }
 
     // Determine local disk file path
     const localFilePath = path.join(
@@ -2688,20 +2627,20 @@ export async function syncRecordingToDriveAction(
     }
 
     const fileBuffer = fs.readFileSync(localFilePath);
-    const driveResult = await uploadToDrive(
+    const uploadResult = await uploadToSupabase(
       fileBuffer,
       recording.fileName,
       "video/webm",
-      { preserveExactName: true },
+      { bucket: "recordings", preserveExactName: true },
     );
 
     // Update database record
     await db.lessonRecording.update({
       where: { id: recordingId },
       data: {
-        fileUrl: driveResult.fileUrl,
-        fileId: driveResult.fileId,
-        storageBackend: "GOOGLE_DRIVE",
+        fileUrl: uploadResult.fileUrl,
+        fileId: uploadResult.fileId,
+        storageBackend: "SUPABASE",
       },
     });
 
@@ -2709,8 +2648,8 @@ export async function syncRecordingToDriveAction(
     await db.lesson.update({
       where: { id: recording.lessonId },
       data: {
-        recordingUrl: driveResult.fileUrl,
-        recordingFileId: driveResult.fileId,
+        recordingUrl: uploadResult.fileUrl,
+        recordingFileId: uploadResult.fileId,
       },
     });
 
@@ -2718,13 +2657,13 @@ export async function syncRecordingToDriveAction(
       await db.lesson.updateMany({
         where: { groupRoomId: recording.lesson.groupRoomId },
         data: {
-          recordingUrl: driveResult.fileUrl,
-          recordingFileId: driveResult.fileId,
+          recordingUrl: uploadResult.fileUrl,
+          recordingFileId: uploadResult.fileId,
         },
       });
     }
 
-    // Optionally remove local file now that it's in Drive
+    // Optionally remove local file now that it's in Supabase
     try {
       fs.unlinkSync(localFilePath);
     } catch {
@@ -2738,17 +2677,19 @@ export async function syncRecordingToDriveAction(
 
     return {
       success: true,
-      message: "Recording successfully synced to Google Drive.",
-      data: { fileUrl: driveResult.fileUrl, fileId: driveResult.fileId },
+      message: "Recording successfully synced to Supabase.",
+      data: { fileUrl: uploadResult.fileUrl, fileId: uploadResult.fileId },
     };
   } catch (error) {
-    logger.error({ error, recordingId }, "Failed to sync recording to Google Drive");
+    logger.error({ error, recordingId }, "Failed to sync recording to Supabase");
     return {
       success: false,
-      error: error instanceof Error ? error.message : "Failed to sync recording to Drive.",
+      error: error instanceof Error ? error.message : "Failed to sync recording to Supabase.",
     };
   }
 }
+
+export const syncRecordingToDriveAction = syncRecordingToSupabaseAction;
 
 export async function deleteRecordingAdminAction(
   recordingId: string,
@@ -2765,13 +2706,13 @@ export async function deleteRecordingAdminAction(
       return { success: false, error: "Recording not found." };
     }
 
-    // Delete from Google Drive if stored there
+    // Delete from Supabase if stored there
     if (recording.fileId) {
       try {
-        const { deleteFromDrive } = await import("@/lib/google-drive");
-        await deleteFromDrive(recording.fileId);
+        const { deleteFromSupabase } = await import("@/lib/supabase-storage");
+        await deleteFromSupabase(recording.fileId, "recordings");
       } catch (e) {
-        logger.warn({ error: e, fileId: recording.fileId }, "Could not delete from Drive");
+        logger.warn({ error: e, fileId: recording.fileId }, "Could not delete from Supabase");
       }
     }
 

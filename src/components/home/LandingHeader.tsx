@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { usePathname } from "next/navigation";
 
 const INSTRUMENT_ITEMS = [
   { label: "Piano", href: "/courses/piano" },
@@ -33,6 +34,8 @@ const DANCE_ITEMS = [
 ];
 
 export function LandingHeader() {
+  const pathname = usePathname();
+  const isFormPage = ["/login", "/signup", "/book-trial", "/book-your-free-trial"].includes(pathname);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCoursesOpen, setMobileCoursesOpen] = useState(false);
@@ -60,10 +63,12 @@ export function LandingHeader() {
     <header className="relative z-50">
       {/* Desktop Header */}
       <div
-        className={`hidden lg:block fixed top-0 left-0 right-0 z-50 w-full transition-all duration-300 ${
-          isScrolled
-            ? "bg-[#24105E]/95 backdrop-blur-md shadow-lg py-2"
-            : "bg-gradient-to-b from-[#1A022D]/90 via-[#1A022D]/50 to-transparent py-3"
+        className={`hidden lg:block fixed top-0 left-0 right-0 z-50 w-full h-20 py-2 transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none ${
+          isFormPage
+            ? "bg-primary shadow-sm"
+            : isScrolled
+              ? "bg-[#24105E]/95 backdrop-blur-md shadow-lg"
+              : "bg-gradient-to-b from-[#1A022D]/90 via-[#1A022D]/50 to-transparent"
         }`}
         style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 400 }}
       >
@@ -368,11 +373,11 @@ export function LandingHeader() {
 
       {/* Mobile Header Bar */}
       <div
-        className={`lg:hidden fixed w-full z-50 top-0 transition-all duration-300 ${
-          isScrolled ? "bg-[#24105E]/95 backdrop-blur-md shadow-md" : "bg-transparent"
+        className={`lg:hidden fixed w-full h-20 z-50 top-0 transition-[background-color,box-shadow] duration-200 motion-reduce:transition-none ${
+          isFormPage ? "bg-primary shadow-sm" : isScrolled ? "bg-[#24105E]/95 backdrop-blur-md shadow-md" : "bg-transparent"
         }`}
       >
-        <div className="flex justify-between items-center p-4 pr-6">
+        <div className="flex h-full justify-between items-center px-4 pr-6">
           <div className="flex-shrink-0">
             <Link href="/" aria-label="Gandharva School Of Music">
               <Image

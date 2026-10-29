@@ -277,4 +277,3 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
     </div>
   );
 }
-

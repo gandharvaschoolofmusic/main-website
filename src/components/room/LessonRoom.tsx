@@ -231,7 +231,7 @@ function LessonRoomContent({
   const multiCam = useMultiCamera(room, isVideoOff);
   const [isMultiCamModalOpen, setIsMultiCamModalOpen] = useState(false);
 
-  // Automatic silent lesson recording (optimized for zero server lag, saves to Google Drive)
+  // Automatic silent lesson recording (optimized for zero server lag, saves to Supabase)
   const autoRecorder = useLessonAutoRecorder({
     room,
     lessonId: lesson.id,
@@ -589,13 +589,13 @@ function LessonRoomContent({
                 Saving Lesson Recording
               </h3>
               <p className="text-xs text-stone-300 leading-relaxed max-w-xs">
-                Archiving session audio and stage video securely to Google Drive. Please keep this tab open...
+                Archiving session audio and stage video securely to Supabase Cloud Storage. Please keep this tab open...
               </p>
             </div>
 
             <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono text-stone-400">
               <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Google Drive Cloud Sync
+              Supabase Cloud Sync
             </div>
           </div>
         </div>
@@ -603,4 +603,3 @@ function LessonRoomContent({
     </>
   );
 }
-

@@ -18,12 +18,10 @@ const getCachedAdminSettingsData = unstable_cache(
 
     return {
       freeTrialLessonCount: settings?.freeTrialLessonCount ?? 2,
-      googleDriveFolderLink: settings?.googleDriveFolderId
-        ? `https://drive.google.com/drive/folders/${settings.googleDriveFolderId}`
-        : "",
+      storageProvider: settings?.storageProvider ?? "SUPABASE",
     };
   },
-  ["admin-settings-data-v1"],
+  ["admin-settings-data-v2"],
   { revalidate: 60, tags: ["admin-settings", "settings"] }
 );
 
@@ -32,7 +30,7 @@ export default async function AdminSettingsPage() {
 
   let initialSettings = {
     freeTrialLessonCount: 2,
-    googleDriveFolderLink: "",
+    storageProvider: "SUPABASE",
   };
 
   try {
@@ -55,7 +53,7 @@ export default async function AdminSettingsPage() {
           className="mt-1"
         />
         <p className="text-sm text-body mt-1">
-          Adjust global free trial lesson allocations, billing currency, and institutional operational parameters.
+          Adjust global free trial lesson allocations, cloud storage settings, and institutional operational parameters.
         </p>
       </div>
 

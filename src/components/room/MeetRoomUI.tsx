@@ -137,4 +137,3 @@ function ToolButton({ icon, label, description, onClick, disabled }: { icon: Rea
   return <button type="button" className="meet-tool-button" onClick={onClick} disabled={disabled} title={disabled ? `${label} is not available in this lesson room` : undefined}><span className="meet-tool-icon">{icon}</span><span><strong>{label}</strong><small>{description}</small></span>{!disabled && <ChevronRight size={21}/>}</button>;
 }
 function MenuButton({ icon, label, onClick }: { icon: ReactNode; label: string; onClick: () => void }) { return <button type="button" className="meet-menu-button" onClick={onClick}>{icon}<span>{label}</span></button>; }
-

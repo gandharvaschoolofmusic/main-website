@@ -2,7 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { FormShell } from "@/components/auth/FormShell";
 import { signupAction, sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import {
@@ -92,6 +92,8 @@ export default function SignupPage() {
   useEffect(() => {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+      // Detect the browser timezone after hydration so server markup stays stable.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (tz) setDetectedTz(tz);
     } catch {
       // Fallback to UTC
@@ -195,26 +197,8 @@ export default function SignupPage() {
   // SUCCESS SCREEN
   if (state?.success) {
     return (
-      <div className="relative min-h-[100dvh] w-full flex items-center justify-center pt-24 sm:pt-28 pb-14 px-4 sm:px-8">
-        {/* Background Stage Image */}
-        <div className="absolute inset-0 z-0 pointer-events-none">
-          <Image
-            src="/auth-bg.png"
-            alt="Gandharva School of Music"
-            fill
-            priority
-            sizes="100vw"
-            className="object-cover object-[20%_18%] sm:object-[22%_20%] lg:object-[16%_22%]"
-          />
-          <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/60 lg:bg-gradient-to-r lg:from-black/15 lg:via-black/45 lg:to-black/85" />
-          <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.18),transparent_70%)]" />
-        </div>
-
-        <div className="relative z-10 w-full max-w-md lg:max-w-[480px]">
-          <div className="relative space-y-6 overflow-hidden rounded-3xl border border-white/80 bg-white/95 p-8 sm:p-10 text-center shadow-[0_24px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-            {/* Decorative Top Accent Bar */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
-
+      <FormShell variant={selectedRole === "TEACHER" ? "teacher" : "student"}>
+        <div className="space-y-6">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-sm border border-emerald-200">
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
             </div>
@@ -272,61 +256,18 @@ export default function SignupPage() {
                 <ArrowRight className="w-4 h-4" />
               </Link>
             </div>
-          </div>
         </div>
-      </div>
+      </FormShell>
     );
   }
 
   // MAIN SIGNUP FORM
   return (
-    <div className="relative min-h-[100dvh] w-full flex items-center justify-center lg:justify-end pt-24 sm:pt-28 pb-14 px-4 sm:px-8 lg:px-14 xl:px-20 max-w-[1560px] mx-auto">
-      {/* Background Stage Image */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Image
-          src="/auth-bg.png"
-          alt="Gandharva School of Music"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[20%_18%] sm:object-[22%_20%] lg:object-[16%_22%]"
-        />
-        {/* Cinematic Vignette & Gradient Overlays: Subtle on the left to highlight the artist, deep & smooth on the right for form clarity */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/60 lg:bg-gradient-to-r lg:from-black/15 lg:via-black/45 lg:to-black/85" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.18),transparent_70%)]" />
-      </div>
-
-      {/* Right Column Form Card */}
-      <div
-        className={`relative z-10 w-full ${
-          selectedRole === "TEACHER" ? "max-w-xl lg:max-w-[540px]" : "max-w-md lg:max-w-[480px]"
-        } transition-all duration-200`}
-      >
-        <div className="relative space-y-6 sm:space-y-7 overflow-hidden rounded-3xl border border-white/80 bg-white/95 p-6 sm:p-9 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-          {/* Decorative Top Accent Bar */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
-
-          {/* Header */}
-          <div className="space-y-3 text-center">
-            <div className="mx-auto flex items-center justify-center py-2 px-5 rounded-2xl bg-heading shadow-md shadow-heading/20 border border-white/10 w-fit transition-transform hover:scale-[1.02]">
-              <Image
-                src="/gandharva-logo.png"
-                alt="Gandharva School of Music"
-                width={160}
-                height={53}
-                className="h-8 sm:h-9 w-auto object-contain"
-                priority
-              />
-            </div>
-            <SplitHeading
-              as="h1"
-              firstClause={selectedRole === "TEACHER" ? "Join As" : "Create Your"}
-              accentClause={selectedRole === "TEACHER" ? "Faculty Guru" : "Account"}
-              align="center"
-              size="md"
-            />
-          </div>
-
+    <FormShell variant={selectedRole === "TEACHER" ? "teacher" : "student"}>
+      <header className="entry-form-header">
+        <h1>{selectedRole === "TEACHER" ? "Become a teacher" : "Create your account"}</h1>
+        <p>{selectedRole === "TEACHER" ? "Tell us about your experience and apply to teach." : "Your first step towards a lifetime of music."}</p>
+      </header>
           {/* Global Error Alert */}
           {state?.error && (
             <div
@@ -348,11 +289,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedRole("STUDENT")}
-                  className={`btn-tactile flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer active:scale-[0.98] ${
-                    selectedRole === "STUDENT"
-                      ? "border-cta bg-cta/5 ring-2 ring-cta/25 shadow-xs"
-                      : "border-surface-muted/90 bg-white hover:border-cta/40 hover:bg-bg-alt/20"
-                  }`}
+                  className="entry-role flex flex-col items-start text-left" aria-pressed={selectedRole === "STUDENT"}
                 >
                   <div className="flex items-center gap-2">
                     <span
@@ -370,11 +307,7 @@ export default function SignupPage() {
                 <button
                   type="button"
                   onClick={() => setSelectedRole("TEACHER")}
-                  className={`btn-tactile flex flex-col items-start rounded-xl border p-3.5 text-left transition-all cursor-pointer active:scale-[0.98] ${
-                    selectedRole === "TEACHER"
-                      ? "border-cta bg-cta/5 ring-2 ring-cta/25 shadow-xs"
-                      : "border-surface-muted/90 bg-white hover:border-cta/40 hover:bg-bg-alt/20"
-                  }`}
+                  className="entry-role flex flex-col items-start text-left" aria-pressed={selectedRole === "TEACHER"}
                 >
                   <div className="flex items-center gap-2">
                     <span
@@ -395,14 +328,14 @@ export default function SignupPage() {
 
             {/* TEACHER CREDENTIALS & TEACHING PROFILE */}
             {selectedRole === "TEACHER" && (
-              <div className="rounded-2xl border border-primary/20 bg-gradient-to-br from-primary-subtle/40 via-white to-bg-alt/20 p-4 sm:p-5 space-y-4 shadow-xs animate-in fade-in duration-200">
+              <div className="entry-teacher-profile space-y-4">
                 <div className="flex items-center justify-between border-b border-border-subtle/70 pb-3">
                   <div className="flex items-center gap-2">
                     <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <Award className="h-4 w-4 text-primary" />
                     </div>
                     <div>
-                      <h3 className="text-xs font-bold uppercase tracking-wider text-heading">
+                      <h3 className="entry-verification-title">
                         Faculty Credentials & Disciplines
                       </h3>
                     </div>
@@ -463,7 +396,7 @@ export default function SignupPage() {
                             handleAddCustomInstrument();
                           }
                         }}
-                        placeholder="Search or add discipline (e.g. Piano, Hindustani Vocals...)"
+                        placeholder="Search or add a discipline" aria-label="Search or add a discipline"
                         className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3 py-2 text-xs text-heading placeholder-body/50 shadow-xs focus:border-cta focus:outline-none focus:ring-3 focus:ring-cta/15"
                       />
                       {instrumentFilter.trim() &&
@@ -612,11 +545,11 @@ export default function SignupPage() {
             )}
 
             {/* MANDATORY PHONE OTP VERIFICATION CARD */}
-            <div className="rounded-2xl border border-primary/20 bg-primary-subtle/30 p-4 space-y-3.5">
+            <div className="entry-verification space-y-3.5">
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4 text-primary" />
-                  <span className="text-xs font-bold uppercase tracking-wider text-heading">
+                  <span className="entry-verification-title">
                     Mobile Number Verification
                   </span>
                 </div>
@@ -688,16 +621,18 @@ export default function SignupPage() {
                 <div className="space-y-3">
                   {/* Phone input with CountryCodeSelector + Send OTP */}
                   <div className="flex gap-2">
-                    <div className="flex-1 flex rounded-xl border border-surface-muted/90 bg-white shadow-xs focus-within:border-cta focus-within:ring-4 focus-within:ring-cta/15 transition-all overflow-visible">
+                    <div className="entry-phone flex-1 flex overflow-visible">
                       <CountryCodeSelector
+                  showDialCodeInButton
                         selectedCountry={selectedCountry}
                         onSelect={(c) => setSelectedCountry(c)}
-                        showDialCodeInButton={true}
                         className="shrink-0"
                       />
                       <input
                         id="phone-input"
+                        aria-label="Mobile phone number"
                         type="tel"
+                  autoComplete="tel-national"
                         value={rawPhoneNumber}
                         onChange={(e) => setRawPhoneNumber(e.target.value)}
                         placeholder="98765 43210"
@@ -738,6 +673,7 @@ export default function SignupPage() {
                           ref={otpInputRef}
                           id="otp-code-input"
                           type="text"
+                          autoComplete="one-time-code"
                           inputMode="numeric"
                           maxLength={6}
                           value={otpCode}
@@ -791,7 +727,7 @@ export default function SignupPage() {
                 type="text"
                 autoComplete="name"
                 required
-                placeholder="e.g. Clara Schumann"
+                placeholder="Your full name"
                 className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3.5 py-2.5 text-sm text-heading placeholder-body/40 shadow-xs transition-all focus:border-cta focus:outline-none focus:ring-4 focus:ring-cta/15"
               />
               {state?.fieldErrors?.name && (
@@ -816,7 +752,7 @@ export default function SignupPage() {
                 type="email"
                 autoComplete="email"
                 required
-                placeholder="clara@example.com"
+                placeholder="you@example.com"
                 className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3.5 py-2.5 text-sm text-heading placeholder-body/40 shadow-xs transition-all focus:border-cta focus:outline-none focus:ring-4 focus:ring-cta/15"
               />
               {state?.fieldErrors?.email && (
@@ -842,7 +778,7 @@ export default function SignupPage() {
                   type={showPassword ? "text" : "password"}
                   autoComplete="new-password"
                   required
-                  placeholder="At least 8 chars, uppercase, lowercase & number"
+                  placeholder="Create a strong password" aria-describedby="password-help"
                   className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3.5 py-2.5 pr-11 text-sm text-heading placeholder-body/40 shadow-xs transition-all focus:border-cta focus:outline-none focus:ring-4 focus:ring-cta/15"
                 />
                 <button
@@ -859,6 +795,7 @@ export default function SignupPage() {
                   )}
                 </button>
               </div>
+              <p id="password-help" className="mt-2 text-xs text-body">Use at least 8 characters, with uppercase, lowercase, and a number.</p>
               {state?.fieldErrors?.password && (
                 <p className="mt-1.5 text-xs font-medium text-error flex items-center gap-1">
                   <span>•</span>
@@ -890,6 +827,7 @@ export default function SignupPage() {
             </div>
 
             {/* Create Account Button */}
+            {!isPhoneVerified && otpCode.trim().length !== 6 && <p className="text-xs text-body">Verify your phone number above to continue.</p>}
             <div className="space-y-2 pt-1">
               <button
                 type="submit"
@@ -915,18 +853,13 @@ export default function SignupPage() {
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
-                  <span>
-                    Verify Phone OTP to{" "}
-                    {selectedRole === "TEACHER"
-                      ? "Submit Application"
-                      : "Create Account"}
-                  </span>
+                  <span>{selectedRole === "TEACHER" ? "Submit application" : "Create account"}</span>
                 )}
               </button>
             </div>
           </form>
 
-          <p className="text-center text-xs text-body">
+          <p className="entry-form-footer">
             Already have an account?{" "}
             <Link
               href="/login"
@@ -935,8 +868,6 @@ export default function SignupPage() {
               Sign in
             </Link>
           </p>
-        </div>
-      </div>
-    </div>
+    </FormShell>
   );
 }

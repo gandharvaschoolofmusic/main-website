@@ -42,5 +42,3 @@ function MeetTile({ track, raised, pinned, onPin, mirror }: { track: TrackRefere
     <div className="meet-tile-name">{pinned && <Pin size={14}/>}<span>{local ? `${name} (You)` : name}{isScreen ? " · Presenting" : isSecondary ? " · Instrument camera" : ""}</span></div>
   </article>;
 }
-
-

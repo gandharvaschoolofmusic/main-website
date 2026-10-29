@@ -110,7 +110,7 @@ model PhoneVerificationToken {
 model PlatformSettings {
   id                   Int     @id @default(1)
   freeTrialLessonCount Int     @default(2)
-  googleDriveFolderId  String?
+  storageProvider      String  @default("SUPABASE")
 }
 
 /// Tracks how many free trial lessons a student has been granted and used.
@@ -237,7 +237,7 @@ model LessonRecording {
   fileName        String
   fileSizeBytes   Int
   durationSeconds Int?
-  storageBackend  String   @default("GOOGLE_DRIVE")
+  storageBackend  String   @default("SUPABASE")
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -529,7 +529,7 @@ model Notification {
   @@index([userId, createdAt])
 }
 
-/// Educational learning resource uploaded by a teacher to Google Drive.
+/// Educational learning resource stored in Supabase.
 model Resource {
   id            String           @id @default(cuid())
   teacherId     String
@@ -740,3 +740,4 @@ enum ResourceCategory {
   REFERENCE
   OTHER
 }
+

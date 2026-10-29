@@ -1,5 +1,7 @@
 "use client";
 
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
+
 import { useState, useTransition } from "react";
 import { EventType } from "@prisma/client";
 import {
@@ -538,12 +540,10 @@ export function AdminEventsManager({
                   <label className="text-xs font-semibold text-heading">
                     Date & Time
                   </label>
-                  <input
-                    type="datetime-local"
-                    required
+                  <DateTimePicker
                     value={startsAt}
-                    onChange={(e) => setStartsAt(e.target.value)}
-                    className="w-full rounded-xl bg-white border border-primary/15 px-3.5 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                    onChange={setStartsAt}
+                    required
                   />
                 </div>
 

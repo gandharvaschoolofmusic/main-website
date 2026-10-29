@@ -1,8 +1,9 @@
 "use client";
 import { countryOptions } from "@/Data/CountryCode";
-import Image from "next/image";
+import { FormShell } from "@/components/auth/FormShell";
+import { BookingSummary } from "@/components/auth/BookingSummary";
 import Link from "next/link";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import Select, { ActionMeta, SingleValue } from "react-select";
 import { useRouter } from "next/navigation";
 
@@ -79,17 +80,6 @@ export default function BookYourFreeTrialClient() {
   );
   const router = useRouter();
 
-  useEffect(() => {
-    const params = new URLSearchParams(window.location.search);
-    const ref = params.get("ref");
-
-    if (ref) {
-      setRefCode(ref);
-      setIsReadOnly(true);
-      validateReferral(ref);
-    }
-  }, []);
-
   const chnageStep = (newStep: number) => {
     setStep(newStep);
   };
@@ -102,27 +92,24 @@ export default function BookYourFreeTrialClient() {
     });
   };
 
-  const validateReferral = async (code: string) => {
+  const validateReferral = useCallback((code: string) => {
     const validCodes = ["ABD345", "MUSIC10", "TRIAL50"];
     const isValidCode = validCodes.includes(code.toUpperCase());
-
     setShowValidation(true);
     setIsValid(isValidCode);
     setIsReadOnly(isValidCode);
-    if (isValidCode) {
-      setRefCode(code);
-      setFormData({
-        ...formData,
-        referralCode: code,
-      });
-    } else {
-      setRefCode("");
-      setFormData({
-        ...formData,
-        referralCode: "",
-      });
+    setRefCode(isValidCode ? code : "");
+    setFormData(previous => ({ ...previous, referralCode: isValidCode ? code : "" }));
+  }, [setShowValidation, setIsValid, setIsReadOnly, setRefCode, setFormData]);
+
+  useEffect(() => {
+    const ref = new URLSearchParams(window.location.search).get("ref");
+    if (ref) {
+      // Read browser-only referral data after hydration.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      validateReferral(ref);
     }
-  };
+  }, [validateReferral]);
 
   type CountryOption = { value: string; label: string };
 
@@ -154,7 +141,6 @@ export default function BookYourFreeTrialClient() {
     newValue: SingleValue<Option>,
     _actionMeta: ActionMeta<Option> // Unused but kept
   ) => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     void _actionMeta;
     if (newValue) {
       // console.log("Selected Category:", newValue.value);
@@ -324,41 +310,24 @@ export default function BookYourFreeTrialClient() {
   };
 
   return (
-    <div>
-      <section className="bg-[#3C096C] w-full h-[50vh] md:h-[35vh] bg-no-repeat bg-top bg-cover flex flex-col items-start justify-center py-10 px-4">
-        <div className="flex flex-col items-center justify-center w-full">
-          <div className="w-full flex items-center justify-center mb-4 mt-10">
-            <Image
-              src={"/cropped-Add-a-subheading-5-png-scaled.avif"}
-              alt="logo"
-              height={200}
-              width={200}
-            />
-          </div>
-          <div
-            className="text-white text-[16px] md:text-[16px] w-full flex flex-col md:flex-row items-center md:items-center gap-2 md:gap-0 md:justify-evenly  p-2"
-            style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 500 }}
-          >
-            <p>1. Student Details</p>
-            <p>2. Date & Time</p>
-            <p>3. Contact Details</p>
-          </div>
-        </div>
-      </section>
-
-      <div
-        className="flex justify-center  px-4 mt-10 "
-        style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 400 }}
-      >
+    <FormShell variant="student" sidebar={
+      <BookingSummary
+        discipline={formData.category || "Choose your discipline"}
+        date={formData.prefDate ? new Date(`${formData.prefDate}T12:00:00`).toLocaleDateString("en-US", { weekday: "long", month: "short", day: "numeric" }) : undefined}
+        time={formData.prefTime || undefined}
+        onEditDiscipline={step > 1 ? () => chnageStep(1) : undefined}
+        onEditSchedule={step === 3 ? () => chnageStep(2) : undefined}
+      />
+    }>
+      <div className="entry-legacy-trial">
+        <nav className="entry-legacy-progress" aria-label="Trial booking progress">{["Student details", "Date & time", "Contact details"].map((label,index) => <span key={label} aria-current={step === index + 1 ? "step" : undefined}><b>{index + 1}</b>{label}</span>)}</nav>
         <form
-          className="w-full max-w-3xl sm:max-w-4xl bg-white md:p-8 px-2 sm:px-4 flex flex-row"
+          className="w-full"
           onSubmit={handleSubmit}
         >
           {/* STEP - 1  */}
           <div
-            className={`${
-              step === 1 ? "w-full h-fit" : "w-0 opacity-0 h-20 overflow-hidden"
-            } transition-all duration-300`}
+            hidden={step !== 1} className="entry-legacy-step"
           >
             <h1
               className="text-[30px]  md:text-[36px] text-center  text-[#210638] mb-4"
@@ -372,7 +341,7 @@ export default function BookYourFreeTrialClient() {
 
             {/* Phone Number */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2 sm:text-left">
+              <label htmlFor="phone" className="block text-gray-700 font-medium mb-2 sm:text-left">
                 Phone Number*{" "}
                 <span className="text-sm text-gray-500">
                   (with country code)
@@ -382,6 +351,7 @@ export default function BookYourFreeTrialClient() {
                 <div className="relative w-auto">
                   <Select
                     id="countryCode"
+                    aria-label="Country code" classNamePrefix="entry-select"
                     name="countryCode"
                     options={countryOptions}
                     onChange={handleCountryChange}
@@ -420,7 +390,8 @@ export default function BookYourFreeTrialClient() {
                   />
                 </div>
                 <input
-                  type="number"
+                  type="tel"
+                  inputMode="tel" autoComplete="tel-national"
                   id="phone"
                   name="phone"
                   onChange={handleChange}
@@ -437,7 +408,7 @@ export default function BookYourFreeTrialClient() {
 
             {/* Student Name */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2 sm:text-left">
+              <label htmlFor="name" className="block text-gray-700 font-medium mb-2 sm:text-left">
                 Student Name*
               </label>
               <input
@@ -507,6 +478,7 @@ export default function BookYourFreeTrialClient() {
               </label>
               <Select
                 options={categoryOptions}
+                aria-label="Choose your category" classNamePrefix="entry-select"
                 onChange={handleCategoryChange}
                 placeholder="Select a category"
                 styles={{
@@ -610,9 +582,7 @@ export default function BookYourFreeTrialClient() {
 
           {/* STEP - 2  */}
           <div
-            className={`${
-              step === 2 ? "w-full h-fit" : "w-0 opacity-0 h-20 overflow-hidden"
-            } transition-all duration-300`}
+            hidden={step !== 2} className="entry-legacy-step"
           >
             <h2
               className="text-[30px]  md:text-[36px] text-center  text-[#210638] mb-4"
@@ -625,7 +595,7 @@ export default function BookYourFreeTrialClient() {
             </p>
             {/* date  */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2 sm:text-left">
+              <label htmlFor="prefDate" className="block text-gray-700 font-medium mb-2 sm:text-left">
                 Choose a Date*
               </label>
               <input
@@ -642,7 +612,7 @@ export default function BookYourFreeTrialClient() {
             </div>
             {/* time  */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2 sm:text-left">
+              <label htmlFor="prefTime" className="block text-gray-700 font-medium mb-2 sm:text-left">
                 Choose a Time*
               </label>
               <input
@@ -689,9 +659,7 @@ export default function BookYourFreeTrialClient() {
 
           {/* STEP - 3  */}
           <div
-            className={`${
-              step === 3 ? "w-full h-fit" : "w-0 opacity-0 h-20 overflow-hidden"
-            } transition-all duration-300`}
+            hidden={step !== 3} className="entry-legacy-step"
           >
             <h2
               className="text-[30px]  md:text-[36px] text-center  text-[#210638] mb-4"
@@ -707,7 +675,7 @@ export default function BookYourFreeTrialClient() {
                 Student Age Group*
               </label>
               <select
-                name="age"
+                name="age" aria-label="Student age group"
                 onChange={handleChange}
                 value={formData.age}
                 className="w-full px-4 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-orange-500 hover:border-orange-500"
@@ -726,7 +694,7 @@ export default function BookYourFreeTrialClient() {
 
             {/* email */}
             <div className="mb-6">
-              <label className="block text-gray-700 font-medium mb-2 sm:text-left">
+              <label htmlFor="email" className="block text-gray-700 font-medium mb-2 sm:text-left">
                 Email*
               </label>
               <input
@@ -792,16 +760,8 @@ export default function BookYourFreeTrialClient() {
           </div>
         </form>
       </div>
-
-      <div className="mt-8">
-        <p
-          className="bg-[#FF9E00]  py-5  text-white text-[19px] md:text-[24px] text-center "
-          style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 500 }}
-        >
-          24/7 Dedicated Customer Support
-        </p>
-      </div>
-    </div>
+      <p className="entry-form-footer">24/7 Dedicated Customer Support</p>
+    </FormShell>
   );
 }
 
@@ -815,7 +775,7 @@ function WarningMsg({ message }: { message: string }) {
 
 // "use client";
 // import { countryOptions } from "@/Data/CountryCode";
-// import Image from "next/image";
+// import { FormShell } from "@/components/auth/FormShell";
 // import Link from "next/link";
 // import { useEffect, useState, useRef } from "react";
 // import Select, { ActionMeta, SingleValue } from "react-select";
@@ -1377,7 +1337,7 @@ function WarningMsg({ message }: { message: string }) {
 //         style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 400 }}
 //       >
 //         <form
-//           className="w-full max-w-3xl sm:max-w-4xl bg-white md:p-8 px-2 sm:px-4 flex flex-row"
+//           className="w-full"
 //           onSubmit={handleSubmit}
 //         >
 //           {/* STEP - 1  */}

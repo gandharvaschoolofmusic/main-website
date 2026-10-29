@@ -2,7 +2,7 @@ import { NextRequest } from "next/server";
 import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
-import { uploadToDrive, isDriveConfigured } from "@/lib/google-drive";
+import { uploadToSupabase } from "@/lib/supabase-storage";
 import { logger } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
@@ -14,8 +14,8 @@ import path from "path";
  * Receives the recorded lesson video/audio (WebM/MP4).
  *
  * 1. Authenticates session (Teacher, Student, or Admin).
- * 2. Uploads to configured Google Drive folder if available.
- * 3. Gracefully falls back to local server storage if Google Drive is not configured or hits personal quota.
+ * 2. Uploads to Supabase storage / database.
+ * 3. Gracefully falls back to local server storage if database is unreachable.
  * 4. Persists the recording metadata to Lesson and LessonRecording models.
  */
 export async function POST(
@@ -98,35 +98,32 @@ export async function POST(
 
     let fileUrl = "";
     let fileId: string | null = null;
-    let storageBackend: "GOOGLE_DRIVE" | "LOCAL" = "LOCAL";
+    let storageBackend: "SUPABASE" | "LOCAL" = "LOCAL";
 
-    // 5. Try Google Drive upload first (with clean human-readable name)
-    let driveError: string | null = null;
-    if (isDriveConfigured()) {
-      try {
-        const driveResult = await uploadToDrive(buffer, fileName, mimeType, {
-          preserveExactName: true,
-        });
-        fileUrl = driveResult.fileUrl;
-        fileId = driveResult.fileId;
-        storageBackend = "GOOGLE_DRIVE";
-        logger.info(
-          { lessonId, fileId, fileName },
-          "Lesson recording successfully uploaded to Google Drive",
-        );
-      } catch (err: unknown) {
-        driveError = err instanceof Error ? err.message : String(err);
-        logger.warn(
-          { error: driveError, lessonId },
-          "Google Drive upload encountered an error. Falling back to local storage...",
-        );
-      }
-    } else {
-      driveError = "Google Drive credentials not configured in environment.";
+    // 5. Upload to Supabase storage / database
+    let uploadError: string | null = null;
+    try {
+      const uploadResult = await uploadToSupabase(buffer, fileName, mimeType, {
+        bucket: "recordings",
+        preserveExactName: true,
+      });
+      fileUrl = uploadResult.fileUrl;
+      fileId = uploadResult.fileId;
+      storageBackend = "SUPABASE";
+      logger.info(
+        { lessonId, fileId, fileName, backend: uploadResult.storageBackend },
+        "Lesson recording successfully stored in Supabase",
+      );
+    } catch (err: unknown) {
+      uploadError = err instanceof Error ? err.message : String(err);
+      logger.warn(
+        { error: uploadError, lessonId },
+        "Supabase recording upload encountered an error. Falling back to local disk storage...",
+      );
     }
 
-    // 6. Fallback to local disk storage if Google Drive failed or not configured
-    if (storageBackend !== "GOOGLE_DRIVE") {
+    // 6. Fallback to local disk storage if Supabase failed
+    if (storageBackend !== "SUPABASE") {
       const recordingsDir = path.join(process.cwd(), "public", "recordings");
       if (!fs.existsSync(recordingsDir)) {
         fs.mkdirSync(recordingsDir, { recursive: true });
@@ -196,7 +193,7 @@ export async function POST(
       fileUrl,
       fileId,
       storageBackend,
-      driveError: driveError ? driveError : undefined,
+      uploadError: uploadError ? uploadError : undefined,
     });
   } catch (error) {
     logger.error({ error }, "Failed to process lesson recording upload");

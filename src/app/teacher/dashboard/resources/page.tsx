@@ -1,7 +1,7 @@
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
-import { getConfiguredFolderId } from "@/lib/google-drive";
+import { isStorageConfigured } from "@/lib/supabase-storage";
 import { TeacherResourcesClient, TeacherResourceItem } from "@/components/resources/TeacherResourcesClient";
 import type { AllottedStudentOption } from "@/actions/resources";
 import { unstable_cache } from "next/cache";
@@ -134,22 +134,15 @@ export default async function TeacherResourcesPage() {
   const user = await requireRole(Role.TEACHER);
 
   let resourcesData = { resources: [] as any[], allottedStudents: [] as AllottedStudentOption[] };
-  let driveFolderId: string | null = null;
 
   try {
-    const [cached, folderId] = await Promise.all([
-      getCachedTeacherResourcesData(user.id),
-      getConfiguredFolderId(),
-    ]);
-    resourcesData = cached;
-    driveFolderId = folderId;
+    resourcesData = await getCachedTeacherResourcesData(user.id);
   } catch (err) {
     console.error("Failed to load cached teacher resources:", err);
-    driveFolderId = await getConfiguredFolderId();
   }
 
   const { resources, allottedStudents } = resourcesData;
-  const isDriveReady = Boolean(driveFolderId);
+  const isDriveReady = isStorageConfigured();
 
   // Format resources safely
   const formattedResources: TeacherResourceItem[] = resources.map((r: any) => ({

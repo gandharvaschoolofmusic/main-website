@@ -2,20 +2,20 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-import { getConfiguredFolderId } from "@/lib/google-drive";
+import { isStorageConfigured } from "@/lib/supabase-storage";
 import { AdminResourcesClient, AdminResourceItem } from "./AdminResourcesClient";
 import type { AllottedStudentOption } from "@/actions/resources";
 
 export const metadata = {
   title: "Academy Learning Resources | Admin Portal | Gandharva School of Music",
   description:
-    "Institutional repository of sheet music, audio tracks, lesson notes, and practice exercises synced with Google Drive.",
+    "Institutional repository of sheet music, audio tracks, lesson notes, and practice exercises synced with Supabase Cloud Storage.",
 };
 
 const getCachedAdminResourcesData = unstable_cache(
   async () => {
     // Run all fetches in parallel using direct db queries (never call auth() inside cache scope)
-    const [resources, enrollments, studentsList, driveFolderId] = await Promise.all([
+    const [resources, enrollments, studentsList] = await Promise.all([
       db.resource.findMany({
         orderBy: { createdAt: "desc" },
         include: {
@@ -73,10 +73,9 @@ const getCachedAdminResourcesData = unstable_cache(
         select: { id: true, name: true, email: true, image: true },
         take: 100,
       }),
-      getConfiguredFolderId(),
     ]);
 
-    const isDriveReady = Boolean(driveFolderId);
+    const isDriveReady = isStorageConfigured();
 
     // Format resources safely for client component
     const formattedResources: AdminResourceItem[] = resources.map((r) => ({

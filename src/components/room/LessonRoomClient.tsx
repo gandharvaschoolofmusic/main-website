@@ -110,5 +110,3 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     />
   );
 }
-
-

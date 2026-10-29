@@ -1,14 +1,13 @@
 "use client";
 
-import { useState, useTransition, useEffect } from "react";
+import { useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { BookingSummary } from "@/components/auth/BookingSummary";
 import {
   CheckCircle2,
   ArrowRight,
   Loader2,
   Info,
-  ChevronRight,
   Clock,
   Eye,
   EyeOff,
@@ -21,9 +20,12 @@ import {
   Mic,
   X,
   Sparkles,
+  Piano, Guitar, Drum, ArrowLeft, ChevronDown,
 } from "lucide-react";
 import { createTrialRequestAction } from "@/actions/trial";
 import { sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
+import "@/components/auth/form-ui.css";
+import "./trial-ui.css";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import {
   CountryCodeSelector,
@@ -162,7 +164,7 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     id: "Bollywood & Light Vocals (North India)",
     name: "Bollywood & Light Vocals",
     category: "Singing",
-    subtitle: "North India",
+    subtitle: "North Indian tradition",
     iconType: "bollywood",
     iconBoxBg: "bg-purple-100/70 text-purple-700",
   },
@@ -200,216 +202,26 @@ export const CATALOG_ITEMS: CatalogItem[] = [
   },
 ];
 
-function CategoryIcon({
-  type,
-  isSelected,
-}: {
-  type: CatalogItem["iconType"];
-  isSelected: boolean;
-}) {
-  switch (type) {
-    case "piano":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <rect x="3" y="4" width="18" height="16" rx="2.5" />
-          <path d="M7 4v8M12 4v8M17 4v8" />
-          <rect x="5.5" y="4" width="3" height="7.5" rx="0.5" fill="currentColor" />
-          <rect x="10.5" y="4" width="3" height="7.5" rx="0.5" fill="currentColor" />
-          <rect x="15.5" y="4" width="3" height="7.5" rx="0.5" fill="currentColor" />
-          <path d="M3 13.5h18" />
-        </svg>
-      );
-    case "acousticGuitar":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <path d="M14.5 9.5l4.5-4.5a1.4 1.4 0 0 1 2 2l-4.5 4.5" />
-          <circle cx="9.5" cy="14.5" r="4.5" />
-          <circle cx="9.5" cy="14.5" r="1.5" fill="currentColor" fillOpacity="0.4" />
-          <path d="M12 12l5.5-5.5" />
-        </svg>
-      );
-    case "electricGuitar":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <path d="M16 8l4-4M18 4l2 2" />
-          <path d="M15 9l-3 3c-.5.5-.5 1.5 0 2l.5.5c-2 2-4.5 3.5-6.5 2.5s-.5-4.5 1.5-6.5l.5.5c.5.5 1.5.5 2 0l3-3" />
-          <circle cx="9" cy="15" r="1.2" fill="currentColor" />
-        </svg>
-      );
-    case "electronicKeyboard":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <rect x="2" y="6" width="20" height="12" rx="2" />
-          <circle cx="5.5" cy="9.5" r="1" fill="currentColor" />
-          <circle cx="8.5" cy="9.5" r="1" fill="currentColor" />
-          <path d="M12 6v6M15 6v6M18 6v6M2 13h20" />
-        </svg>
-      );
-    case "flute":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <path d="M4 20L20 4" />
-          <circle cx="8.5" cy="15.5" r="1" fill="currentColor" />
-          <circle cx="11.5" cy="12.5" r="1" fill="currentColor" />
-          <circle cx="14.5" cy="9.5" r="1" fill="currentColor" />
-          <circle cx="17.5" cy="6.5" r="1" fill="currentColor" />
-        </svg>
-      );
-    case "violin":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <path d="M15 5l4-4M17 1l2 2" />
-          <path d="M14 6l-2 2c-.5.5-.5 1.2 0 1.7.8.8.8 2 0 2.8-.5.5-.5 1.2 0 1.7l1.5 1.5c-2 2-4.5 3-6.5 2s-1-4.5 1-6.5l1.5 1.5c.5.5 1.2.5 1.7 0 .8-.8 2-.8 2.8 0 .5.5 1.2.5 1.7 0l2-2" />
-          <circle cx="9" cy="15" r="1.2" fill="currentColor" />
-        </svg>
-      );
-    case "ukulele":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <path d="M15 9l5-5M18 3l3 3" />
-          <circle cx="9" cy="15" r="4.5" />
-          <circle cx="9" cy="15" r="1.5" fill="currentColor" fillOpacity="0.4" />
-          <path d="M12 12l4-4" />
-        </svg>
-      );
-    case "tabla":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <ellipse cx="8" cy="8" rx="4.5" ry="2.5" />
-          <path d="M3.5 8v6c0 2 2 3.5 4.5 3.5s4.5-1.5 4.5-3.5V8" />
-          <circle cx="8" cy="8" r="1.5" fill="currentColor" fillOpacity="0.4" />
-          <ellipse cx="17" cy="11" rx="4" ry="2.2" />
-          <path d="M13 11v5c0 1.8 1.8 3 4 3s4-1.2 4-3v-5" />
-          <circle cx="17" cy="11" r="1.2" fill="currentColor" fillOpacity="0.4" />
-        </svg>
-      );
-    case "westernVocals":
-      return <Mic className="w-5 h-5 stroke-[2]" />;
-    case "hindustani":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <rect x="2" y="7" width="20" height="11" rx="2" />
-          <path d="M5 10v5M8 10v5M11 10v5M14 10v5M17 10v5" />
-          <rect x="5" y="10" width="2" height="3" fill="currentColor" />
-          <rect x="11" y="10" width="2" height="3" fill="currentColor" />
-          <path d="M4 7V5a1 1 0 0 1 1-1h14a1 1 0 0 1 1 1v2" />
-        </svg>
-      );
-    case "carnatic":
-      return (
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="1.8"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          className="w-5 h-5"
-        >
-          <circle cx="7" cy="16" r="4.5" />
-          <circle cx="7" cy="16" r="1.5" fill="currentColor" fillOpacity="0.3" />
-          <path d="M10.5 13.5L19 5" />
-          <circle cx="19" cy="5" r="2.5" />
-          <path d="M18 3l3 3" />
-        </svg>
-      );
-    case "bollywood":
-    case "regionalFilm":
-    default:
-      return <Music className="w-5 h-5 stroke-[2]" />;
-  }
+function CategoryIcon({ type }: { type: CatalogItem["iconType"] }) {
+  const Icon = type === "piano" || type === "electronicKeyboard" ? Piano
+    : ["acousticGuitar", "electricGuitar", "ukulele"].includes(type) ? Guitar
+    : type === "tabla" ? Drum : ["westernVocals", "hindustani", "carnatic", "bollywood", "regionalFilm"].includes(type) ? Mic : Music;
+  return <Icon size={22} strokeWidth={1.7} aria-hidden="true"/>;
 }
 
-const MORNING_SLOTS = [
+const HOURS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10", "11", "12"];
+const MINUTES = ["00", "05", "10", "15", "20", "25", "30", "35", "40", "45", "50", "55"];
+const POPULAR_SLOTS = [
   "9:00 AM",
   "9:30 AM",
   "10:00 AM",
   "10:30 AM",
   "11:00 AM",
   "11:30 AM",
-];
-
-const EVENING_SLOTS = [
   "4:00 PM",
-  "4:30 PM",
   "5:00 PM",
-  "5:30 PM",
   "6:00 PM",
-  "6:30 PM",
   "7:00 PM",
-  "7:30 PM",
 ];
 
 const AGE_GROUPS = [
@@ -477,8 +289,21 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
     );
   }
 
+  return <TrialBookingForm currentUser={currentUser}/>;
+}
+
+function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUser">) {
   // Wizard step: 1 = Category, 2 = Date/Time, 3 = Details & Age Group, 4 = Success
   const [step, setStep] = useState<1 | 2 | 3 | 4>(1);
+  const stepRef = useRef<HTMLDivElement>(null);
+  const previousStep = useRef(step);
+  useEffect(() => {
+    if (previousStep.current === step) return;
+    previousStep.current = step;
+    stepRef.current?.focus({ preventScroll: true });
+    stepRef.current?.scrollIntoView({ block: "start", behavior: "instant" });
+  }, [step]);
+
 
   // Step 1: Category & Instrument selection
   const [selectedCategory, setSelectedCategory] = useState<"Instruments" | "Singing">("Singing");
@@ -519,8 +344,20 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
   });
 
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
-  const [timePeriod, setTimePeriod] = useState<"Morning" | "Evening">("Morning");
-  const [selectedSlot, setSelectedSlot] = useState<string>("10:00 AM");
+  const [selectedHour, setSelectedHour] = useState("10");
+  const [selectedMinute, setSelectedMinute] = useState("00");
+  const [selectedPeriod, setSelectedPeriod] = useState<"AM" | "PM">("AM");
+
+  // Live formatted slot (e.g. "10:00 AM")
+  const selectedSlot = `${selectedHour}:${selectedMinute} ${selectedPeriod}`;
+
+  const handleSelectPreset = (preset: string) => {
+    const [time, p] = preset.split(" ");
+    const [h, m] = time.split(":");
+    setSelectedHour(String(parseInt(h, 10)));
+    setSelectedMinute(m);
+    setSelectedPeriod((p as "AM" | "PM") || "AM");
+  };
 
   // Step 3: Age group & Contact details
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>("Children (8 - 12 years)");
@@ -764,619 +601,141 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
   const labelClass = "block text-xs font-bold uppercase tracking-wider text-heading mb-1.5";
 
   return (
-    <div
-      className={`mx-auto px-4 sm:px-6 transition-all duration-300 ${
-        step === 1 ? "max-w-[1180px]" : "max-w-2xl"
-      }`}
-    >
-      {/* Wizard Progress Indicator (Apple-grade Stepper matching user screenshot) */}
-      {step < 4 && (
-        <div className="flex items-center justify-center max-w-lg mx-auto mb-8 px-4">
-          <div className="flex items-center w-full justify-between">
-            {/* Step 1: Category */}
-            <div className="flex flex-col items-center">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs cursor-pointer ${
-                  step === 1
-                    ? "bg-[#3C096C] text-white ring-4 ring-[#3C096C]/15"
-                    : step > 1
-                    ? "bg-[#3C096C] text-white"
-                    : "bg-[#F3E8FF] text-[#6B21A8]"
-                }`}
-              >
-                {step > 1 ? <Check className="w-4 h-4 stroke-[2.5]" /> : "1"}
-              </button>
-              <span
-                className={`text-xs mt-1.5 transition-colors ${
-                  step === 1
-                    ? "text-[#1E1A4D] font-bold"
-                    : "text-gray-400 font-medium"
-                }`}
-              >
-                Category
-              </span>
-            </div>
-
-            {/* Gradient Connector Line 1 -> 2 */}
-            <div className="flex-1 mx-3 sm:mx-5 -mt-5">
-              <div
-                className={`h-[2px] w-full rounded-full transition-all ${
-                  step >= 2
-                    ? "bg-gradient-to-r from-[#3C096C] to-[#FF7803]"
-                    : "bg-gradient-to-r from-[#3C096C] via-[#FF7803] to-[#E9D5FF]"
-                }`}
-              />
-            </div>
-
-            {/* Step 2: Date & Time */}
-            <div className="flex flex-col items-center">
-              <button
-                type="button"
-                onClick={() => selectedInstrument && setStep(2)}
-                disabled={!selectedInstrument}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
-                  step === 2
-                    ? "bg-[#3C096C] text-white ring-4 ring-[#3C096C]/15"
-                    : step > 2
-                    ? "bg-[#3C096C] text-white cursor-pointer"
-                    : "bg-[#F3E8FF] text-[#6B21A8]"
-                }`}
-              >
-                {step > 2 ? <Check className="w-4 h-4 stroke-[2.5]" /> : "2"}
-              </button>
-              <span
-                className={`text-xs mt-1.5 transition-colors ${
-                  step === 2
-                    ? "text-[#1E1A4D] font-bold"
-                    : "text-gray-400 font-medium"
-                }`}
-              >
-                Date & Time
-              </span>
-            </div>
-
-            {/* Connector Line 2 -> 3 */}
-            <div className="flex-1 mx-3 sm:mx-5 -mt-5">
-              <div
-                className={`h-[2px] w-full rounded-full transition-all ${
-                  step >= 3
-                    ? "bg-gradient-to-r from-[#FF7803] to-[#3C096C]"
-                    : "bg-[#E9D5FF]"
-                }`}
-              />
-            </div>
-
-            {/* Step 3: Your Details */}
-            <div className="flex flex-col items-center">
-              <button
-                type="button"
-                onClick={() => selectedInstrument && selectedSlot && setStep(3)}
-                disabled={!selectedInstrument || !selectedSlot}
-                className={`w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold transition-all shadow-xs ${
-                  step === 3
-                    ? "bg-[#3C096C] text-white ring-4 ring-[#3C096C]/15"
-                    : "bg-[#F3E8FF] text-[#6B21A8]"
-                }`}
-              >
-                3
-              </button>
-              <span
-                className={`text-xs mt-1.5 transition-colors ${
-                  step === 3
-                    ? "text-[#1E1A4D] font-bold"
-                    : "text-gray-400 font-medium"
-                }`}
-              >
-                Your Details
-              </span>
-            </div>
-          </div>
+    <div className="trial-layout entry-fields">
+      <aside className="trial-sidebar">
+        <BookingSummary
+          discipline={selectedDisplayName}
+          date={step >= 2 ? activeDateFormatted : undefined}
+          time={selectedSlot}
+          onEditDiscipline={step > 1 && step < 4 ? () => setStep(1) : undefined}
+          onEditSchedule={step === 3 ? () => setStep(2) : undefined}
+        />
+        <p className="trial-review-note">Your preferred schedule will be reviewed before a teacher is assigned.</p>
+      </aside>
+      <div className="trial-main" ref={stepRef} tabIndex={-1} aria-label={`Trial booking, step ${step} of ${step === 4 ? 4 : 3}`}>
+        <h1 className="trial-page-title">Book your free trial</h1>
+      {step < 4 && <nav className="trial-progress" aria-label="Booking progress">{steps.map(({num,label}) => <button key={num} type="button" aria-current={step === num ? "step" : undefined} disabled={num === 2 ? !selectedInstrument : num === 3 ? !selectedInstrument || !selectedSlot : false} onClick={() => setStep(num as 1 | 2 | 3)}><span>{step > num ? <Check size={16}/> : num}</span><strong>{label}</strong></button>)}</nav>}
+      {errorMessage && step !== 3 && <div role="alert" className="trial-error"><AlertCircle size={18}/>{errorMessage}</div>}
+      {step === 1 && <section className="trial-surface">
+        <header className="trial-section-heading"><span>Step 1 of 3</span><h2>What would you like to learn?</h2><p>Choose an instrument or singing style to get started.</p></header>
+        <div className="trial-catalog-toolbar">
+          <div className="trial-filters" role="group" aria-label="Course categories">{(["All","Instruments","Singing"] as const).map(tab => <button key={tab} type="button" aria-pressed={filterTab === tab} onClick={() => setFilterTab(tab)}>{tab}</button>)}</div>
+          <div className="trial-search"><Search size={18}/><input aria-label="Search instruments or styles" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search courses"/>{searchQuery && <button type="button" aria-label="Clear course search" onClick={() => setSearchQuery("")}><X size={17}/></button>}</div>
         </div>
-      )}
-
-      {/* Error Alert */}
-      {errorMessage && (
-        <div
-          role="alert"
-          className="mb-6 flex items-start gap-2.5 rounded-xl border border-error/30 bg-error-muted/40 p-3.5 text-sm text-error"
-        >
-          <Info className="mt-0.5 h-5 w-5 flex-shrink-0 text-error" />
-          <span>{errorMessage}</span>
-        </div>
-      )}
-
-      {/* ============ STEP 1: WHAT WOULD YOU LIKE TO LEARN? (APPLE-DESIGN REDESIGN) ============ */}
-      {step === 1 && (
-        <div className="relative overflow-hidden rounded-3xl bg-white border border-slate-200/80 shadow-[0_20px_50px_-15px_rgba(0,0,0,0.06)]">
-          {/* Top accent gradient border */}
-          <div className="h-[3px] w-full bg-gradient-to-r from-primary via-[#9810FA] to-accent" />
-
-          <div className="p-6 sm:p-8 lg:p-10 space-y-6">
-            {/* Header: Title + Subtitle on Left, Search Bar on Right */}
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <h2 className="text-2xl sm:text-3xl font-extrabold text-[#1E1A4D] tracking-tight">
-                  What would you like to learn?
-                </h2>
-                <p className="text-xs sm:text-sm text-gray-500 mt-1">
-                  Choose an instrument or singing style to get started.
-                </p>
-              </div>
-
-              {/* Search Bar */}
-              <div className="relative w-full sm:w-72">
-                <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
-                <input
-                  type="text"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder="Search instruments or styles"
-                  className="w-full pl-10 pr-8 py-2 text-xs sm:text-sm rounded-xl border border-slate-200 bg-white placeholder-gray-400 text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 shadow-2xs transition-all"
-                />
-                {searchQuery && (
-                  <button
-                    type="button"
-                    onClick={() => setSearchQuery("")}
-                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 cursor-pointer"
-                  >
-                    <X className="w-3.5 h-3.5" />
-                  </button>
-                )}
+        {filteredItems.length === 0 ? <div className="trial-empty"><Search size={28}/><h3>No matching courses</h3><p>Try another instrument or singing style.</p><button type="button" onClick={() => {setSearchQuery("");setFilterTab("All");}}>Clear filters</button></div> : <div className="trial-catalog">{[{name:"Instruments",items:instrumentsList},{name:"Singing",items:singingList}].filter(group => group.items.length).map(group => <section key={group.name} className="trial-category"><h3>{group.name}<span>{group.items.length}</span></h3><div className="trial-course-grid">{group.items.map(item => <button key={item.id} type="button" className="trial-course" aria-pressed={selectedInstrument === item.id} onClick={() => {setSelectedInstrument(item.id);setSelectedCategory(item.category);}}><span className="trial-course-icon"><CategoryIcon type={item.iconType}/></span><span className="trial-course-copy"><strong>{item.name}</strong><small>{item.subtitle}{item.tags?.length ? ` · ${item.tags.join(" · ")}` : ""}</small></span><span className="trial-course-check">{selectedInstrument === item.id && <Check size={14}/>}</span></button>)}</div></section>)}</div>}
+        <footer className="trial-actions"><p><span>Selected</span><strong>{selectedDisplayName}</strong></p><button type="button" className="entry-primary" disabled={!selectedInstrument} onClick={() => setStep(2)}>Choose a time <ArrowRight size={18}/></button></footer>
+      </section>}
+      {step === 2 && <section className="trial-surface">
+        <header className="trial-section-heading"><span>Step 2 of 3</span><h2>When is a good time?</h2><p>Choose your preferred date and time for the lesson.</p></header>
+        <h3 className="trial-field-title">Choose a date</h3>
+        <div className="trial-dates" role="group" aria-label="Preferred lesson date">{dates.map((date,index) => <button key={index} type="button" aria-pressed={selectedDateIndex === index} aria-label={date.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} onClick={() => setSelectedDateIndex(index)}><small>{index === 0 ? "Today" : date.toLocaleDateString("en-US",{weekday:"short"})}</small><strong>{date.getDate()}</strong><small>{date.toLocaleDateString("en-US",{month:"short"})}</small></button>)}</div>
+        <h3 className="trial-field-title">Choose your preferred time</h3>
+        <div className="trial-custom-time-card">
+          <div className="trial-time-controls-row">
+            {/* Hour Selector */}
+            <div className="trial-time-col">
+              <label htmlFor="trialHourSelect" className="trial-time-col-label">Hour</label>
+              <div className="trial-time-select-wrap">
+                <select
+                  id="trialHourSelect"
+                  aria-label="Select hour"
+                  value={selectedHour}
+                  onChange={(e) => setSelectedHour(e.target.value)}
+                  className="trial-time-select"
+                >
+                  {HOURS.map((h) => (
+                    <option key={h} value={h}>
+                      {h}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={18} className="trial-time-select-icon" aria-hidden="true" />
               </div>
             </div>
 
-            {/* Filter Pills */}
-            <div className="inline-flex items-center gap-1 p-1 rounded-full border border-slate-200/90 bg-white shadow-2xs">
-              {(["All", "Instruments", "Singing"] as const).map((tab) => (
-                <button
-                  key={tab}
-                  type="button"
-                  onClick={() => setFilterTab(tab)}
-                  className={`px-4 py-1.5 rounded-full text-xs sm:text-sm font-semibold transition-all cursor-pointer ${
-                    filterTab === tab
-                      ? "bg-[#3C096C] text-white shadow-xs"
-                      : "text-gray-600 hover:text-black"
-                  }`}
+            <span className="trial-time-colon-separator" aria-hidden="true">:</span>
+
+            {/* Minute Selector */}
+            <div className="trial-time-col">
+              <label htmlFor="trialMinuteSelect" className="trial-time-col-label">Minute</label>
+              <div className="trial-time-select-wrap">
+                <select
+                  id="trialMinuteSelect"
+                  aria-label="Select minute"
+                  value={selectedMinute}
+                  onChange={(e) => setSelectedMinute(e.target.value)}
+                  className="trial-time-select"
                 >
-                  {tab}
-                </button>
-              ))}
+                  {MINUTES.map((m) => (
+                    <option key={m} value={m}>
+                      {m}
+                    </option>
+                  ))}
+                </select>
+                <ChevronDown size={18} className="trial-time-select-icon" aria-hidden="true" />
+              </div>
             </div>
 
-            {/* Catalog Grid Area */}
-            {filteredItems.length === 0 ? (
-              <div className="text-center py-16 px-4 space-y-3">
-                <div className="w-12 h-12 rounded-2xl bg-purple-50 text-purple-600 mx-auto flex items-center justify-center">
-                  <Search className="w-6 h-6" />
-                </div>
-                <h3 className="text-base font-bold text-heading">
-                  No courses found matching &ldquo;{searchQuery}&rdquo;
-                </h3>
-                <p className="text-xs text-body-muted max-w-sm mx-auto">
-                  Try searching for another instrument (e.g. Guitar, Piano) or vocal style.
-                </p>
+            {/* AM / PM Segmented Control */}
+            <div className="trial-time-col trial-time-col-period">
+              <span className="trial-time-col-label">Time of Day</span>
+              <div className="trial-ampm-switch" role="radiogroup" aria-label="Time of day">
                 <button
                   type="button"
-                  onClick={() => {
-                    setSearchQuery("");
-                    setFilterTab("All");
-                  }}
-                  className="mt-2 inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary/10 text-primary text-xs font-bold hover:bg-primary/15 transition-colors cursor-pointer"
+                  role="radio"
+                  aria-checked={selectedPeriod === "AM"}
+                  onClick={() => setSelectedPeriod("AM")}
+                  className={`trial-ampm-btn ${selectedPeriod === "AM" ? "active" : ""}`}
                 >
-                  Clear Filters
-                </button>
-              </div>
-            ) : filterTab === "All" ? (
-              /* Two Column Layout (Instruments on Left, Singing on Right) */
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:gap-8 pt-1">
-                {/* ─── INSTRUMENTS COLUMN ─── */}
-                {instrumentsList.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#481282]" />
-                      <h3 className="font-bold text-sm text-[#1E1A4D]">Instruments</h3>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {instrumentsList.map((item) => {
-                        const isSelected = selectedInstrument === item.id;
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategory(item.category);
-                              setSelectedInstrument(item.id);
-                            }}
-                            className={`relative p-3.5 rounded-2xl border text-left flex flex-col justify-between min-h-[148px] transition-all cursor-pointer active:scale-[0.97] ${
-                              isSelected
-                                ? "border-2 border-[#581C87] bg-white ring-4 ring-[#581C87]/10 shadow-[0_8px_20px_-4px_rgba(88,28,135,0.22)]"
-                                : "border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-xs"
-                            }`}
-                          >
-                            {/* Selected Check Badge */}
-                            {isSelected && (
-                              <div className="absolute top-2.5 right-2.5 w-4.5 h-4.5 rounded-full bg-[#3C096C] text-white flex items-center justify-center shadow-xs">
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              </div>
-                            )}
-
-                            {/* Top: Icon Box */}
-                            <div
-                              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${
-                                isSelected
-                                  ? "bg-purple-100 text-purple-700"
-                                  : "bg-[#F3E8FF] text-[#481282]"
-                              }`}
-                            >
-                              <CategoryIcon type={item.iconType} isSelected={isSelected} />
-                            </div>
-
-                            {/* Middle & Bottom: Details */}
-                            <div className="mt-2.5">
-                              <h4 className="font-bold text-xs sm:text-[13px] text-[#1E1A4D] leading-snug">
-                                {item.name}
-                              </h4>
-                              <p className="text-[11px] text-gray-500 font-normal mt-0.5 line-clamp-1">
-                                {item.subtitle}
-                              </p>
-
-                              {/* Tags */}
-                              {item.tags && item.tags.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-1 mt-2">
-                                  {item.tags.map((t) => (
-                                    <span
-                                      key={t}
-                                      className="text-[9px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 leading-none"
-                                    >
-                                      {t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-
-                {/* ─── SINGING COLUMN ─── */}
-                {singingList.length > 0 && (
-                  <div className="space-y-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2.5 h-2.5 rounded-full bg-[#FF7703]" />
-                      <h3 className="font-bold text-sm text-[#1E1A4D]">Singing</h3>
-                    </div>
-                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-                      {singingList.map((item) => {
-                        const isSelected = selectedInstrument === item.id;
-                        const isBollywood = item.id.includes("Bollywood");
-
-                        return (
-                          <button
-                            key={item.id}
-                            type="button"
-                            onClick={() => {
-                              setSelectedCategory(item.category);
-                              setSelectedInstrument(item.id);
-                            }}
-                            className={`relative p-3.5 rounded-2xl border text-left flex flex-col justify-between min-h-[148px] transition-all cursor-pointer active:scale-[0.97] ${
-                              isSelected
-                                ? "border-2 border-[#581C87] bg-white ring-4 ring-[#581C87]/10 shadow-[0_8px_20px_-4px_rgba(88,28,135,0.22)]"
-                                : "border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-xs"
-                            }`}
-                          >
-                            {/* Selected Check Badge */}
-                            {isSelected && (
-                              <div className="absolute top-2.5 right-2.5 w-4.5 h-4.5 rounded-full bg-[#3C096C] text-white flex items-center justify-center shadow-xs">
-                                <Check className="w-2.5 h-2.5 stroke-[3]" />
-                              </div>
-                            )}
-
-                            {/* Top: Icon Box */}
-                            <div
-                              className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${
-                                isSelected && isBollywood
-                                  ? "bg-gradient-to-br from-[#7C3AED] to-[#A855F7] text-white shadow-md"
-                                  : isSelected
-                                  ? "bg-purple-100 text-purple-700"
-                                  : item.defaultIconBg || "bg-[#F3E8FF] text-[#481282]"
-                              }`}
-                            >
-                              <CategoryIcon type={item.iconType} isSelected={isSelected} />
-                            </div>
-
-                            {/* Middle & Bottom: Details */}
-                            <div className="mt-2.5">
-                              <h4 className="font-bold text-xs sm:text-[13px] text-[#1E1A4D] leading-snug">
-                                {item.name}
-                              </h4>
-                              <p className="text-[11px] text-gray-500 font-normal mt-0.5 line-clamp-1">
-                                {item.subtitle}
-                              </p>
-
-                              {/* Tags */}
-                              {item.tags && item.tags.length > 0 && (
-                                <div className="flex flex-wrap items-center gap-1 mt-2">
-                                  {item.tags.map((t) => (
-                                    <span
-                                      key={t}
-                                      className="text-[9px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 leading-none"
-                                    >
-                                      {t}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                )}
-              </div>
-            ) : (
-              /* Single Selected Category View (Instruments or Singing) */
-              <div className="space-y-3 pt-1">
-                <div className="flex items-center gap-2">
-                  <span
-                    className={`w-2.5 h-2.5 rounded-full ${
-                      filterTab === "Instruments" ? "bg-[#481282]" : "bg-[#FF7703]"
-                    }`}
-                  />
-                  <h3 className="font-bold text-sm text-[#1E1A4D]">
-                    {filterTab} ({filteredItems.length})
-                  </h3>
-                </div>
-                <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-4 gap-3.5">
-                  {filteredItems.map((item) => {
-                    const isSelected = selectedInstrument === item.id;
-                    const isBollywood = item.id.includes("Bollywood");
-
-                    return (
-                      <button
-                        key={item.id}
-                        type="button"
-                        onClick={() => {
-                          setSelectedCategory(item.category);
-                          setSelectedInstrument(item.id);
-                        }}
-                        className={`relative p-3.5 rounded-2xl border text-left flex flex-col justify-between min-h-[148px] transition-all cursor-pointer active:scale-[0.97] ${
-                          isSelected
-                            ? "border-2 border-[#581C87] bg-white ring-4 ring-[#581C87]/10 shadow-[0_8px_20px_-4px_rgba(88,28,135,0.22)]"
-                            : "border-slate-200/90 bg-white hover:border-slate-300 hover:shadow-xs"
-                        }`}
-                      >
-                        {/* Selected Check Badge */}
-                        {isSelected && (
-                          <div className="absolute top-2.5 right-2.5 w-4.5 h-4.5 rounded-full bg-[#3C096C] text-white flex items-center justify-center shadow-xs">
-                            <Check className="w-2.5 h-2.5 stroke-[3]" />
-                          </div>
-                        )}
-
-                        <div
-                          className={`w-9 h-9 sm:w-10 sm:h-10 rounded-xl flex items-center justify-center transition-all ${
-                            isSelected && isBollywood
-                              ? "bg-gradient-to-br from-[#7C3AED] to-[#A855F7] text-white shadow-md"
-                              : isSelected
-                              ? "bg-purple-100 text-purple-700"
-                              : item.defaultIconBg || "bg-[#F3E8FF] text-[#481282]"
-                          }`}
-                        >
-                          <CategoryIcon type={item.iconType} isSelected={isSelected} />
-                        </div>
-
-                        <div className="mt-2.5">
-                          <h4 className="font-bold text-xs sm:text-[13px] text-[#1E1A4D] leading-snug">
-                            {item.name}
-                          </h4>
-                          <p className="text-[11px] text-gray-500 font-normal mt-0.5 line-clamp-1">
-                            {item.subtitle}
-                          </p>
-
-                          {item.tags && item.tags.length > 0 && (
-                            <div className="flex flex-wrap items-center gap-1 mt-2">
-                              {item.tags.map((t) => (
-                                <span
-                                  key={t}
-                                  className="text-[9px] font-semibold text-slate-500 bg-slate-100 rounded px-1.5 py-0.5 leading-none"
-                                >
-                                  {t}
-                                </span>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* Footer Row (Matching Screenshot) */}
-            <div className="border-t border-slate-100 pt-5 mt-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-              {/* Selected Badge */}
-              <div className="flex items-center gap-2">
-                <div className="w-7 h-7 rounded-lg bg-purple-100/90 text-purple-700 flex items-center justify-center shrink-0">
-                  <Music className="w-3.5 h-3.5" />
-                </div>
-                <span className="text-xs sm:text-sm text-gray-600 font-medium">
-                  Selected:{" "}
-                  <strong className="text-[#1E1A4D] font-bold">
-                    {selectedDisplayName}
-                  </strong>
-                </span>
-              </div>
-
-              {/* Action Buttons */}
-              <div className="flex items-center gap-3 self-end sm:self-auto">
-                <button
-                  type="button"
-                  disabled
-                  className="text-xs sm:text-sm font-semibold text-gray-400 px-3 py-2 cursor-not-allowed opacity-60"
-                >
-                  Back
+                  AM
                 </button>
                 <button
                   type="button"
-                  onClick={() => setStep(2)}
-                  disabled={!selectedInstrument}
-                  className="btn-tactile inline-flex items-center gap-2 rounded-full bg-[#3C096C] hover:bg-[#2D0752] active:scale-[0.98] text-white px-6 py-2.5 text-xs sm:text-sm font-bold shadow-md shadow-primary/20 transition-all disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+                  role="radio"
+                  aria-checked={selectedPeriod === "PM"}
+                  onClick={() => setSelectedPeriod("PM")}
+                  className={`trial-ampm-btn ${selectedPeriod === "PM" ? "active" : ""}`}
                 >
-                  <span>Next: Pick Date & Time</span>
-                  <ArrowRight className="w-4 h-4" />
+                  PM
                 </button>
               </div>
             </div>
           </div>
-        </div>
-      )}
 
-      {/* ============ STEP 2: DATE & TIME ============ */}
-      {step === 2 && (
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-surface-muted/80 shadow-xl shadow-primary/5 backdrop-blur-sm">
-          {/* Top accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
-
-          <div className="p-6 sm:p-8 space-y-6 pt-8">
-            <div className="text-center space-y-1">
-              <h2 className="text-lg sm:text-xl font-bold text-heading tracking-tight">
-                When is a good time?
-              </h2>
-              <p className="text-xs text-body">
-                Pick a date and time that works for you
-              </p>
-            </div>
-
-            {/* Date Selector - Horizontal scroll with proper padding */}
-            <div className="relative">
-              <div className="flex items-center gap-2 sm:gap-3 overflow-x-auto py-3 px-4 scroll-px-4 no-scrollbar sm:justify-center">
-                {dates.map((d, idx) => {
-                  const isSelected = selectedDateIndex === idx;
-                  const isToday = idx === 0;
-                  const dayName = isToday
-                    ? "Today"
-                    : d.toLocaleDateString("en-US", { weekday: "short" });
-                  const dayNum = d.getDate();
-                  const monthName = d.toLocaleDateString("en-US", { month: "short" });
-
-                  return (
-                    <button
-                      key={idx}
-                      type="button"
-                      onClick={() => setSelectedDateIndex(idx)}
-                      className={`flex flex-col items-center justify-center shrink-0 w-16 py-3 rounded-2xl transition-all ${
-                        isSelected
-                          ? "bg-gradient-to-br from-primary to-cta text-white shadow-lg shadow-primary/30 scale-105"
-                          : "bg-bg-alt/30 text-heading hover:bg-bg-alt/50"
-                      }`}
-                    >
-                      <span className={`text-[10px] font-semibold leading-none ${isSelected ? "text-white/80" : "text-body/60"}`}>
-                        {dayName}
-                      </span>
-                      <span className="text-lg font-bold leading-tight mt-0.5">{dayNum}</span>
-                      <span className={`text-[9px] font-medium leading-none mt-0.5 ${isSelected ? "text-white/70" : "text-body/40"}`}>
-                        {monthName}
-                      </span>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Date label & Morning/Evening toggle */}
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pt-1">
-              <div className="flex items-center gap-2 text-xs text-body font-medium">
-                <span className="font-semibold text-heading">{activeDateFormatted}</span>
-                <span className="px-2 py-0.5 rounded-full bg-bg-alt/40 text-body/60 text-[10px] font-semibold">
-                  Your local time
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setTimePeriod("Morning")}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    timePeriod === "Morning"
-                      ? "bg-gradient-to-r from-primary to-cta text-white shadow-sm shadow-primary/20"
-                      : "bg-bg-alt/30 text-body hover:text-heading hover:bg-bg-alt/50"
-                  }`}
-                >
-                  Morning
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setTimePeriod("Evening")}
-                  className={`px-4 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                    timePeriod === "Evening"
-                      ? "bg-gradient-to-r from-primary to-cta text-white shadow-sm shadow-primary/20"
-                      : "bg-bg-alt/30 text-body hover:text-heading hover:bg-bg-alt/50"
-                  }`}
-                >
-                  Evening
-                </button>
-              </div>
-            </div>
-
-            {/* Time Slot Grid */}
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-              {(timePeriod === "Morning" ? MORNING_SLOTS : EVENING_SLOTS).map((slot) => {
+          {/* Quick select popular times */}
+          <div className="trial-popular-section">
+            <span className="trial-popular-label">Or quick pick a popular time:</span>
+            <div className="trial-popular-grid" role="group" aria-label="Popular time slots">
+              {POPULAR_SLOTS.map((slot) => {
                 const isSelected = selectedSlot === slot;
                 return (
                   <button
                     key={slot}
                     type="button"
-                    onClick={() => setSelectedSlot(slot)}
-                    className={`py-3 px-4 rounded-xl text-xs font-bold transition-all ${
-                      isSelected
-                        ? "bg-cta/15 text-cta shadow-sm ring-2 ring-cta/30 font-extrabold"
-                        : "bg-bg-alt/25 text-heading hover:bg-bg-alt/45"
-                    }`}
+                    aria-pressed={isSelected}
+                    onClick={() => handleSelectPreset(slot)}
+                    className={`trial-popular-btn ${isSelected ? "active" : ""}`}
                   >
                     {slot}
+                    {isSelected && <Check size={14} className="inline ml-1.5" />}
                   </button>
                 );
               })}
             </div>
-
-            {/* Navigation */}
-            <div className="pt-4 flex items-center justify-between">
-              <button
-                type="button"
-                onClick={() => setStep(1)}
-                className="px-5 py-2.5 rounded-xl bg-bg-alt/30 text-body hover:text-heading text-xs font-bold transition-colors"
-              >
-                Previous
-              </button>
-              <button
-                type="button"
-                onClick={() => setStep(3)}
-                className="btn-tactile flex items-center gap-1.5 rounded-xl bg-primary px-6 py-2.5 text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-light"
-              >
-                <span>Enter Your Details</span>
-                <ChevronRight className="w-4 h-4" />
-              </button>
-            </div>
           </div>
         </div>
-      )}
 
+        <p className="trial-time-note"><Clock size={16}/>Times are shown in your local time.</p>
+        <footer className="trial-actions"><button type="button" className="trial-back" onClick={() => setStep(1)}><ArrowLeft size={16}/>Back</button><button type="button" className="entry-primary" disabled={!selectedSlot} onClick={() => setStep(3)}>Your details <ArrowRight size={18}/></button></footer>
+      </section>}
       {/* ============ STEP 3: ACCOUNT DETAILS & AGE GROUP ============ */}
       {step === 3 && (
         <form
           onSubmit={handleSubmitBooking}
-          className="relative overflow-hidden rounded-2xl bg-white border border-surface-muted/80 shadow-xl shadow-primary/5 backdrop-blur-sm"
+          className="trial-surface trial-details"
         >
-          {/* Top accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
 
-          <div className="p-6 sm:p-8 space-y-6 pt-8">
+          <div className="space-y-6">
             <div>
               <h2 className="text-lg sm:text-xl font-bold text-heading tracking-tight">
                 Student Age Group & Details
@@ -1410,6 +769,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                       key={g.id}
                       type="button"
                       onClick={() => setSelectedAgeGroup(`${g.label} (${g.range})`)}
+                      aria-pressed={isSelected}
                       className={`p-3.5 rounded-xl text-left transition-all flex flex-col justify-between ${
                         isSelected
                           ? "bg-primary/8 ring-2 ring-primary/30 shadow-sm"
@@ -1438,7 +798,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                   Student Full Name *
                 </label>
                 <input
-                  id="studentName"
+                  id="studentName" autoComplete="name"
                   type="text"
                   required
                   value={studentName}
@@ -1453,7 +813,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                   Email Address *
                 </label>
                 <input
-                  id="studentEmail"
+                  id="studentEmail" autoComplete="email"
                   type="email"
                   required
                   value={studentEmail}
@@ -1464,11 +824,11 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
               </div>
 
               {/* Mobile Phone Verification */}
-              <div className="sm:col-span-2 rounded-2xl border border-primary/20 bg-primary-subtle/30 p-4 space-y-3.5">
+              <div className="entry-verification sm:col-span-2 space-y-3.5">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-1.5">
                     <Smartphone className="w-4 h-4 text-primary" />
-                    <span className="text-xs font-bold uppercase tracking-wider text-heading">
+                    <span className="entry-verification-title">
                       Mobile Number Verification
                     </span>
                   </div>
@@ -1544,8 +904,9 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                   <div className="space-y-3">
                     <div className="flex flex-col sm:flex-row gap-2">
                       {/* Country Code Selector + Phone Input Container */}
-                      <div className="flex-1 flex items-center rounded-xl border border-surface-muted/90 bg-white shadow-xs transition-all focus-within:border-cta focus-within:ring-4 focus-within:ring-cta/15">
+                      <div className="entry-phone flex-1 flex items-center">
                         <CountryCodeSelector
+                          showDialCodeInButton
                           selectedCountry={selectedCountry}
                           onSelect={(country) => {
                             setSelectedCountry(country);
@@ -1555,6 +916,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                         <div className="h-6 w-px bg-border-default/80 shrink-0" />
                         <input
                           id="studentPhone"
+                          aria-label="Mobile phone number" autoComplete="tel-national"
                           type="tel"
                           inputMode="tel"
                           value={studentPhone}
@@ -1661,7 +1023,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                     </label>
                     <div className="relative">
                       <input
-                        id="password"
+                        id="password" autoComplete="new-password"
                         type={showPassword ? "text" : "password"}
                         required
                         value={password}
@@ -1691,7 +1053,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                     </label>
                     <div className="relative">
                       <input
-                        id="confirmPassword"
+                        id="confirmPassword" autoComplete="new-password"
                         type={showConfirmPassword ? "text" : "password"}
                         required
                         value={confirmPassword}
@@ -1754,8 +1116,9 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
               </div>
             </div>
 
+            {!currentUser && !isPhoneVerified && <p className="text-xs text-body">Verify your phone number above to request your trial.</p>}
             {/* Action Row */}
-            <div className="pt-2 flex items-center justify-between">
+            <div className="trial-actions trial-submit-actions">
               <button
                 type="button"
                 onClick={() => setStep(2)}
@@ -1783,7 +1146,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
                       {currentUser
                         ? "Submit Trial Request"
                         : !isPhoneVerified
-                        ? "Verify Phone OTP to Book"
+                        ? "Request free trial"
                         : "Create Account & Book"}
                     </span>
                     <CheckCircle2 className="w-4 h-4" />
@@ -1797,11 +1160,9 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
 
       {/* ============ STEP 4: SUCCESS SCREEN ============ */}
       {step === 4 && (
-        <div className="relative overflow-hidden rounded-2xl bg-white border border-surface-muted/80 shadow-xl shadow-primary/5 backdrop-blur-sm">
-          {/* Top accent bar */}
-          <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
+        <div className="trial-surface trial-details">
 
-          <div className="p-8 sm:p-10 pt-10 text-center space-y-6">
+          <div className="trial-success space-y-6">
             <div className="w-16 h-16 rounded-full bg-green-50 flex items-center justify-center text-green-500 mx-auto shadow-md shadow-green-100">
               <CheckCircle2 className="w-8 h-8" />
             </div>
@@ -1879,6 +1240,7 @@ export function BookTrialClient({ currentUser, isConvertedStudent }: BookTrialCl
           </div>
         </div>
       )}
+      </div>
     </div>
   );
 }

@@ -52,6 +52,7 @@ import {
   SearchableFacultySelector,
   SearchableCourseSelector,
 } from "./EnrollmentSelectors";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import {
   WeeklySchedulePicker,
   AutoScheduleAllotModal,
@@ -284,7 +285,6 @@ export function AdminEnrollmentsManager({
   );
   const [frequencyLabel, setFrequencyLabel] = useState<string>("2 classes / week");
   const [expectedDurationWeeks, setExpectedDurationWeeks] = useState<number>(12);
-  const [sessionSortOrder, setSessionSortOrder] = useState<"LATEST_FIRST" | "CHRONOLOGICAL">("LATEST_FIRST");
 
   // Form State: 4 · Fees, payments & notes
   const [feeRupees, setFeeRupees] = useState<number>(
@@ -367,6 +367,13 @@ export function AdminEnrollmentsManager({
 
   // Inline Reschedule modal/input
   const [reschedulingLessonId, setReschedulingLessonId] = useState<string | null>(null);
+  const reschedulingLesson = useMemo(() => {
+    if (!reschedulingLessonId || !activeEnrollment) return null;
+    return (
+      activeEnrollment.lessons.find((l) => l.id === reschedulingLessonId) ||
+      null
+    );
+  }, [reschedulingLessonId, activeEnrollment]);
   const [rescheduleDateInput, setRescheduleDateInput] = useState<string>("");
   const [reassigningLessonId, setReassigningLessonId] = useState<string | null>(null);
   const [reassignTeacherId, setReassignTeacherId] = useState<string>("");
@@ -2273,11 +2280,9 @@ export function AdminEnrollmentsManager({
                       <label className="text-[11px] font-semibold text-body block mb-1">
                         Date & Time
                       </label>
-                      <input
-                        type="datetime-local"
+                      <DateTimePicker
                         value={singleLessonDate}
-                        onChange={(e) => setSingleLessonDate(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-xs font-medium focus:outline-none focus:border-[#3C096C]"
+                        onChange={setSingleLessonDate}
                       />
                     </div>
                     <div className="w-24">
@@ -2330,11 +2335,9 @@ export function AdminEnrollmentsManager({
                       <label className="text-[11px] font-semibold text-body block mb-1">
                         First Session
                       </label>
-                      <input
-                        type="datetime-local"
+                      <DateTimePicker
                         value={bulkStartDate}
-                        onChange={(e) => setBulkStartDate(e.target.value)}
-                        className="w-full px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-xs font-medium focus:outline-none focus:border-[#3C096C]"
+                        onChange={setBulkStartDate}
                       />
                     </div>
                     <div className="w-24">
@@ -2403,32 +2406,6 @@ export function AdminEnrollmentsManager({
                     Scheduled 1-on-1 Sessions for {currentCourse?.title}
                   </h3>
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 p-0.5 rounded-lg bg-neutral-100 text-[11px] font-semibold">
-                      <button
-                        type="button"
-                        onClick={() => setSessionSortOrder("LATEST_FIRST")}
-                        className={`px-2 py-0.5 rounded-md transition-all active:scale-95 ${
-                          sessionSortOrder === "LATEST_FIRST"
-                            ? "bg-white text-heading shadow-2xs font-bold"
-                            : "text-body/60 hover:text-heading"
-                        }`}
-                        title="Show latest scheduled session first"
-                      >
-                        Latest First
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setSessionSortOrder("CHRONOLOGICAL")}
-                        className={`px-2 py-0.5 rounded-md transition-all active:scale-95 ${
-                          sessionSortOrder === "CHRONOLOGICAL"
-                            ? "bg-white text-heading shadow-2xs font-bold"
-                            : "text-body/60 hover:text-heading"
-                        }`}
-                        title="Show earliest session first"
-                      >
-                        Chronological
-                      </button>
-                    </div>
                     <span className="text-[11px] font-numeric text-body/60">
                       {activeEnrollment?.lessons.length || 0} scheduled classes
                     </span>
@@ -2458,12 +2435,7 @@ export function AdminEnrollmentsManager({
                           </tr>
                         ) : (
                           [...(activeEnrollment.lessons || [])]
-                            .sort((a, b) => {
-                              if (sessionSortOrder === "LATEST_FIRST") {
-                                return new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime();
-                              }
-                              return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
-                            })
+                            .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
                             .map((lesson, idx) => {
                             const isRescheduling = reschedulingLessonId === lesson.id;
                             const lDate = new Date(lesson.startsAt);
@@ -2495,48 +2467,22 @@ export function AdminEnrollmentsManager({
                                 </td>
 
                                 <td className="py-3 px-3.5">
-                                  {isRescheduling ? (
-                                    <div className="flex items-center gap-2">
-                                      <input
-                                        type="datetime-local"
-                                        value={rescheduleDateInput}
-                                        onChange={(e) => setRescheduleDateInput(e.target.value)}
-                                        className="rounded-lg border border-neutral-300 px-2 py-1 text-xs"
-                                      />
-                                      <button
-                                        type="button"
-                                        onClick={() => handleReschedule(lesson.id)}
-                                        disabled={isPending || !rescheduleDateInput}
-                                        className="px-2 py-1 rounded bg-emerald-700 text-white font-bold text-[11px]"
-                                      >
-                                        Save
-                                      </button>
-                                      <button
-                                        type="button"
-                                        onClick={() => setReschedulingLessonId(null)}
-                                        className="text-[11px] text-body hover:text-heading"
-                                      >
-                                        Cancel
-                                      </button>
+                                  <div>
+                                    <div className="font-bold text-heading font-numeric">
+                                      {lDate.toLocaleDateString("en-GB", {
+                                        weekday: "short",
+                                        month: "short",
+                                        day: "numeric",
+                                        year: "numeric",
+                                      })}
                                     </div>
-                                  ) : (
-                                    <div>
-                                      <div className="font-bold text-heading">
-                                        {lDate.toLocaleDateString("en-GB", {
-                                          weekday: "short",
-                                          month: "short",
-                                          day: "numeric",
-                                          year: "numeric",
-                                        })}
-                                      </div>
-                                      <div className="text-[11px] text-body/70">
-                                        {lDate.toLocaleTimeString("en-GB", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}
-                                      </div>
+                                    <div className="text-[11px] text-body/70 font-numeric">
+                                      {lDate.toLocaleTimeString("en-GB", {
+                                        hour: "2-digit",
+                                        minute: "2-digit",
+                                      })}
                                     </div>
-                                  )}
+                                  </div>
                                 </td>
 
                                 <td className="py-3 px-3.5 text-body">
@@ -2616,7 +2562,7 @@ export function AdminEnrollmentsManager({
                                 </td>
 
                                 <td className="py-3 px-3.5 text-right whitespace-nowrap">
-                                  {(lesson.status === "SCHEDULED" || lesson.status === "RESCHEDULED") && !isRescheduling && (
+                                  {(lesson.status === "SCHEDULED" || lesson.status === "RESCHEDULED") && (
                                     <div className="flex items-center justify-end gap-2">
                                       <button
                                         type="button"
@@ -3341,6 +3287,96 @@ export function AdminEnrollmentsManager({
     </div>
   </div>
 )}
+
+      {/* ─── APPLE-DESIGN RESCHEDULE 1-ON-1 LESSON MODAL ─── */}
+      {reschedulingLesson && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-lg rounded-2xl bg-white border border-neutral-200/90 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 font-sans">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <div>
+                <h3 className="font-serif font-bold text-base text-heading">
+                  Reschedule 1-on-1 Lesson
+                </h3>
+                <p className="text-xs text-body/60 mt-0.5">
+                  Lesson #{reschedulingLesson.trackingCode} • {reschedulingLesson.teacherName}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setReschedulingLessonId(null)}
+                className="p-1 rounded-lg text-body/60 hover:text-heading hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              {/* Current Schedule Summary */}
+              <div className="p-3 rounded-xl bg-purple-50/60 border border-purple-100 text-xs">
+                <span className="font-semibold text-body/70 block mb-0.5">
+                  Currently Scheduled
+                </span>
+                <span className="font-bold text-[#3C096C] font-numeric text-sm">
+                  {new Date(reschedulingLesson.startsAt).toLocaleDateString("en-GB", {
+                    weekday: "short",
+                    day: "numeric",
+                    month: "short",
+                    year: "numeric",
+                  })}{" "}
+                  at{" "}
+                  {new Date(reschedulingLesson.startsAt).toLocaleTimeString("en-GB", {
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </span>
+                <span className="text-[11px] text-body/60 block mt-0.5">
+                  Duration: {reschedulingLesson.durationMinutes} mins
+                </span>
+              </div>
+
+              {/* New Date & Time */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-heading block">
+                  Select New Date & Time
+                </label>
+                <DateTimePicker
+                  value={rescheduleDateInput}
+                  onChange={setRescheduleDateInput}
+                  className="w-full"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 bg-neutral-50/80 border-t border-neutral-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setReschedulingLessonId(null)}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-body hover:text-heading hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => handleReschedule(reschedulingLesson.id)}
+                disabled={isPending || !rescheduleDateInput}
+                className="px-4 py-2 rounded-xl bg-[#3C096C] hover:bg-[#2F0755] text-white text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isPending ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : (
+                  <>
+                    <Check className="w-3.5 h-3.5" />
+                    <span>Confirm Reschedule</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ─── APPLE-DESIGN AUTO-SCHEDULE MODAL FOR ALLOTMENT ─── */}
       <AutoScheduleAllotModal

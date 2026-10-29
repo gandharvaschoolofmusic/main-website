@@ -41,7 +41,7 @@ export default async function BookTrialPage() {
   }
 
   return (
-    <div className="min-h-[calc(100vh-4rem)] bg-gradient-to-b from-bg via-bg-alt/25 to-bg py-12 pt-16 sm:pt-20 pb-16">
+    <div className="trial-page">
       <BookTrialClient
         currentUser={
           dbUser

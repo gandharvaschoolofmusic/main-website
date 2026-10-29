@@ -2,9 +2,8 @@
 
 import { useActionState, useState, useTransition, useEffect, useRef } from "react";
 import Link from "next/link";
-import Image from "next/image";
+import { FormShell } from "@/components/auth/FormShell";
 import { loginAction, sendPhoneOtpAction, verifyOtpAndLoginAction } from "@/actions/auth";
-import { SplitHeading } from "@/components/ui/SplitHeading";
 import {
   CountryCodeSelector,
   SUPPORTED_COUNTRIES,
@@ -166,65 +165,23 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="relative min-h-[100dvh] w-full flex items-center justify-center lg:justify-end pt-24 sm:pt-28 pb-14 px-4 sm:px-8 lg:px-14 xl:px-20 max-w-[1560px] mx-auto">
-      {/* Background Stage Image - Fixed in place like signup page */}
-      <div className="fixed inset-0 z-0 pointer-events-none">
-        <Image
-          src="/auth-bg.png"
-          alt="Gandharva School of Music"
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-[20%_18%] sm:object-[22%_20%] lg:object-[16%_22%]"
-        />
-        {/* Cinematic Vignette & Gradient Overlays: Subtle on the left to highlight the artist, deep & smooth on the right for form clarity */}
-        <div className="absolute inset-0 bg-gradient-to-t from-black/85 via-black/40 to-black/60 lg:bg-gradient-to-r lg:from-black/15 lg:via-black/45 lg:to-black/85" />
-        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_top_right,rgba(168,85,247,0.18),transparent_70%)]" />
-      </div>
-
-      {/* Right Column: Form Card */}
-      <div className="relative z-10 w-full max-w-md lg:max-w-[460px]">
-        <div className="relative space-y-7 overflow-hidden rounded-3xl border border-white/80 bg-white/95 p-6 sm:p-9 shadow-[0_24px_60px_-15px_rgba(0,0,0,0.5)] backdrop-blur-xl">
-            {/* Decorative Top Accent Bar */}
-            <div className="absolute top-0 left-0 right-0 h-1.5 bg-gradient-to-r from-primary via-cta to-accent" />
-
-        {/* Header: Official Gandharva School of Music Logo */}
-        <div className="space-y-3 text-center">
-          <div className="mx-auto flex items-center justify-center py-2 px-5 rounded-2xl bg-heading shadow-md shadow-heading/20 border border-white/10 w-fit transition-transform hover:scale-[1.02]">
-            <Image
-              src="/cropped-Add-a-subheading-5-png-scaled.webp"
-              alt="Gandharva School of Music"
-              width={160}
-              height={44}
-              className="h-8 sm:h-9 w-auto object-contain"
-              priority
-            />
-          </div>
-          <SplitHeading
-            as="h1"
-            firstClause="Welcome"
-            accentClause="Back"
-            align="center"
-            size="md"
-          />
-        </div>
-
+    <FormShell>
+      <header className="entry-form-header">
+        <h1>Welcome back</h1>
+        <p>Sign in to continue your music journey.</p>
+      </header>
         {/* Mode Toggle Switch */}
-        <div className="p-1 rounded-2xl bg-bg-alt/80 border border-border-subtle grid grid-cols-2 gap-1 shadow-inner">
+        <div className="entry-segmented" role="group" aria-label="Sign-in method">
           <button
             type="button"
             onClick={() => {
               setLoginMode("PASSWORD");
               setOtpError(null);
             }}
-            className={`btn-tactile py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              loginMode === "PASSWORD"
-                ? "bg-white text-heading shadow-xs border border-border-default/60"
-                : "text-body hover:text-heading"
-            }`}
+            aria-pressed={loginMode === "PASSWORD"}
           >
             <KeyRound className="w-3.5 h-3.5 text-primary" />
-            <span>Login with Password</span>
+            <span>Password</span>
           </button>
 
           <button
@@ -233,14 +190,10 @@ export default function LoginPage() {
               setLoginMode("OTP");
               setOtpError(null);
             }}
-            className={`btn-tactile py-2 px-3 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-              loginMode === "OTP"
-                ? "bg-white text-heading shadow-xs border border-border-default/60"
-                : "text-body hover:text-heading"
-            }`}
+            aria-pressed={loginMode === "OTP"}
           >
             <Smartphone className="w-3.5 h-3.5 text-cta" />
-            <span>Login with OTP</span>
+            <span>Phone OTP</span>
           </button>
         </div>
 
@@ -271,7 +224,7 @@ export default function LoginPage() {
                   type="text"
                   autoComplete="username"
                   required
-                  placeholder="e.g. clara@example.com or +91 98765 43210"
+                  placeholder="Email address or phone number"
                   className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3.5 py-2.5 text-sm text-heading placeholder-body/40 shadow-xs transition-all focus:border-cta focus:outline-none focus:ring-4 focus:ring-cta/15"
                 />
                 {pwdState?.fieldErrors?.identifier && (
@@ -341,7 +294,7 @@ export default function LoginPage() {
                   </>
                 ) : (
                   <>
-                    <span>Sign In with Password</span>
+                    <span>Sign in</span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 )}
@@ -399,8 +352,9 @@ export default function LoginPage() {
               </div>
 
               {/* Country Code Selector + Phone Input Container (Matching Attached Screenshot) */}
-              <div className="flex items-center rounded-xl border border-surface-muted/90 bg-white shadow-xs transition-all focus-within:border-cta focus-within:ring-4 focus-within:ring-cta/15">
+              <div className="entry-phone flex items-center rounded-xl border border-surface-muted/90 bg-white shadow-xs transition-all focus-within:border-cta focus-within:ring-4 focus-within:ring-cta/15">
                 <CountryCodeSelector
+                  showDialCodeInButton
                   selectedCountry={selectedCountry}
                   onSelect={(country) => {
                     setSelectedCountry(country);
@@ -412,6 +366,7 @@ export default function LoginPage() {
                   id="phone"
                   name="phone"
                   type="tel"
+                  autoComplete="tel-national"
                   inputMode="tel"
                   value={otpPhone}
                   onChange={(e) => {
@@ -440,7 +395,7 @@ export default function LoginPage() {
                 type="button"
                 disabled={isSendingOtp || !otpPhone.trim()}
                 onClick={handleSendOtp}
-                className="btn-tactile w-full py-3 px-6 rounded-xl font-bold text-sm bg-amber-400 hover:bg-amber-500 active:scale-[0.98] text-amber-950 shadow-md shadow-amber-400/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                className="entry-primary w-full"
               >
                 {isSendingOtp ? (
                   <>
@@ -493,7 +448,7 @@ export default function LoginPage() {
 
                     {/* 6 Individual Digit Input Boxes (Matching screenshot) */}
                     <div
-                      className="otp-digit-grid grid grid-cols-6 gap-2 sm:gap-2.5 w-full"
+                      className="entry-otp-digits"
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
@@ -504,10 +459,12 @@ export default function LoginPage() {
                       {otpDigits.map((digit, index) => (
                         <input
                           key={index}
+                          aria-label={`Verification code digit ${index + 1}`}
                           ref={(el) => {
                             digitRefs.current[index] = el;
                           }}
                           type="text"
+                          autoComplete="one-time-code"
                           inputMode="numeric"
                           pattern="[0-9]*"
                           maxLength={1}
@@ -559,7 +516,7 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={isOtpLoginPending || otpDigits.join("").length !== 6}
-                    className="btn-tactile w-full py-3 sm:py-3.5 px-6 rounded-xl font-bold text-base bg-[#FFB800] hover:bg-[#F59E0B] active:scale-[0.98] text-[#1E1A4D] shadow-md shadow-amber-400/20 transition-all flex items-center justify-center gap-2 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="entry-primary w-full"
                   >
                     {isOtpLoginPending ? (
                       <>
@@ -577,7 +534,7 @@ export default function LoginPage() {
         )}
 
         {/* Footer link */}
-        <p className="text-center text-xs text-body">
+        <p className="entry-form-footer">
           Don&apos;t have an account yet?{" "}
           <Link
             href="/signup"
@@ -586,8 +543,6 @@ export default function LoginPage() {
             Create an account
           </Link>
         </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
+    </FormShell>
+  );
+}
