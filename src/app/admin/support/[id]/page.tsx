@@ -20,6 +20,7 @@ export default async function AdminTicketDetailPage({
           name: true,
           email: true,
           role: true,
+          customId: true,
         },
       },
       messages: {
@@ -51,6 +52,7 @@ export default async function AdminTicketDetailPage({
         userName: ticket.user.name || "User",
         userEmail: ticket.user.email,
         userRole: ticket.user.role,
+        userCustomId: ticket.user.customId,
       }}
       messages={formattedMessages}
     />

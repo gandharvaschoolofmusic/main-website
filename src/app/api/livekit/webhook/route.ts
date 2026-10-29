@@ -162,27 +162,72 @@ async function handleIndividualRoom(event: any, lessonId: string) {
         where: { id: lessonId },
       });
 
-      if (lesson && lesson.status === "SCHEDULED") {
-        await db.lesson.update({
-          where: { id: lessonId },
-          data: { status: "COMPLETED" },
-        });
+      if (lesson) {
+        const now = new Date();
+        const updateData: {
+          status?: "COMPLETED";
+          teacherLeftAt?: Date;
+          studentLeftAt?: Date;
+        } = {};
+
+        if (lesson.status === "SCHEDULED") {
+          updateData.status = "COMPLETED";
+        }
+        if (lesson.teacherJoinedAt && !lesson.teacherLeftAt) {
+          updateData.teacherLeftAt = now;
+        }
+        if (lesson.studentJoinedAt && !lesson.studentLeftAt) {
+          updateData.studentLeftAt = now;
+        }
+
+        if (Object.keys(updateData).length > 0) {
+          await db.lesson.update({
+            where: { id: lessonId },
+            data: updateData,
+          });
+        }
         logger.info(
-          { lessonId },
-          "Marked lesson as COMPLETED upon room_finished webhook event",
+          { lessonId, updateData },
+          "Handled room_finished webhook event and finalized timestamps",
         );
       }
       break;
     }
 
     case "participant_left": {
-      logger.info(
-        {
-          lessonId,
-          participantIdentity: event.participant?.identity,
-        },
-        "Participant left LiveKit lesson room",
-      );
+      const participantIdentity = event.participant?.identity;
+      if (!participantIdentity) break;
+
+      const lesson = await db.lesson.findUnique({
+        where: { id: lessonId },
+        include: { teacherProfile: true },
+      });
+
+      if (!lesson) break;
+
+      const now = new Date();
+      const isTeacher = participantIdentity === lesson.teacherProfile.userId;
+      const isStudent = participantIdentity === lesson.studentId;
+
+      if (isTeacher) {
+        await db.lesson.update({
+          where: { id: lessonId },
+          data: { teacherLeftAt: now },
+        });
+        logger.info(
+          { lessonId, teacherId: participantIdentity, timestamp: now },
+          "Recorded teacherLeftAt via LiveKit webhook",
+        );
+      } else if (isStudent) {
+        await db.lesson.update({
+          where: { id: lessonId },
+          data: { studentLeftAt: now },
+        });
+        logger.info(
+          { lessonId, studentId: participantIdentity, timestamp: now },
+          "Recorded studentLeftAt via LiveKit webhook",
+        );
+      }
       break;
     }
 
@@ -255,27 +300,72 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
     }
 
     case "room_finished": {
-      // Mark ALL scheduled lessons in this group room as COMPLETED
+      const now = new Date();
+      // Mark ALL scheduled lessons in this group room as COMPLETED and fill missing leftAt
       const result = await db.lesson.updateMany({
         where: { groupRoomId, status: "SCHEDULED" },
         data: { status: "COMPLETED" },
       });
 
+      // Update teacherLeftAt where teacher joined but leftAt is null
+      await db.lesson.updateMany({
+        where: { groupRoomId, teacherJoinedAt: { not: null }, teacherLeftAt: null },
+        data: { teacherLeftAt: now },
+      });
+
+      // Update studentLeftAt where student joined but leftAt is null
+      await db.lesson.updateMany({
+        where: { groupRoomId, studentJoinedAt: { not: null }, studentLeftAt: null },
+        data: { studentLeftAt: now },
+      });
+
       logger.info(
         { groupRoomId, completedCount: result.count },
-        "Marked group room lessons as COMPLETED upon room_finished",
+        "Marked group room lessons as COMPLETED and set exit timestamps upon room_finished",
       );
       break;
     }
 
     case "participant_left": {
-      logger.info(
-        {
-          groupRoomId,
-          participantIdentity: event.participant?.identity,
-        },
-        "Participant left group classroom room",
+      const participantIdentity = event.participant?.identity;
+      if (!participantIdentity) break;
+
+      const groupLessons = await db.lesson.findMany({
+        where: { groupRoomId },
+        include: { teacherProfile: true },
+      });
+
+      if (groupLessons.length === 0) break;
+
+      const now = new Date();
+      const isTeacher = groupLessons.some(
+        (l) => l.teacherProfile.userId === participantIdentity,
       );
+
+      if (isTeacher) {
+        await db.lesson.updateMany({
+          where: { groupRoomId },
+          data: { teacherLeftAt: now },
+        });
+        logger.info(
+          { groupRoomId, teacherId: participantIdentity, timestamp: now },
+          "Recorded teacherLeftAt for group room",
+        );
+      } else {
+        const studentLesson = groupLessons.find(
+          (l) => l.studentId === participantIdentity,
+        );
+        if (studentLesson) {
+          await db.lesson.update({
+            where: { id: studentLesson.id },
+            data: { studentLeftAt: now },
+          });
+          logger.info(
+            { groupRoomId, studentId: participantIdentity, lessonId: studentLesson.id, timestamp: now },
+            "Recorded studentLeftAt for group room student",
+          );
+        }
+      }
       break;
     }
 

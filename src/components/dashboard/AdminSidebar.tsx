@@ -137,8 +137,8 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
 
   return (
     <>
-      {/* Desktop Persistent Sidebar with Color #32134F */}
-      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-[#32134F] text-white h-full max-h-[calc(100vh-4rem)] p-4 space-y-2 shadow-xl z-40 select-none overflow-hidden">
+      {/* Desktop Persistent Sidebar with Navbar matching color bg-primary */}
+      <aside className="hidden md:flex flex-col w-64 shrink-0 bg-primary text-white h-full max-h-[calc(100vh-4rem)] p-4 space-y-2 shadow-xl z-40 select-none overflow-hidden">
         {/* Navigation Items List */}
         <nav className="space-y-0.5 flex-1 overflow-y-auto pr-1 text-xs sidebar-scroll">
           {navItems.map((item) => {
@@ -149,9 +149,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
               <Link
                 key={item.name}
                 href={item.href}
-                prefetch={false}
-                onMouseEnter={() => router.prefetch(item.href)}
-                onTouchStart={() => router.prefetch(item.href)}
+                prefetch={true}
                 onClick={() => setNavigatingTo(item.href)}
                 className={`relative flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all active:scale-[0.98] ${
                   active
@@ -203,7 +201,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
       </aside>
 
       {/* Mobile Horizontal Navigation Header */}
-      <div className="md:hidden bg-[#32134F] text-white sticky top-16 z-40 shadow-md">
+      <div className="md:hidden bg-primary text-white sticky top-16 z-40 shadow-md">
         <div className="flex items-center justify-between px-4 py-2.5">
           <Link href="/admin" className="flex items-center text-sm font-serif font-bold text-white tracking-wide">
             Gandharva
@@ -228,8 +226,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
               <Link
                 key={item.name}
                 href={item.href}
-                prefetch={false}
-                onTouchStart={() => router.prefetch(item.href)}
+                prefetch={true}
                 onClick={() => setNavigatingTo(item.href)}
                 className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all ${
                   active

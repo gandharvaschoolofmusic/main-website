@@ -1,6 +1,7 @@
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import { AdminEventsManager, AdminEventItem } from "./AdminEventsManager";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
@@ -9,49 +10,57 @@ export const metadata = {
   description: "Schedule live workshops, masterclasses, recitals, and monitor registrations.",
 };
 
-export default async function AdminEventsPage() {
-  await requireRole(Role.ADMIN);
-
-  const [dbEvents, dbTeachers] = await Promise.all([
-    db.event.findMany({
-      include: {
-        teacher: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-            image: true,
-            teacherProfile: {
-              select: {
-                instruments: true,
+const getCachedAdminEventsData = unstable_cache(
+  async () => {
+    return Promise.all([
+      db.event.findMany({
+        include: {
+          teacher: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+              image: true,
+              teacherProfile: {
+                select: {
+                  instruments: true,
+                },
               },
             },
           },
-        },
-        registrations: {
-          include: {
-            student: { select: { name: true, email: true } },
-          },
-          orderBy: { registeredAt: "asc" },
-        },
-      },
-      orderBy: { startsAt: "asc" },
-    }),
-    db.user.findMany({
-      where: { role: Role.TEACHER, isActive: true },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        teacherProfile: {
-          select: {
-            instruments: true,
+          registrations: {
+            include: {
+              student: { select: { name: true, email: true } },
+            },
+            orderBy: { registeredAt: "asc" },
           },
         },
-      },
-      orderBy: { name: "asc" },
-    }),
-  ]);
+        orderBy: { startsAt: "asc" },
+      }),
+      db.user.findMany({
+        where: { role: Role.TEACHER, isActive: true },
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          teacherProfile: {
+            select: {
+              instruments: true,
+            },
+          },
+        },
+        orderBy: { name: "asc" },
+      }),
+    ]);
+  },
+  ["admin-events-data"],
+  { revalidate: 30, tags: ["admin-events", "events"] },
+);
+
+export default async function AdminEventsPage() {
+  await requireRole(Role.ADMIN);
+
+  const [dbEvents, dbTeachers] = await getCachedAdminEventsData();
 
   const formattedTeachers = dbTeachers.map((t) => ({
     id: t.id,

@@ -26,6 +26,7 @@ import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
+import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 
 export type AdminActionResponse<T = unknown> = {
@@ -393,7 +394,7 @@ export async function scheduleEnrollmentLessonAction(input: {
       return { success: false, error: "Invalid date and time selected." };
     }
 
-    const trackingCode = await generateUniqueLessonTrackingCode();
+    const trackingCode = await generateUniqueLessonTrackingCode(enrollment.studentId, db);
 
     const lesson = await db.lesson.create({
       data: {
@@ -488,7 +489,7 @@ export async function bulkScheduleEnrollmentLessonsAction(input: {
       const startsAtDate = new Date(slot.startsAt);
       if (isNaN(startsAtDate.getTime())) continue;
 
-      const trackingCode = await generateUniqueLessonTrackingCode();
+      const trackingCode = await generateUniqueLessonTrackingCode(enrollment.studentId, db);
 
       await db.lesson.create({
         data: {
@@ -793,7 +794,7 @@ export async function saveFullEnrollmentPlanAction(input: {
       for (const slot of input.generatedSlots) {
         const slotDate = new Date(slot.startsAt);
         if (!isNaN(slotDate.getTime())) {
-          const trackingCode = await generateUniqueLessonTrackingCode();
+          const trackingCode = await generateUniqueLessonTrackingCode(student.id, db);
           await db.lesson.create({
             data: {
               teacherId: teacher.id,
@@ -1514,14 +1515,47 @@ export async function updateTicketStatusAdminAction(input: {
   try {
     await requireRole(Role.ADMIN);
 
-    await db.supportTicket.update({
+    const updated = await db.supportTicket.update({
       where: { id: input.ticketId },
       data: { status: input.status },
+      include: { user: true },
     });
+
+    try {
+      const statusLabel =
+        input.status === TicketStatus.RESOLVED
+          ? "Resolved"
+          : input.status === TicketStatus.CLOSED
+          ? "Closed"
+          : input.status === TicketStatus.IN_PROGRESS
+          ? "In Progress"
+          : "Reopened";
+
+      await createNotification({
+        userId: updated.userId,
+        type: NotificationType.SYSTEM,
+        title: `Support Ticket ${statusLabel}`,
+        body: `Your ticket "${updated.subject}" has been marked as ${statusLabel.toLowerCase()} by administration.`,
+        link:
+          updated.user.role === Role.TEACHER
+            ? `/teacher/dashboard/support/${updated.id}`
+            : `/student/dashboard/support/${updated.id}`,
+      });
+    } catch {
+      // Non-blocking notification emission
+    }
 
     revalidatePath(`/admin/support/${input.ticketId}`);
     revalidatePath("/admin/support");
     revalidatePath("/admin");
+    revalidatePath(`/student/dashboard/support/${input.ticketId}`);
+    revalidatePath(`/teacher/dashboard/support/${input.ticketId}`);
+    try {
+      revalidateTag("admin-support", "max");
+      revalidateTag("support", "max");
+    } catch {
+      // safe fallback
+    }
 
     return { success: true };
   } catch (error) {
@@ -1590,7 +1624,7 @@ export async function allotTrialTeacherAction(input: {
         });
       } else {
         // Create scheduled Lesson with unique trackingCode
-        const trackingCode = await generateUniqueLessonTrackingCode();
+        const trackingCode = await generateUniqueLessonTrackingCode(trialRequest.studentId, tx);
         activeLesson = await tx.lesson.create({
           data: {
             teacherProfileId: teacher.teacherProfile!.id,
@@ -2008,7 +2042,7 @@ export async function adminApproveAndAllotCourseAction(input: {
           const startsAtDate = new Date(slot.startsAt);
           if (isNaN(startsAtDate.getTime())) continue;
 
-          const trackingCode = await generateUniqueLessonTrackingCode();
+          const trackingCode = await generateUniqueLessonTrackingCode(student.id, db);
           const lesson = await db.lesson.create({
             data: {
               teacherId: teacher.id,
@@ -2115,6 +2149,7 @@ export async function createAdminTrialLeadAction(input: {
     });
 
     if (!student) {
+      const studentCustomId = await generateNextStudentId(db);
       student = await db.user.create({
         data: {
           email,
@@ -2124,6 +2159,7 @@ export async function createAdminTrialLeadAction(input: {
           guardianPhone: input.guardianPhone?.trim() || null,
           timezone: input.timezone || "Asia/Kolkata",
           role: Role.STUDENT,
+          customId: studentCustomId,
         },
       });
 
@@ -2500,7 +2536,7 @@ export async function adminRecordEnrollmentPaymentAction(input: {
           const startsAtDate = new Date(slot.startsAt);
           if (isNaN(startsAtDate.getTime())) continue;
 
-          const trackingCode = await generateUniqueLessonTrackingCode();
+          const trackingCode = await generateUniqueLessonTrackingCode(enrollment.student.id, db);
           const lesson = await db.lesson.create({
             data: {
               teacherId: teacher.id,

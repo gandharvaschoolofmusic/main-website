@@ -488,6 +488,13 @@ function LessonRoomContent({
   // Window unload listener to guarantee camera & mic shut off immediately if tab or browser is closed
   useEffect(() => {
     const handleWindowUnload = () => {
+      try {
+        if (navigator.sendBeacon) {
+          navigator.sendBeacon(`/api/lessons/${lesson.id}/leave`);
+        } else {
+          fetch(`/api/lessons/${lesson.id}/leave`, { method: "POST", keepalive: true }).catch(() => {});
+        }
+      } catch {}
       multiCam.stopSecondaryCamera().catch(() => {});
       releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
     };
@@ -508,6 +515,14 @@ function LessonRoomContent({
     setIsSavingRecording(true);
 
     try {
+      // Record exit timestamp immediately
+      try {
+        fetch(`/api/lessons/${lesson.id}/leave`, {
+          method: "POST",
+          keepalive: true,
+        }).catch(() => {});
+      } catch {}
+
       // 1. Finalize and await upload of automatic lesson recording
       await autoRecorder.stopAndUpload();
     } catch (e) {

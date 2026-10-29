@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const POOL_VERSION = 5;
+const POOL_VERSION = 6;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -60,14 +60,15 @@ if (
 globalForPrisma.poolVersion = POOL_VERSION;
 globalForPrisma.connectionString = connectionString;
 
-// Transaction mode pooler (port 6543) with max: 8 connections per serverless instance
+// Transaction mode pooler (port 6543) with max: 15 connections per serverless instance
+// Extended idleTimeoutMillis to 5 minutes so connections remain hot and avoid repeated 400ms TCP/TLS handshakes
 const pool =
   globalForPrisma.pool ??
   new Pool({
     connectionString,
     ssl: isSupabaseOrSsl ? { rejectUnauthorized: false } : undefined,
-    max: 8,
-    idleTimeoutMillis: 10000,
+    max: 15,
+    idleTimeoutMillis: 300000,
     connectionTimeoutMillis: 10000,
     keepAlive: true,
     keepAliveInitialDelayMillis: 10000,

@@ -19,6 +19,7 @@ const getCachedAdminSupportData = unstable_cache(
             name: true,
             email: true,
             role: true,
+            customId: true,
           },
         },
         _count: {
@@ -37,6 +38,7 @@ const getCachedAdminSupportData = unstable_cache(
       userName: t.user.name || "User",
       userEmail: t.user.email,
       userRole: t.user.role,
+      userCustomId: t.user.customId,
       messagesCount: t._count.messages,
     }));
 

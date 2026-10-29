@@ -320,7 +320,7 @@ export async function bookLessonCore(
               });
             }
 
-            const trackingCode = await generateUniqueLessonTrackingCode();
+            const trackingCode = await generateUniqueLessonTrackingCode(student.id, tx);
 
             return await tx.lesson.create({
               data: {

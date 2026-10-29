@@ -7,12 +7,9 @@ import { TrialRequestStatus, Role, TrialStatus, NotificationType, EnrollmentStat
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
-import {
-  normalizePhoneNumber,
-  isValidPhoneNumber,
-  validateAndConsumePhoneOtp,
-} from "@/lib/phone";
+import { normalizePhoneNumber, isValidPhoneNumber, validateAndConsumePhoneOtp } from "@/lib/phone";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
+import { generateNextStudentId } from "@/lib/id-generator";
 
 const CreateTrialRequestSchema = z.object({
   category: z.string().min(1, "Category is required"),
@@ -246,6 +243,7 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
         studentUserId = existingEmail.id;
       } else {
         const hashed = await hashPassword(validated.password);
+        const studentCustomId = await generateNextStudentId(db);
         const newUser = await db.user.create({
           data: {
             name: validated.studentName.trim(),
@@ -256,6 +254,7 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
             emailVerified: new Date(),
             role: Role.STUDENT,
             timezone: validated.timezone || "UTC",
+            customId: studentCustomId,
           },
         });
         studentUserId = newUser.id;

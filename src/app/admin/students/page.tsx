@@ -145,6 +145,7 @@ const getCachedAdminStudentsData = unstable_cache(
     // Format student records cleanly for client state
     const formattedStudents: StudentRecord[] = dbStudents.map((s) => ({
       id: s.id,
+      customId: s.customId || null,
       name: s.name || "Student",
       email: s.email,
       phone: s.phone,

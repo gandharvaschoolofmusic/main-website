@@ -567,7 +567,7 @@ export async function scheduleEnrollmentLessonsCore(
       const lessonDuration = cl.durationMinutes || 60;
 
       // Generate unique tracking code for payment & payout auditing
-      const trackingCode = await generateUniqueLessonTrackingCode();
+      const trackingCode = await generateUniqueLessonTrackingCode(studentId, tx);
 
       const lesson = await tx.lesson.create({
         data: {
@@ -592,7 +592,7 @@ export async function scheduleEnrollmentLessonsCore(
     const totalSessions = fullCourse.sessionCount || 4;
     for (let i = 1; i <= totalSessions; i++) {
       const startsAt = new Date(baseStartDate.getTime() + (i - 1) * 7 * 86400000);
-      const trackingCode = await generateUniqueLessonTrackingCode();
+      const trackingCode = await generateUniqueLessonTrackingCode(studentId, tx);
 
       const lesson = await tx.lesson.create({
         data: {

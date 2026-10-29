@@ -8,6 +8,7 @@ datasource db {
 
 model User {
   id                      String                    @id @default(cuid())
+  customId                String?                   @unique
   email                   String                    @unique
   emailVerified           DateTime?
   name                    String?
@@ -202,7 +203,9 @@ model Lesson {
   cancelledBy              String?
   cancelledAt              DateTime?           @db.Timestamptz(6)
   teacherJoinedAt          DateTime?           @db.Timestamptz(6)
+  teacherLeftAt            DateTime?           @db.Timestamptz(6)
   studentJoinedAt          DateTime?           @db.Timestamptz(6)
+  studentLeftAt            DateTime?           @db.Timestamptz(6)
   recordingUrl             String?
   recordingFileId          String?
   recordingDurationSeconds Int?
@@ -238,6 +241,10 @@ model LessonRecording {
   fileSizeBytes   Int
   durationSeconds Int?
   storageBackend  String   @default("SUPABASE")
+  teacherJoinedAt DateTime? @db.Timestamptz(6)
+  teacherLeftAt   DateTime? @db.Timestamptz(6)
+  studentJoinedAt DateTime? @db.Timestamptz(6)
+  studentLeftAt   DateTime? @db.Timestamptz(6)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
 
@@ -729,6 +736,8 @@ enum NotificationType {
   COURSE_REQUEST_APPROVED
   COURSE_REQUEST_REJECTED
   LESSON_RESCHEDULED
+  NEW_SUPPORT_TICKET
+  SUPPORT_TICKET_REPLY
 }
 
 enum ResourceCategory {

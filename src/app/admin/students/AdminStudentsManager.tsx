@@ -54,6 +54,7 @@ import {
 
 export interface StudentRecord {
   id: string;
+  customId?: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -225,9 +226,9 @@ export function AdminStudentsManager({
       if (res.success) {
         showToast(
           res.message ||
-            (nextActive
-              ? `Login access granted for ${targetStudent.name}.`
-              : `Login access removed for ${targetStudent.name}.`)
+          (nextActive
+            ? `Login access granted for ${targetStudent.name}.`
+            : `Login access removed for ${targetStudent.name}.`)
         );
         setStudents((prev) =>
           prev.map((s) =>
@@ -275,13 +276,12 @@ export function AdminStudentsManager({
       if (res.success) {
         showToast(
           res.message ||
-            `Class status updated to ${
-              newStatus === "COMPLETED"
-                ? "Complete"
-                : newStatus === "SCHEDULED"
-                ? "Upcoming"
-                : newStatus
-            }.`
+          `Class status updated to ${newStatus === "COMPLETED"
+            ? "Complete"
+            : newStatus === "SCHEDULED"
+              ? "Upcoming"
+              : newStatus
+          }.`
         );
       } else {
         showToast(res.error || "Failed to update class status.");
@@ -304,6 +304,7 @@ export function AdminStudentsManager({
       s.name.toLowerCase().includes(q) ||
       s.email.toLowerCase().includes(q) ||
       s.id.toLowerCase().includes(q) ||
+      (s.customId && s.customId.toLowerCase().includes(q)) ||
       (s.phone && s.phone.toLowerCase().includes(q));
 
     if (!matchesSearch) return false;
@@ -340,9 +341,9 @@ export function AdminStudentsManager({
     : 0;
   const sessionsTaken = selectedStudent
     ? selectedStudent.enrollments.reduce(
-        (acc, e) => acc + Math.max(0, e.totalSessions - e.sessionsRemaining),
-        0
-      )
+      (acc, e) => acc + Math.max(0, e.totalSessions - e.sessionsRemaining),
+      0
+    )
     : 0;
   const courseProgressPct =
     totalCourseSessions > 0
@@ -355,14 +356,14 @@ export function AdminStudentsManager({
 
   const outstandingRupees = selectedStudent
     ? selectedStudent.payments
-        .filter((p) => p.status === "CREATED")
-        .reduce((acc, p) => acc + p.amountRupees, 0)
+      .filter((p) => p.status === "CREATED")
+      .reduce((acc, p) => acc + p.amountRupees, 0)
     : 0;
 
   const totalPaidRupees = selectedStudent
     ? selectedStudent.payments
-        .filter((p) => p.status === "PAID")
-        .reduce((acc, p) => acc + p.amountRupees, 0)
+      .filter((p) => p.status === "PAID")
+      .reduce((acc, p) => acc + p.amountRupees, 0)
     : 0;
 
   // Selected student avatar initials
@@ -379,30 +380,30 @@ export function AdminStudentsManager({
   // Filtered classes: Upcoming vs Past
   const upcomingLessons = selectedStudent
     ? selectedStudent.lessons
-        .filter((l) => {
-          const lDate = new Date(l.startsAt);
-          const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
-          const isFuture = endTime.getTime() >= Date.now();
-          return isFuture && l.status !== "CANCELLED" && l.status !== "COMPLETED";
-        })
-        .sort(
-          (a, b) =>
-            new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
-        )
+      .filter((l) => {
+        const lDate = new Date(l.startsAt);
+        const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+        const isFuture = endTime.getTime() >= Date.now();
+        return isFuture && l.status !== "CANCELLED" && l.status !== "COMPLETED";
+      })
+      .sort(
+        (a, b) =>
+          new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+      )
     : [];
 
   const pastLessons = selectedStudent
     ? selectedStudent.lessons
-        .filter((l) => {
-          const lDate = new Date(l.startsAt);
-          const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
-          const isPast = endTime.getTime() < Date.now();
-          return l.status === "COMPLETED" || l.status === "CANCELLED" || isPast;
-        })
-        .sort(
-          (a, b) =>
-            new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()
-        )
+      .filter((l) => {
+        const lDate = new Date(l.startsAt);
+        const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+        const isPast = endTime.getTime() < Date.now();
+        return l.status === "COMPLETED" || l.status === "CANCELLED" || isPast;
+      })
+      .sort(
+        (a, b) =>
+          new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime()
+      )
     : [];
 
   // Student timeline events
@@ -566,9 +567,8 @@ Total Messages Recorded: ${conv.messages.length}
           second: "2-digit",
         });
         const attachment = m.fileName
-          ? `\n[Attachment: ${m.fileName}${
-              m.fileSizeBytes ? ` (${(m.fileSizeBytes / 1024).toFixed(0)} KB)` : ""
-            }${m.fileUrl ? ` - Link: ${m.fileUrl}` : ""}]`
+          ? `\n[Attachment: ${m.fileName}${m.fileSizeBytes ? ` (${(m.fileSizeBytes / 1024).toFixed(0)} KB)` : ""
+          }${m.fileUrl ? ` - Link: ${m.fileUrl}` : ""}]`
           : "";
         content += `[${idx + 1}] [${timeStr} IST] ${m.senderName} (${m.senderRole}):\n${m.body || ""}${attachment}\n\n`;
       });
@@ -626,9 +626,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               second: "2-digit",
             });
             const attachment = m.fileName
-              ? `\n[Attachment: ${m.fileName}${
-                  m.fileSizeBytes ? ` (${(m.fileSizeBytes / 1024).toFixed(0)} KB)` : ""
-                }]`
+              ? `\n[Attachment: ${m.fileName}${m.fileSizeBytes ? ` (${(m.fileSizeBytes / 1024).toFixed(0)} KB)` : ""
+              }]`
               : "";
             content += `[${mIdx + 1}] [${timeStr} IST] ${m.senderName} (${m.senderRole}):\n${m.body || ""}${attachment}\n\n`;
           });
@@ -736,33 +735,30 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
             <button
               type="button"
               onClick={() => setStatusFilter("ALL")}
-              className={`px-3 py-1 rounded-full transition-colors ${
-                statusFilter === "ALL"
+              className={`px-3 py-1 rounded-full transition-colors ${statusFilter === "ALL"
                   ? "bg-purple-100 text-[#3C096C] font-bold"
                   : "bg-neutral-100 text-body/70 hover:bg-neutral-200/60"
-              }`}
+                }`}
             >
               All {students.length}
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter("ACTIVE")}
-              className={`px-3 py-1 rounded-full transition-colors ${
-                statusFilter === "ACTIVE"
+              className={`px-3 py-1 rounded-full transition-colors ${statusFilter === "ACTIVE"
                   ? "bg-purple-100 text-[#3C096C] font-bold"
                   : "bg-neutral-100 text-body/70 hover:bg-neutral-200/60"
-              }`}
+                }`}
             >
               Active {students.filter((s) => s.isActive).length}
             </button>
             <button
               type="button"
               onClick={() => setStatusFilter("DUE")}
-              className={`px-3 py-1 rounded-full transition-colors ${
-                statusFilter === "DUE"
+              className={`px-3 py-1 rounded-full transition-colors ${statusFilter === "DUE"
                   ? "bg-rose-100 text-rose-700 font-bold"
                   : "bg-neutral-100 text-body/70 hover:bg-neutral-200/60"
-              }`}
+                }`}
             >
               Due {dueStudentsCount}
             </button>
@@ -784,11 +780,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   <div
                     key={st.id}
                     onClick={() => setSelectedStudentId(st.id)}
-                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 group active:scale-[0.99] ${
-                      isSelected
+                    className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 group active:scale-[0.99] ${isSelected
                         ? "border-[#3C096C] bg-purple-50/40 shadow-xs ring-1 ring-[#3C096C]/20"
                         : "border-neutral-200/70 hover:border-purple-200 hover:bg-neutral-50/70 bg-white"
-                    }`}
+                      }`}
                   >
                     <div className="flex items-center gap-3 min-w-0">
                       {/* Initials Avatar */}
@@ -797,8 +792,15 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       </div>
 
                       <div className="min-w-0 flex-1">
-                        <div className="font-bold text-xs text-heading truncate group-hover:text-[#3C096C] transition-colors">
-                          {st.name}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-bold text-xs text-heading truncate group-hover:text-[#3C096C] transition-colors">
+                            {st.name}
+                          </span>
+                          {st.customId && (
+                            <span className="shrink-0 text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-100 text-[#3C096C]">
+                              {st.customId}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-body/70 truncate mt-0.5">
                           {primaryCourse} · {st.country || "India"}
@@ -822,9 +824,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     </div>
 
                     <ChevronRight
-                      className={`w-4 h-4 shrink-0 transition-colors ${
-                        isSelected ? "text-[#3C096C]" : "text-body/30 group-hover:text-heading"
-                      }`}
+                      className={`w-4 h-4 shrink-0 transition-colors ${isSelected ? "text-[#3C096C]" : "text-body/30 group-hover:text-heading"
+                        }`}
                     />
                   </div>
                 );
@@ -848,23 +849,26 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       <h2 className="font-serif text-xl sm:text-2xl font-bold text-heading">
                         {selectedStudent.name}
                       </h2>
-                      <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${
-                        selectedStudent.isActive
+                      <span className={`px-2 py-0.5 rounded-md text-xs font-semibold border ${selectedStudent.isActive
                           ? "bg-emerald-50 text-emerald-700 border-emerald-200"
                           : "bg-rose-50 text-rose-700 border-rose-200"
-                      }`}>
+                        }`}>
                         {selectedStudent.isActive ? "Active" : "Login Disabled"}
                       </span>
                     </div>
-                    <p className="text-xs text-body/60 mt-1 font-numeric">
-                      STU-{new Date(selectedStudent.createdAt).getFullYear()}-
-                      {selectedStudent.id.slice(-4)} · student since{" "}
-                      {new Date(selectedStudent.createdAt).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-purple-100 text-[#3C096C]">
+                        {selectedStudent.customId || `S${selectedStudent.id.slice(-4).toUpperCase()}`}
+                      </span>
+                      <span className="text-xs text-body/60 font-numeric">
+                        · student since{" "}
+                        {new Date(selectedStudent.createdAt).toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -889,11 +893,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         ? "Remove access from student to login"
                         : "Grant access to student to login"
                     }
-                    className={`btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer ${
-                      selectedStudent.isActive
+                    className={`btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border shadow-2xs cursor-pointer ${selectedStudent.isActive
                         ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border-rose-200 hover:border-rose-300 active:scale-95"
                         : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border-emerald-200 hover:border-emerald-300 active:scale-95"
-                    }`}
+                      }`}
                   >
                     {isTogglingAccess ? (
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -986,11 +989,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id as any)}
-                  className={`px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 ${
-                    activeTab === tab.id
+                  className={`px-4 py-2 rounded-xl transition-all whitespace-nowrap active:scale-95 ${activeTab === tab.id
                       ? "bg-[#3C096C] text-white shadow-xs"
                       : "bg-white hover:bg-neutral-100 text-body/70 border border-neutral-200/80"
-                  }`}
+                    }`}
                 >
                   {tab.label}
                 </button>
@@ -1069,301 +1071,299 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
 
                 {/* 2-Column Overview Grid */}
                 <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
-                {/* LEFT SUB-COLUMN (7 COLS / ~60%) */}
-                <div className="lg:col-span-7 space-y-5">
-                {/* 1. Enrollments Card */}
-                <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-serif text-base font-bold text-heading">
-                        Enrollments
-                      </h3>
-                      <p className="text-xs text-body/60 mt-0.5">
-                        Controlled course catalog records
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsCreateEnrollmentOpen(true)}
-                      className="text-xs font-bold text-[#3C096C] hover:underline"
-                    >
-                      + Enroll
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {selectedStudent.enrollments.length === 0 ? (
-                      <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
-                        No active course enrollments yet.
-                      </div>
-                    ) : (
-                      selectedStudent.enrollments.map((enr) => (
-                        <div
-                          key={enr.id}
-                          className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
-                        >
-                          <div>
-                            <div className="font-bold text-xs text-heading">
-                              {enr.courseTitle} · {enr.courseLevel}
-                            </div>
-                            <div className="text-[11px] text-body/70 mt-0.5 font-numeric">
-                              ENR-{enr.id.slice(-4)} · {enr.teacherName || "Assigned Faculty"} ·{" "}
-                              {Math.max(0, enr.totalSessions - enr.sessionsRemaining)}/
-                              {enr.totalSessions} sessions
-                            </div>
-                          </div>
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                            {enr.status}
-                          </span>
+                  {/* LEFT SUB-COLUMN (7 COLS / ~60%) */}
+                  <div className="lg:col-span-7 space-y-5">
+                    {/* 1. Enrollments Card */}
+                    <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-serif text-base font-bold text-heading">
+                            Enrollments
+                          </h3>
+                          <p className="text-xs text-body/60 mt-0.5">
+                            Controlled course catalog records
+                          </p>
                         </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Upcoming & past classes Card */}
-                <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-serif text-base font-bold text-heading">
-                        Upcoming & past classes
-                      </h3>
-                      <p className="text-xs text-body/60 mt-0.5">
-                        Individual sessions · {selectedStudent.timezone}
-                      </p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsScheduleClassOpen(true)}
-                      className="text-xs font-bold text-[#3C096C] hover:underline"
-                    >
-                      + Schedule
-                    </button>
-                  </div>
-
-                  <div className="space-y-3">
-                    {selectedStudent.lessons.length === 0 ? (
-                      <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
-                        No scheduled or completed lessons for this student.
-                      </div>
-                    ) : (
-                      selectedStudent.lessons.slice(0, 5).map((l, idx) => {
-                        const lDate = new Date(l.startsAt);
-                        const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
-                        const isPastTime = Date.now() >= endTime.getTime();
-                        const isUpcoming = (l.status === "SCHEDULED" || l.status === "RESCHEDULED") && !isPastTime;
-                        const isCompleted = l.status === "COMPLETED";
-                        const isCancelled = l.status === "CANCELLED";
-
-                        return (
-                          <div
-                            key={l.id}
-                            className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3 group hover:border-[#3C096C]/20 transition-colors"
-                          >
-                            <div className="min-w-0">
-                              <div className="font-bold text-xs text-heading truncate">
-                                {lDate.toLocaleDateString("en-GB", {
-                                  day: "2-digit",
-                                  month: "short",
-                                })}{" "}
-                                ·{" "}
-                                {lDate.toLocaleTimeString("en-GB", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}{" "}
-                                · {l.instrument}
-                              </div>
-                              <div className="text-[11px] text-body/70 mt-0.5 truncate">
-                                Faculty: {l.teacherName || "Assigned Faculty"}
-                              </div>
-                            </div>
-
-                            <div className="flex items-center gap-2 shrink-0">
-                              {updatingLessonId === l.id ? (
-                                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 text-body/70 text-[10px] font-semibold border border-neutral-200">
-                                  <Loader2 className="w-3 h-3 animate-spin text-[#3C096C]" />
-                                  <span>Saving...</span>
-                                </div>
-                              ) : (
-                                <div className="relative inline-flex items-center">
-                                  <select
-                                    value={l.status}
-                                    onChange={(e) =>
-                                      handleUpdateLessonStatus(
-                                        l.id,
-                                        e.target.value as any
-                                      )
-                                    }
-                                    className={`appearance-none pl-2.5 pr-6 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer transition-all outline-none ${
-                                      isCompleted
-                                        ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
-                                        : isCancelled
-                                        ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
-                                        : isUpcoming
-                                        ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70"
-                                        : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70"
-                                    }`}
-                                    title="Click to update session status"
-                                  >
-                                    <option value="SCHEDULED">Upcoming</option>
-                                    <option value="COMPLETED">Complete</option>
-                                    <option value="CANCELLED">Cancelled</option>
-                                    <option value="RESCHEDULED">Rescheduled</option>
-                                  </select>
-                                  <ChevronDown className="w-3 h-3 text-body/40 absolute right-1.5 pointer-events-none" />
-                                </div>
-                              )}
-                            </div>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-                </div>
-
-                {/* 3. Homework & resources Card */}
-                <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-serif text-base font-bold text-heading">
-                        Homework & resources
-                      </h3>
-                      <p className="text-xs text-body/60 mt-0.5">
-                        Assigned practice materials and reference sheet music
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {selectedStudent.resources.length === 0 ? (
-                      <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
-                        No shared learning materials or resources yet.
-                      </div>
-                    ) : (
-                      selectedStudent.resources.map((res) => (
-                        <div
-                          key={res.id}
-                          className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
+                        <button
+                          type="button"
+                          onClick={() => setIsCreateEnrollmentOpen(true)}
+                          className="text-xs font-bold text-[#3C096C] hover:underline"
                         >
-                          <div>
-                            <div className="font-bold text-xs text-heading">
-                              {res.title}
-                            </div>
-                            <div className="text-[11px] text-body/60 mt-0.5">
-                              {res.category} · Shared{" "}
-                              {new Date(res.sharedAt).toLocaleDateString("en-GB", {
-                                day: "2-digit",
-                                month: "short",
-                              })}
-                            </div>
+                          + Enroll
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {selectedStudent.enrollments.length === 0 ? (
+                          <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
+                            No active course enrollments yet.
                           </div>
-                          <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
-                            Shared
-                          </span>
+                        ) : (
+                          selectedStudent.enrollments.map((enr) => (
+                            <div
+                              key={enr.id}
+                              className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
+                            >
+                              <div>
+                                <div className="font-bold text-xs text-heading">
+                                  {enr.courseTitle} · {enr.courseLevel}
+                                </div>
+                                <div className="text-[11px] text-body/70 mt-0.5 font-numeric">
+                                  ENR-{enr.id.slice(-4)} · {enr.teacherName || "Assigned Faculty"} ·{" "}
+                                  {Math.max(0, enr.totalSessions - enr.sessionsRemaining)}/
+                                  {enr.totalSessions} sessions
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                {enr.status}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Upcoming & past classes Card */}
+                    <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-serif text-base font-bold text-heading">
+                            Upcoming & past classes
+                          </h3>
+                          <p className="text-xs text-body/60 mt-0.5">
+                            Individual sessions · {selectedStudent.timezone}
+                          </p>
                         </div>
-                      ))
-                    )}
+                        <button
+                          type="button"
+                          onClick={() => setIsScheduleClassOpen(true)}
+                          className="text-xs font-bold text-[#3C096C] hover:underline"
+                        >
+                          + Schedule
+                        </button>
+                      </div>
+
+                      <div className="space-y-3">
+                        {selectedStudent.lessons.length === 0 ? (
+                          <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
+                            No scheduled or completed lessons for this student.
+                          </div>
+                        ) : (
+                          selectedStudent.lessons.slice(0, 5).map((l, idx) => {
+                            const lDate = new Date(l.startsAt);
+                            const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+                            const isPastTime = Date.now() >= endTime.getTime();
+                            const isUpcoming = (l.status === "SCHEDULED" || l.status === "RESCHEDULED") && !isPastTime;
+                            const isCompleted = l.status === "COMPLETED";
+                            const isCancelled = l.status === "CANCELLED";
+
+                            return (
+                              <div
+                                key={l.id}
+                                className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3 group hover:border-[#3C096C]/20 transition-colors"
+                              >
+                                <div className="min-w-0">
+                                  <div className="font-bold text-xs text-heading truncate">
+                                    {lDate.toLocaleDateString("en-GB", {
+                                      day: "2-digit",
+                                      month: "short",
+                                    })}{" "}
+                                    ·{" "}
+                                    {lDate.toLocaleTimeString("en-GB", {
+                                      hour: "2-digit",
+                                      minute: "2-digit",
+                                    })}{" "}
+                                    · {l.instrument}
+                                  </div>
+                                  <div className="text-[11px] text-body/70 mt-0.5 truncate">
+                                    Faculty: {l.teacherName || "Assigned Faculty"}
+                                  </div>
+                                </div>
+
+                                <div className="flex items-center gap-2 shrink-0">
+                                  {updatingLessonId === l.id ? (
+                                    <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-neutral-100 text-body/70 text-[10px] font-semibold border border-neutral-200">
+                                      <Loader2 className="w-3 h-3 animate-spin text-[#3C096C]" />
+                                      <span>Saving...</span>
+                                    </div>
+                                  ) : (
+                                    <div className="relative inline-flex items-center">
+                                      <select
+                                        value={l.status}
+                                        onChange={(e) =>
+                                          handleUpdateLessonStatus(
+                                            l.id,
+                                            e.target.value as any
+                                          )
+                                        }
+                                        className={`appearance-none pl-2.5 pr-6 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer transition-all outline-none ${isCompleted
+                                            ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
+                                            : isCancelled
+                                              ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
+                                              : isUpcoming
+                                                ? "bg-purple-50 text-purple-700 border-purple-200 hover:bg-purple-100/70"
+                                                : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100/70"
+                                          }`}
+                                        title="Click to update session status"
+                                      >
+                                        <option value="SCHEDULED">Upcoming</option>
+                                        <option value="COMPLETED">Complete</option>
+                                        <option value="CANCELLED">Cancelled</option>
+                                        <option value="RESCHEDULED">Rescheduled</option>
+                                      </select>
+                                      <ChevronDown className="w-3 h-3 text-body/40 absolute right-1.5 pointer-events-none" />
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 3. Homework & resources Card */}
+                    <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-serif text-base font-bold text-heading">
+                            Homework & resources
+                          </h3>
+                          <p className="text-xs text-body/60 mt-0.5">
+                            Assigned practice materials and reference sheet music
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="space-y-3">
+                        {selectedStudent.resources.length === 0 ? (
+                          <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
+                            No shared learning materials or resources yet.
+                          </div>
+                        ) : (
+                          selectedStudent.resources.map((res) => (
+                            <div
+                              key={res.id}
+                              className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
+                            >
+                              <div>
+                                <div className="font-bold text-xs text-heading">
+                                  {res.title}
+                                </div>
+                                <div className="text-[11px] text-body/60 mt-0.5">
+                                  {res.category} · Shared{" "}
+                                  {new Date(res.sharedAt).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}
+                                </div>
+                              </div>
+                              <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-200 text-[10px] font-semibold">
+                                Shared
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* RIGHT SUB-COLUMN (5 COLS / ~40%) */}
+                  <div className="lg:col-span-5 space-y-5">
+                    {/* 1. Payment Ledger Card */}
+                    <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <h3 className="font-serif text-base font-bold text-heading">
+                            Payment ledger
+                          </h3>
+                          <p className="text-xs text-body/60 mt-0.5">INR only</p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setIsRecordPaymentOpen(true)}
+                          className="px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-50 text-[#3C096C] text-xs font-bold transition-colors"
+                        >
+                          + Record payment
+                        </button>
+                      </div>
+
+                      {/* Outstanding balance banner */}
+                      <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
+                        <span className="text-xs font-semibold text-rose-900">
+                          Outstanding balance
+                        </span>
+                        <span className="font-serif text-base font-bold text-rose-900 font-numeric">
+                          ₹{outstandingRupees.toLocaleString("en-IN")}
+                        </span>
+                      </div>
+
+                      {/* Past Transactions */}
+                      <div className="space-y-2.5">
+                        {selectedStudent.payments.length === 0 ? (
+                          <div className="p-3 text-center text-xs text-body/50">
+                            No transactions recorded for this student.
+                          </div>
+                        ) : (
+                          selectedStudent.payments.map((p) => (
+                            <div
+                              key={p.id}
+                              className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30 flex items-center justify-between text-xs font-numeric"
+                            >
+                              <div>
+                                <div className="font-bold text-heading">
+                                  {new Date(p.createdAt).toLocaleDateString("en-GB", {
+                                    day: "2-digit",
+                                    month: "short",
+                                  })}{" "}
+                                  · ₹{p.amountRupees.toLocaleString("en-IN")}
+                                </div>
+                                <div className="text-[11px] text-body/60 mt-0.5 uppercase">
+                                  {p.gateway} · {p.gatewayPaymentId || "DIRECT"}
+                                </div>
+                              </div>
+                              <span
+                                className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${p.status === "PAID"
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-rose-50 text-rose-700"
+                                  }`}
+                              >
+                                {p.status}
+                              </span>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* 2. Communications Card */}
+                    <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
+                      <h3 className="font-serif text-base font-bold text-heading">
+                        Communications
+                      </h3>
+                      <div className="space-y-3 text-xs">
+                        <div className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/40">
+                          <div className="font-bold text-heading">
+                            WhatsApp · Class reminder
+                          </div>
+                          <div className="text-[11px] text-body/60 mt-0.5">
+                            Delivered today · 10:12 IST
+                          </div>
+                        </div>
+                        <div className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/40">
+                          <div className="font-bold text-heading">
+                            Email · Tuition receipt sent
+                          </div>
+                          <div className="text-[11px] text-body/60 mt-0.5">
+                            Delivered · Automated system
+                          </div>
+                        </div>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
-
-              {/* RIGHT SUB-COLUMN (5 COLS / ~40%) */}
-              <div className="lg:col-span-5 space-y-5">
-                {/* 1. Payment Ledger Card */}
-                <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <h3 className="font-serif text-base font-bold text-heading">
-                        Payment ledger
-                      </h3>
-                      <p className="text-xs text-body/60 mt-0.5">INR only</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => setIsRecordPaymentOpen(true)}
-                      className="px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-50 text-[#3C096C] text-xs font-bold transition-colors"
-                    >
-                      + Record payment
-                    </button>
-                  </div>
-
-                  {/* Outstanding balance banner */}
-                  <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
-                    <span className="text-xs font-semibold text-rose-900">
-                      Outstanding balance
-                    </span>
-                    <span className="font-serif text-base font-bold text-rose-900 font-numeric">
-                      ₹{outstandingRupees.toLocaleString("en-IN")}
-                    </span>
-                  </div>
-
-                  {/* Past Transactions */}
-                  <div className="space-y-2.5">
-                    {selectedStudent.payments.length === 0 ? (
-                      <div className="p-3 text-center text-xs text-body/50">
-                        No transactions recorded for this student.
-                      </div>
-                    ) : (
-                      selectedStudent.payments.map((p) => (
-                        <div
-                          key={p.id}
-                          className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/30 flex items-center justify-between text-xs font-numeric"
-                        >
-                          <div>
-                            <div className="font-bold text-heading">
-                              {new Date(p.createdAt).toLocaleDateString("en-GB", {
-                                day: "2-digit",
-                                month: "short",
-                              })}{" "}
-                              · ₹{p.amountRupees.toLocaleString("en-IN")}
-                            </div>
-                            <div className="text-[11px] text-body/60 mt-0.5 uppercase">
-                              {p.gateway} · {p.gatewayPaymentId || "DIRECT"}
-                            </div>
-                          </div>
-                          <span
-                            className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                              p.status === "PAID"
-                                ? "bg-emerald-50 text-emerald-700"
-                                : "bg-rose-50 text-rose-700"
-                            }`}
-                          >
-                            {p.status}
-                          </span>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </div>
-
-                {/* 2. Communications Card */}
-                <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs p-5 sm:p-6 space-y-4">
-                  <h3 className="font-serif text-base font-bold text-heading">
-                    Communications
-                  </h3>
-                  <div className="space-y-3 text-xs">
-                    <div className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/40">
-                      <div className="font-bold text-heading">
-                        WhatsApp · Class reminder
-                      </div>
-                      <div className="text-[11px] text-body/60 mt-0.5">
-                        Delivered today · 10:12 IST
-                      </div>
-                    </div>
-                    <div className="p-3 rounded-xl border border-neutral-100 bg-neutral-50/40">
-                      <div className="font-bold text-heading">
-                        Email · Tuition receipt sent
-                      </div>
-                      <div className="text-[11px] text-body/60 mt-0.5">
-                        Delivered · Automated system
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
+            )}
 
             {/* ─── TAB 2: CLASSES (UPCOMING & PAST CLASSES) ────────────── */}
             {activeTab === "CLASSES" && (
@@ -1530,11 +1530,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/50 transition-colors"
                         >
                           <div className="flex items-center gap-3">
-                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-                              l.status === "COMPLETED"
+                            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${l.status === "COMPLETED"
                                 ? "bg-emerald-50 text-emerald-700"
                                 : "bg-neutral-100 text-neutral-600"
-                            }`}>
+                              }`}>
                               {l.status === "COMPLETED" ? <CheckCircle2 className="w-4 h-4" /> : <Clock className="w-4 h-4" />}
                             </div>
                             <div>
@@ -1549,13 +1548,12 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                       onChange={(e) =>
                                         handleUpdateLessonStatus(l.id, e.target.value as any)
                                       }
-                                      className={`appearance-none pl-2 pr-5 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer outline-none transition-all ${
-                                        l.status === "COMPLETED"
+                                      className={`appearance-none pl-2 pr-5 py-0.5 rounded-md text-[10px] font-bold border cursor-pointer outline-none transition-all ${l.status === "COMPLETED"
                                           ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100/70"
                                           : l.status === "CANCELLED"
-                                          ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
-                                          : "bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200/60"
-                                      }`}
+                                            ? "bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100/70"
+                                            : "bg-neutral-100 text-neutral-700 border-neutral-200 hover:bg-neutral-200/60"
+                                        }`}
                                       title="Change class status"
                                     >
                                       <option value="COMPLETED">Completed</option>
@@ -1803,11 +1801,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/50 transition-colors"
                         >
                           <div className="flex items-center gap-3.5">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
-                              p.status === "PAID"
+                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${p.status === "PAID"
                                 ? "bg-emerald-50 text-emerald-700"
                                 : "bg-amber-50 text-amber-700"
-                            }`}>
+                              }`}>
                               <CreditCard className="w-4 h-4" />
                             </div>
                             <div>
@@ -1815,11 +1812,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                 <span className="font-bold text-heading text-sm">
                                   {p.courseTitle || "Academy Tuition Fee"}
                                 </span>
-                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
-                                  p.status === "PAID"
+                                <span className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${p.status === "PAID"
                                     ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
                                     : "bg-amber-50 text-amber-700 border border-amber-200"
-                                }`}>
+                                  }`}>
                                   {p.status}
                                 </span>
                               </div>
@@ -1876,17 +1872,16 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         href={
                           selectedStudent.phone
                             ? `https://wa.me/${selectedStudent.phone.replace(/[^0-9]/g, "")}?text=${encodeURIComponent(
-                                `Namaste ${selectedStudent.name}, greetings from Gandharva School of Music.`
-                              )}`
+                              `Namaste ${selectedStudent.name}, greetings from Gandharva School of Music.`
+                            )}`
                             : "#"
                         }
                         target={selectedStudent.phone ? "_blank" : undefined}
                         rel="noopener noreferrer"
-                        className={`p-3.5 rounded-xl border transition-all active:scale-95 flex items-center gap-3 ${
-                          selectedStudent.phone
+                        className={`p-3.5 rounded-xl border transition-all active:scale-95 flex items-center gap-3 ${selectedStudent.phone
                             ? "border-emerald-200 bg-emerald-50/40 hover:bg-emerald-50 text-emerald-900"
                             : "border-neutral-200 bg-neutral-50/50 text-body/40 cursor-not-allowed"
-                        }`}
+                          }`}
                       >
                         <div className="w-8 h-8 rounded-lg bg-emerald-600 text-white flex items-center justify-center shrink-0">
                           <Phone className="w-4 h-4" />
@@ -2125,11 +2120,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         key={f.id}
                         type="button"
                         onClick={() => setTimelineFilter(f.id as any)}
-                        className={`px-3 py-1.5 rounded-xl font-semibold transition-all active:scale-95 whitespace-nowrap ${
-                          timelineFilter === f.id
+                        className={`px-3 py-1.5 rounded-xl font-semibold transition-all active:scale-95 whitespace-nowrap ${timelineFilter === f.id
                             ? "bg-[#3C096C] text-white shadow-2xs"
                             : "bg-neutral-100 hover:bg-neutral-200/70 text-body"
-                        }`}
+                          }`}
                       >
                         {f.label}
                       </button>
@@ -2146,17 +2140,16 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     {filteredTimelineEvents.map((ev) => (
                       <div key={ev.id} className="relative group">
                         {/* Timeline node icon / ring */}
-                        <div className={`absolute -left-[27px] top-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white ${
-                          ev.type === "PAYMENT"
+                        <div className={`absolute -left-[27px] top-0.5 w-6 h-6 rounded-full flex items-center justify-center ring-4 ring-white ${ev.type === "PAYMENT"
                             ? "bg-emerald-600 text-white"
                             : ev.type === "LESSON"
-                            ? "bg-[#3C096C] text-white"
-                            : ev.type === "RESOURCE"
-                            ? "bg-sky-600 text-white"
-                            : ev.type === "ENROLLMENT"
-                            ? "bg-indigo-600 text-white"
-                            : "bg-neutral-800 text-white"
-                        }`}>
+                              ? "bg-[#3C096C] text-white"
+                              : ev.type === "RESOURCE"
+                                ? "bg-sky-600 text-white"
+                                : ev.type === "ENROLLMENT"
+                                  ? "bg-indigo-600 text-white"
+                                  : "bg-neutral-800 text-white"
+                          }`}>
                           {ev.type === "PAYMENT" && <IndianRupee className="w-3 h-3" />}
                           {ev.type === "LESSON" && <Calendar className="w-3 h-3" />}
                           {ev.type === "RESOURCE" && <FileText className="w-3 h-3" />}
@@ -2271,9 +2264,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                               return (
                                 <div
                                   key={msg.id}
-                                  className={`flex flex-col ${
-                                    isStudent ? "items-end" : "items-start"
-                                  }`}
+                                  className={`flex flex-col ${isStudent ? "items-end" : "items-start"
+                                    }`}
                                 >
                                   <div className="flex items-center gap-1.5 text-[10px] text-body/50 mb-1 px-1">
                                     <span className="font-semibold text-heading">
@@ -2289,11 +2281,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                     </span>
                                   </div>
                                   <div
-                                    className={`max-w-[85%] sm:max-w-[70%] p-3.5 rounded-2xl text-xs space-y-1.5 ${
-                                      isStudent
+                                    className={`max-w-[85%] sm:max-w-[70%] p-3.5 rounded-2xl text-xs space-y-1.5 ${isStudent
                                         ? "bg-[#3C096C] text-white rounded-br-xs"
                                         : "bg-neutral-100 text-heading rounded-bl-xs"
-                                    }`}
+                                      }`}
                                   >
                                     {msg.body && (
                                       <p className="whitespace-pre-wrap leading-relaxed">
@@ -2302,11 +2293,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                     )}
                                     {msg.fileName && (
                                       <div
-                                        className={`p-2 rounded-xl text-xs flex items-center gap-2 ${
-                                          isStudent
+                                        className={`p-2 rounded-xl text-xs flex items-center gap-2 ${isStudent
                                             ? "bg-white/10 text-white"
                                             : "bg-white text-heading border border-neutral-200"
-                                        }`}
+                                          }`}
                                       >
                                         <FileText className="w-3.5 h-3.5 shrink-0" />
                                         <span className="truncate font-medium">

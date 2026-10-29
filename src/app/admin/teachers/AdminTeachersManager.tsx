@@ -50,6 +50,7 @@ import {
 export interface TeacherRecord {
   id: string; // TeacherProfile id (or user id fallback)
   userId: string;
+  customId?: string | null;
   name: string;
   email: string;
   phone: string | null;
@@ -401,6 +402,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
       !q ||
       t.name.toLowerCase().includes(q) ||
       t.email.toLowerCase().includes(q) ||
+      (t.customId && t.customId.toLowerCase().includes(q)) ||
       (t.phone && t.phone.toLowerCase().includes(q)) ||
       t.instruments.some((inst) => inst.toLowerCase().includes(q));
 
@@ -767,8 +769,15 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       </div>
 
                       <div className="min-w-0">
-                        <div className="font-bold text-xs text-heading truncate">
-                          {teacher.name}
+                        <div className="flex items-center gap-1.5 min-w-0">
+                          <span className="font-bold text-xs text-heading truncate">
+                            {teacher.name}
+                          </span>
+                          {teacher.customId && (
+                            <span className="shrink-0 text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-purple-100 text-[#3C096C]">
+                              {teacher.customId}
+                            </span>
+                          )}
                         </div>
                         <div className="text-[11px] text-body/70 truncate mt-0.5">
                           {primaryInst} · {teacher.country || "India"}
@@ -841,15 +850,19 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         </span>
                       )}
                     </div>
-                    <p className="text-xs text-body/60 mt-1 font-numeric">
-                      FAC-{new Date(selectedTeacher.createdAt).getFullYear()}-
-                      {selectedTeacher.id.slice(-4)} · faculty since{" "}
-                      {new Date(selectedTeacher.createdAt).toLocaleDateString("en-GB", {
-                        day: "2-digit",
-                        month: "short",
-                        year: "numeric",
-                      })}
-                    </p>
+                    <div className="flex items-center gap-2 mt-1 flex-wrap">
+                      <span className="inline-flex items-center px-2 py-0.5 rounded font-mono font-bold text-xs bg-purple-100 text-[#3C096C]">
+                        {selectedTeacher.customId || `T${selectedTeacher.userId.slice(-4).toUpperCase()}`}
+                      </span>
+                      <span className="text-xs text-body/60 font-numeric">
+                        · faculty since{" "}
+                        {new Date(selectedTeacher.createdAt).toLocaleDateString("en-GB", {
+                          day: "2-digit",
+                          month: "short",
+                          year: "numeric",
+                        })}
+                      </span>
+                    </div>
                   </div>
                 </div>
 
@@ -2303,7 +2316,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     <div className="p-3.5 rounded-xl bg-neutral-50/70 border border-neutral-100">
                       <div className="text-[11px] text-body/60 font-medium">Faculty Name & ID</div>
                       <div className="font-bold text-heading mt-1">{selectedTeacher.name}</div>
-                      <div className="text-[10px] text-body/50 font-mono mt-0.5">{selectedTeacher.id}</div>
+                      <div className="text-[10px] text-[#3C096C] font-mono font-bold mt-0.5">{selectedTeacher.customId || selectedTeacher.id}</div>
                     </div>
 
                     <div className="p-3.5 rounded-xl bg-neutral-50/70 border border-neutral-100">

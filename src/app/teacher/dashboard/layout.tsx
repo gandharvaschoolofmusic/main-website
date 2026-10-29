@@ -8,6 +8,8 @@ export const metadata = {
   description: "Gandharva Faculty Studio: Manage schedule, lessons, students, and earnings.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function TeacherDashboardLayout({
   children,
 }: {

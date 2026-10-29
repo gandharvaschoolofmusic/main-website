@@ -74,32 +74,96 @@ const getCachedCourseRecordingsData = unstable_cache(
       for (const e of c.enrollments) {
         if (!e.student) continue;
 
-        const studentLessons: SessionLessonItem[] = e.lessons.map((l, lIdx) => ({
-          id: l.id,
-          trackingCode: getLessonTrackingId(l),
-          sessionNumber: lIdx + 1,
-          startsAt: l.startsAt.toISOString(),
-          formattedDate: formatInViewerTimezone(l.startsAt, "UTC", "MMM d, yyyy"),
-          formattedTime: formatInViewerTimezone(l.startsAt, "UTC", "h:mm a zzz"),
-          status: l.status,
-          durationMinutes: l.durationMinutes,
-          instrument: l.instrument || c.instrument,
-          teacherName: l.teacher?.name || "Teacher",
-          teacherEmail: l.teacher?.email || "",
-          recordings: l.recordings.map((r, rIdx) => ({
-            id: r.id,
-            lessonId: r.lessonId,
-            fileName: r.fileName,
-            fileUrl: r.fileUrl,
-            fileId: r.fileId,
-            fileSizeBytes: r.fileSizeBytes,
-            durationSeconds: r.durationSeconds,
-            storageBackend: r.storageBackend,
-            createdAt: r.createdAt.toISOString(),
-            formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
-            partNumber: rIdx + 1,
-          })),
-        }));
+        const studentLessons: SessionLessonItem[] = e.lessons.map((l, lIdx) => {
+          const tJoined = l.teacherJoinedAt;
+          const tLeft = l.teacherLeftAt;
+          const sJoined = l.studentJoinedAt;
+          const sLeft = l.studentLeftAt;
+
+          const teacherDurationSeconds =
+            tJoined && tLeft ? Math.max(0, Math.round((tLeft.getTime() - tJoined.getTime()) / 1000)) : null;
+          const studentDurationSeconds =
+            sJoined && sLeft ? Math.max(0, Math.round((sLeft.getTime() - sJoined.getTime()) / 1000)) : null;
+
+          let overlapDurationSeconds: number | null = null;
+          if (tJoined && tLeft && sJoined && sLeft) {
+            const start = Math.max(tJoined.getTime(), sJoined.getTime());
+            const end = Math.min(tLeft.getTime(), sLeft.getTime());
+            if (end > start) {
+              overlapDurationSeconds = Math.round((end - start) / 1000);
+            }
+          }
+
+          return {
+            id: l.id,
+            trackingCode: getLessonTrackingId(l),
+            sessionNumber: lIdx + 1,
+            startsAt: l.startsAt.toISOString(),
+            formattedDate: formatInViewerTimezone(l.startsAt, "UTC", "MMM d, yyyy"),
+            formattedTime: formatInViewerTimezone(l.startsAt, "UTC", "h:mm a zzz"),
+            status: l.status,
+            durationMinutes: l.durationMinutes,
+            instrument: l.instrument || c.instrument,
+            teacherName: l.teacher?.name || "Teacher",
+            teacherEmail: l.teacher?.email || "",
+            teacherJoinedAt: tJoined ? tJoined.toISOString() : null,
+            teacherLeftAt: tLeft ? tLeft.toISOString() : null,
+            studentJoinedAt: sJoined ? sJoined.toISOString() : null,
+            studentLeftAt: sLeft ? sLeft.toISOString() : null,
+            formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, "UTC", "h:mm:ss a") : null,
+            formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, "UTC", "h:mm:ss a") : null,
+            formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, "UTC", "h:mm:ss a") : null,
+            formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, "UTC", "h:mm:ss a") : null,
+            teacherDurationSeconds,
+            studentDurationSeconds,
+            overlapDurationSeconds,
+            recordings: l.recordings.map((r, rIdx) => {
+              const rTJoined = r.teacherJoinedAt || tJoined;
+              const rTLeft = r.teacherLeftAt || tLeft || (r.createdAt && rTJoined ? r.createdAt : null);
+              const rSJoined = r.studentJoinedAt || sJoined;
+              const rSLeft = r.studentLeftAt || sLeft || (r.createdAt && rSJoined ? r.createdAt : null);
+
+              const recTeacherDuration =
+                rTJoined && rTLeft ? Math.max(0, Math.round((rTLeft.getTime() - rTJoined.getTime()) / 1000)) : null;
+              const recStudentDuration =
+                rSJoined && rSLeft ? Math.max(0, Math.round((rSLeft.getTime() - rSJoined.getTime()) / 1000)) : null;
+
+              let recOverlapDuration: number | null = null;
+              if (rTJoined && rTLeft && rSJoined && rSLeft) {
+                const rStart = Math.max(rTJoined.getTime(), rSJoined.getTime());
+                const rEnd = Math.min(rTLeft.getTime(), rSLeft.getTime());
+                if (rEnd > rStart) {
+                  recOverlapDuration = Math.round((rEnd - rStart) / 1000);
+                }
+              }
+
+              return {
+                id: r.id,
+                lessonId: r.lessonId,
+                fileName: r.fileName,
+                fileUrl: r.fileUrl,
+                fileId: r.fileId,
+                fileSizeBytes: r.fileSizeBytes,
+                durationSeconds: r.durationSeconds,
+                storageBackend: r.storageBackend,
+                createdAt: r.createdAt.toISOString(),
+                formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
+                partNumber: rIdx + 1,
+                teacherJoinedAt: rTJoined ? rTJoined.toISOString() : null,
+                teacherLeftAt: rTLeft ? rTLeft.toISOString() : null,
+                studentJoinedAt: rSJoined ? rSJoined.toISOString() : null,
+                studentLeftAt: rSLeft ? rSLeft.toISOString() : null,
+                formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, "UTC", "h:mm:ss a") : null,
+                formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, "UTC", "h:mm:ss a") : null,
+                formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, "UTC", "h:mm:ss a") : null,
+                formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, "UTC", "h:mm:ss a") : null,
+                teacherDurationSeconds: recTeacherDuration,
+                studentDurationSeconds: recStudentDuration,
+                overlapDurationSeconds: recOverlapDuration,
+              };
+            }),
+          };
+        });
 
         const totalRecs = studentLessons.reduce((acc, l) => acc + l.recordings.length, 0);
         const totalDuration = studentLessons.reduce(
@@ -161,6 +225,25 @@ const getCachedCourseRecordingsData = unstable_cache(
           trialStudentsMap.set(tl.student.id, studentEntry);
         }
 
+        const tJoined = tl.teacherJoinedAt;
+        const tLeft = tl.teacherLeftAt;
+        const sJoined = tl.studentJoinedAt;
+        const sLeft = tl.studentLeftAt;
+
+        const teacherDurationSeconds =
+          tJoined && tLeft ? Math.max(0, Math.round((tLeft.getTime() - tJoined.getTime()) / 1000)) : null;
+        const studentDurationSeconds =
+          sJoined && sLeft ? Math.max(0, Math.round((sLeft.getTime() - sJoined.getTime()) / 1000)) : null;
+
+        let overlapDurationSeconds: number | null = null;
+        if (tJoined && tLeft && sJoined && sLeft) {
+          const start = Math.max(tJoined.getTime(), sJoined.getTime());
+          const end = Math.min(tLeft.getTime(), sLeft.getTime());
+          if (end > start) {
+            overlapDurationSeconds = Math.round((end - start) / 1000);
+          }
+        }
+
         const sessionItem: SessionLessonItem = {
           id: tl.id,
           trackingCode: getLessonTrackingId(tl),
@@ -173,19 +256,62 @@ const getCachedCourseRecordingsData = unstable_cache(
           instrument: tl.instrument,
           teacherName: tl.teacher?.name || "Teacher",
           teacherEmail: tl.teacher?.email || "",
-          recordings: tl.recordings.map((r, rIdx) => ({
-            id: r.id,
-            lessonId: r.lessonId,
-            fileName: r.fileName,
-            fileUrl: r.fileUrl,
-            fileId: r.fileId,
-            fileSizeBytes: r.fileSizeBytes,
-            durationSeconds: r.durationSeconds,
-            storageBackend: r.storageBackend,
-            createdAt: r.createdAt.toISOString(),
-            formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
-            partNumber: rIdx + 1,
-          })),
+          teacherJoinedAt: tJoined ? tJoined.toISOString() : null,
+          teacherLeftAt: tLeft ? tLeft.toISOString() : null,
+          studentJoinedAt: sJoined ? sJoined.toISOString() : null,
+          studentLeftAt: sLeft ? sLeft.toISOString() : null,
+          formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, "UTC", "h:mm:ss a") : null,
+          formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, "UTC", "h:mm:ss a") : null,
+          formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, "UTC", "h:mm:ss a") : null,
+          formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, "UTC", "h:mm:ss a") : null,
+          teacherDurationSeconds,
+          studentDurationSeconds,
+          overlapDurationSeconds,
+          recordings: tl.recordings.map((r, rIdx) => {
+            const rTJoined = r.teacherJoinedAt || tJoined;
+            const rTLeft = r.teacherLeftAt || tLeft || (r.createdAt && rTJoined ? r.createdAt : null);
+            const rSJoined = r.studentJoinedAt || sJoined;
+            const rSLeft = r.studentLeftAt || sLeft || (r.createdAt && rSJoined ? r.createdAt : null);
+
+            const recTeacherDuration =
+              rTJoined && rTLeft ? Math.max(0, Math.round((rTLeft.getTime() - rTJoined.getTime()) / 1000)) : null;
+            const recStudentDuration =
+              rSJoined && rSLeft ? Math.max(0, Math.round((rSLeft.getTime() - rSJoined.getTime()) / 1000)) : null;
+
+            let recOverlapDuration: number | null = null;
+            if (rTJoined && rTLeft && rSJoined && rSLeft) {
+              const rStart = Math.max(rTJoined.getTime(), rSJoined.getTime());
+              const rEnd = Math.min(rTLeft.getTime(), rSLeft.getTime());
+              if (rEnd > rStart) {
+                recOverlapDuration = Math.round((rEnd - rStart) / 1000);
+              }
+            }
+
+            return {
+              id: r.id,
+              lessonId: r.lessonId,
+              fileName: r.fileName,
+              fileUrl: r.fileUrl,
+              fileId: r.fileId,
+              fileSizeBytes: r.fileSizeBytes,
+              durationSeconds: r.durationSeconds,
+              storageBackend: r.storageBackend,
+              createdAt: r.createdAt.toISOString(),
+              formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
+              partNumber: rIdx + 1,
+              teacherJoinedAt: rTJoined ? rTJoined.toISOString() : null,
+              teacherLeftAt: rTLeft ? rTLeft.toISOString() : null,
+              studentJoinedAt: rSJoined ? rSJoined.toISOString() : null,
+              studentLeftAt: rSLeft ? rSLeft.toISOString() : null,
+              formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, "UTC", "h:mm:ss a") : null,
+              formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, "UTC", "h:mm:ss a") : null,
+              formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, "UTC", "h:mm:ss a") : null,
+              formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, "UTC", "h:mm:ss a") : null,
+              teacherDurationSeconds: recTeacherDuration,
+              studentDurationSeconds: recStudentDuration,
+              overlapDurationSeconds: recOverlapDuration,
+            };
+          }),
         };
 
         studentEntry.lessons.push(sessionItem);
@@ -217,7 +343,7 @@ const getCachedCourseRecordingsData = unstable_cache(
 
     return coursesList;
   },
-  ["admin-course-recordings-hierarchy-v2"],
+  ["admin-course-recordings-hierarchy-v3"],
   { revalidate: 30, tags: ["admin-recordings"] },
 );
 

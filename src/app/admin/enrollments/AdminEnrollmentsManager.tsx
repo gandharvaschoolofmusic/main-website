@@ -551,7 +551,7 @@ export function AdminEnrollmentsManager({
 
         const scheduledLessons: ScheduledLessonData[] = (res.data.newLessons || []).map((l: any) => ({
           id: l.id,
-          trackingCode: l.trackingCode || `GS-LSN-${l.id.slice(-6).toUpperCase()}`,
+          trackingCode: l.trackingCode || l.id,
           startsAt: l.startsAt,
           durationMinutes: l.durationMinutes || 60,
           status: l.status || "SCHEDULED",
@@ -741,7 +741,7 @@ export function AdminEnrollmentsManager({
 
         const scheduledLessons: ScheduledLessonData[] = (res.data.newLessons || []).map((l: any) => ({
           id: l.id,
-          trackingCode: l.trackingCode || `GS-LSN-${l.id.slice(-6).toUpperCase()}`,
+          trackingCode: l.trackingCode || l.id,
           startsAt: l.startsAt,
           durationMinutes: l.durationMinutes || 60,
           status: l.status || "SCHEDULED",
@@ -2418,7 +2418,7 @@ export function AdminEnrollmentsManager({
                       <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] font-semibold text-body uppercase tracking-wider">
                         <tr>
                           <th className="py-2.5 px-3.5">#</th>
-                          <th className="py-2.5 px-3.5">Unique Lesson ID (Tracking)</th>
+                          <th className="py-2.5 px-3.5">Session ID (Tracking)</th>
                           <th className="py-2.5 px-3.5">Date & Time</th>
                           <th className="py-2.5 px-3.5">Duration</th>
                           <th className="py-2.5 px-3.5">Assigned Faculty</th>

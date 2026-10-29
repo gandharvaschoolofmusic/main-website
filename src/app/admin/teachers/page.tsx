@@ -195,6 +195,7 @@ const getCachedAdminTeachersData = unstable_cache(
     return {
       id: profile?.id || u.id,
       userId: u.id,
+      customId: u.customId || null,
       name: u.name || "Faculty Applicant",
       email: u.email,
       phone: u.phone,

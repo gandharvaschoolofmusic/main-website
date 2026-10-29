@@ -7,6 +7,34 @@ import {
 } from "@/lib/errors";
 import { Role, Lesson } from "@prisma/client";
 import { cache } from "react";
+import { unstable_cache } from "next/cache";
+import { unstable_rethrow } from "next/navigation";
+
+/**
+ * Cache user database validation for 60 seconds across page navigations
+ * to eliminate repeated cross-region database queries on every navigation click.
+ */
+const getCachedDbUser = unstable_cache(
+  async (userId: string) => {
+    return db.user.findUnique({
+      where: { id: userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        image: true,
+        timezone: true,
+        emailVerified: true,
+        isActive: true,
+        customId: true,
+        teacherProfile: { select: { approvalStatus: true } },
+      },
+    });
+  },
+  ["auth-cached-db-user-v2"],
+  { revalidate: 60, tags: ["user-session"] },
+);
 
 /**
  * Get the current session user, or null if not authenticated.
@@ -21,20 +49,7 @@ export const getCurrentUser = cache(async () => {
     }
 
     try {
-      const dbUser = await db.user.findUnique({
-        where: { id: session.user.id },
-        select: {
-          id: true,
-          name: true,
-          email: true,
-          role: true,
-          image: true,
-          timezone: true,
-          emailVerified: true,
-          isActive: true,
-          teacherProfile: { select: { approvalStatus: true } },
-        },
-      });
+      const dbUser = await getCachedDbUser(session.user.id);
 
       if (dbUser) {
         if (!dbUser.isActive) {
@@ -53,6 +68,7 @@ export const getCurrentUser = cache(async () => {
           email: dbUser.email || session.user.email,
           image: dbUser.image || session.user.image,
           timezone: dbUser.timezone || session.user.timezone || "UTC",
+          customId: dbUser.customId,
           emailVerified: dbUser.emailVerified,
         };
       }
@@ -61,7 +77,8 @@ export const getCurrentUser = cache(async () => {
     }
 
     return session.user;
-  } catch {
+  } catch (err) {
+    unstable_rethrow(err);
     return null;
   }
 });

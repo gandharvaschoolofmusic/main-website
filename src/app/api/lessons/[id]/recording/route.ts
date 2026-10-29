@@ -140,7 +140,33 @@ export async function POST(
       );
     }
 
-    // 7. Persist to database (each rejoin creates a new LessonRecording entry)
+    // 7. Determine participant join/leave timestamps for this recording snapshot
+    const isTeacher = userId === lesson.teacherId;
+    const isStudent = userId === lesson.studentId;
+
+    const teacherJoinedAtRaw = formData.get("teacherJoinedAt") as string | null;
+    const teacherLeftAtRaw = formData.get("teacherLeftAt") as string | null;
+    const studentJoinedAtRaw = formData.get("studentJoinedAt") as string | null;
+    const studentLeftAtRaw = formData.get("studentLeftAt") as string | null;
+
+    const teacherJoinedAt = teacherJoinedAtRaw
+      ? new Date(teacherJoinedAtRaw)
+      : lesson.teacherJoinedAt || (isTeacher ? now : null);
+    const teacherLeftAt = teacherLeftAtRaw
+      ? new Date(teacherLeftAtRaw)
+      : isTeacher
+      ? now
+      : lesson.teacherLeftAt;
+    const studentJoinedAt = studentJoinedAtRaw
+      ? new Date(studentJoinedAtRaw)
+      : lesson.studentJoinedAt || (isStudent ? now : null);
+    const studentLeftAt = studentLeftAtRaw
+      ? new Date(studentLeftAtRaw)
+      : isStudent
+      ? now
+      : lesson.studentLeftAt;
+
+    // Persist to database (each rejoin creates a new LessonRecording entry)
     const recordingRecord = await db.lessonRecording.create({
       data: {
         lessonId,
@@ -150,6 +176,10 @@ export async function POST(
         fileSizeBytes: buffer.length,
         durationSeconds,
         storageBackend,
+        teacherJoinedAt,
+        teacherLeftAt,
+        studentJoinedAt,
+        studentLeftAt,
       },
     });
 
@@ -166,6 +196,10 @@ export async function POST(
         recordingUrl: fileUrl,
         recordingFileId: fileId,
         recordingDurationSeconds: cumulativeDuration,
+        ...(teacherJoinedAt && !lesson.teacherJoinedAt ? { teacherJoinedAt } : {}),
+        ...(teacherLeftAt ? { teacherLeftAt } : {}),
+        ...(studentJoinedAt && !lesson.studentJoinedAt ? { studentJoinedAt } : {}),
+        ...(studentLeftAt ? { studentLeftAt } : {}),
       },
     });
 

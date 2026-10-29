@@ -8,6 +8,8 @@ export const metadata = {
   description: "Gandharva Administration: Manage users, courses, enrollments, lessons, and settings.",
 };
 
+export const dynamic = "force-dynamic";
+
 export default async function AdminPortalLayout({
   children,
 }: {

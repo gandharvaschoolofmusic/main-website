@@ -243,7 +243,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       adminNotes: e.adminNotes,
       lessons: (e.lessons || []).map((l: any) => ({
         id: l.id,
-        trackingCode: l.trackingCode || `GS-LSN-${l.id.slice(-8).toUpperCase()}`,
+        trackingCode: l.trackingCode || l.id,
         startsAt: l.startsAt.toISOString(),
         durationMinutes: l.durationMinutes,
         status: l.status,

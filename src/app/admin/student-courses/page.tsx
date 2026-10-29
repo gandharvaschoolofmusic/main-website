@@ -2,6 +2,7 @@ import { Suspense } from "react";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
+import { unstable_cache } from "next/cache";
 import {
   AdminStudentCoursesManager,
   StudentCourseRequestRow,
@@ -18,11 +19,9 @@ export const metadata = {
     "Review student course admission requests, approve and allot courses directly to student dashboards, manage EMI installments, and assign faculty mentors.",
 };
 
-export default async function AdminStudentCoursesPage() {
-  await requireRole(Role.ADMIN);
-
-  const [dbRequests, dbEnrollments, dbTeachers, dbStudents, dbCourses] =
-    await Promise.all([
+const getCachedAdminStudentCoursesData = unstable_cache(
+  async () => {
+    return Promise.all([
       db.courseEnrollmentRequest.findMany({
         include: {
           student: {
@@ -87,6 +86,16 @@ export default async function AdminStudentCoursesPage() {
         orderBy: { title: "asc" },
       }),
     ]);
+  },
+  ["admin-student-courses-data"],
+  { revalidate: 30, tags: ["admin-courses", "student-courses", "enrollments"] },
+);
+
+export default async function AdminStudentCoursesPage() {
+  await requireRole(Role.ADMIN);
+
+  const [dbRequests, dbEnrollments, dbTeachers, dbStudents, dbCourses] =
+    await getCachedAdminStudentCoursesData();
 
   const teacherMap = new Map<string, string>();
   for (const t of dbTeachers) {

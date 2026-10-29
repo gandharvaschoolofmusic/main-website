@@ -6,6 +6,7 @@ import { Role, PaymentStatus, EnrollmentStatus, LessonStatus, LessonSource, Noti
 import { hashPassword } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
+import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 
 export type StudentActionResponse<T = unknown> = {
@@ -42,6 +43,7 @@ export async function createStudentAction(input: {
     }
 
     const passwordHash = await hashPassword("student123");
+    const customId = await generateNextStudentId(db);
 
     const student = await db.user.create({
       data: {
@@ -58,6 +60,7 @@ export async function createStudentAction(input: {
         role: Role.STUDENT,
         isActive: true,
         passwordHash,
+        customId,
       },
     });
 
@@ -197,7 +200,7 @@ export async function scheduleStudentLessonAction(input: {
       return { success: false, error: "Selected faculty profile not found or inactive." };
     }
 
-    const trackingCode = await generateUniqueLessonTrackingCode();
+    const trackingCode = await generateUniqueLessonTrackingCode(input.studentId, db);
     const startsAt = new Date(input.startsAtIso);
 
     if (isNaN(startsAt.getTime())) {

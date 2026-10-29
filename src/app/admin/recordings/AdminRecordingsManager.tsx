@@ -27,6 +27,12 @@ import {
   GraduationCap,
   User,
   Layers,
+  LogIn,
+  LogOut,
+  Activity,
+  CheckCircle2,
+  UserCheck,
+  Timer,
 } from "lucide-react";
 import {
   syncRecordingToSupabaseAction,
@@ -46,6 +52,17 @@ export interface RecordingFileItem {
   createdAt: string;
   formattedDate: string;
   partNumber?: number;
+  teacherJoinedAt?: string | null;
+  teacherLeftAt?: string | null;
+  studentJoinedAt?: string | null;
+  studentLeftAt?: string | null;
+  formattedTeacherJoined?: string | null;
+  formattedTeacherLeft?: string | null;
+  formattedStudentJoined?: string | null;
+  formattedStudentLeft?: string | null;
+  teacherDurationSeconds?: number | null;
+  studentDurationSeconds?: number | null;
+  overlapDurationSeconds?: number | null;
 }
 
 export interface SessionLessonItem {
@@ -60,6 +77,17 @@ export interface SessionLessonItem {
   instrument: string;
   teacherName: string;
   teacherEmail: string;
+  teacherJoinedAt?: string | null;
+  teacherLeftAt?: string | null;
+  studentJoinedAt?: string | null;
+  studentLeftAt?: string | null;
+  formattedTeacherJoined?: string | null;
+  formattedTeacherLeft?: string | null;
+  formattedStudentJoined?: string | null;
+  formattedStudentLeft?: string | null;
+  teacherDurationSeconds?: number | null;
+  studentDurationSeconds?: number | null;
+  overlapDurationSeconds?: number | null;
   recordings: RecordingFileItem[];
 }
 
@@ -126,6 +154,16 @@ function formatDurationToHoursMinutes(seconds: number | null): string {
     return `${h}h ${m}m`;
   }
   return `${m} mins`;
+}
+
+function formatSecondsToCompact(seconds: number | null | undefined): string {
+  if (seconds == null || seconds <= 0) return "—";
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  const s = seconds % 60;
+  if (h > 0) return `${h}h ${m}m`;
+  if (m > 0) return s > 0 ? `${m}m ${s}s` : `${m}m`;
+  return `${s}s`;
 }
 
 export function AdminRecordingsManager({
@@ -910,6 +948,17 @@ export function AdminRecordingsManager({
                           </span>
                           <span>•</span>
                           <span>Duration: {lesson.durationMinutes} mins scheduled</span>
+                          {(lesson.formattedTeacherJoined || lesson.formattedStudentJoined) && (
+                            <>
+                              <span>•</span>
+                              <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/50">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                {lesson.formattedTeacherJoined && `Teacher: ${lesson.formattedTeacherJoined}`}
+                                {lesson.formattedTeacherJoined && lesson.formattedStudentJoined && " • "}
+                                {lesson.formattedStudentJoined && `Student: ${lesson.formattedStudentJoined}`}
+                              </span>
+                            </>
+                          )}
                         </div>
                       </div>
                     </div>
@@ -993,6 +1042,172 @@ export function AdminRecordingsManager({
             </div>
           </div>
 
+          {/* ─── Master Classroom Attendance & Activity Timestamps Card ──── */}
+          <div className="rounded-2xl border border-primary/10 bg-white p-5 sm:p-6 shadow-xs space-y-5">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-primary/10">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <UserCheck className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-base font-bold text-heading flex items-center gap-2">
+                    Classroom Attendance &amp; Activity Timestamps
+                  </h3>
+                  <p className="text-xs text-body-muted">
+                    Exact LiveKit room entry and exit logs for this session
+                  </p>
+                </div>
+              </div>
+
+              <div>
+                {selectedSession.formattedTeacherJoined && selectedSession.formattedStudentJoined ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    Verified Presence
+                  </span>
+                ) : selectedSession.formattedTeacherJoined || selectedSession.formattedStudentJoined ? (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                    <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                    Partial Attendance
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-stone-50 text-stone-600 border border-stone-200">
+                    <Clock className="w-3.5 h-3.5 text-stone-500" />
+                    Pending Room Entry
+                  </span>
+                )}
+              </div>
+            </div>
+
+            {/* Dual Pillars: Teacher and Student Attendance Cards */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Teacher Pillar */}
+              <div className="rounded-xl p-4 bg-[#FAF9FD] border border-primary/10 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-primary text-white font-bold text-xs flex items-center justify-center font-serif shadow-xs">
+                      T
+                    </div>
+                    <div>
+                      <div className="font-serif text-sm font-bold text-heading leading-tight">
+                        {selectedSession.teacherName}
+                      </div>
+                      <div className="text-[11px] text-body-muted font-mono truncate max-w-[200px]">
+                        {selectedSession.teacherEmail || "Instructor"}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-primary/10 text-primary">
+                    Instructor
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/10">
+                  <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                      <LogIn className="w-3 h-3 text-emerald-600" />
+                      Joined Room
+                    </div>
+                    <div className="font-mono text-xs font-bold text-emerald-700">
+                      {selectedSession.formattedTeacherJoined || "Not Recorded"}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                      <LogOut className="w-3 h-3 text-rose-600" />
+                      Left Room
+                    </div>
+                    <div className="font-mono text-xs font-bold text-rose-700">
+                      {selectedSession.formattedTeacherLeft || "Not Recorded"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted">
+                  <span>Total Time in Room:</span>
+                  <span className="font-bold text-heading">
+                    {formatSecondsToCompact(selectedSession.teacherDurationSeconds)}
+                  </span>
+                </div>
+              </div>
+
+              {/* Student Pillar */}
+              <div className="rounded-xl p-4 bg-accent/5 border border-accent/15 space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-accent text-white font-bold text-xs flex items-center justify-center font-serif shadow-xs">
+                      S
+                    </div>
+                    <div>
+                      <div className="font-serif text-sm font-bold text-heading leading-tight">
+                        {selectedStudent.name}
+                      </div>
+                      <div className="text-[11px] text-body-muted font-mono truncate max-w-[200px]">
+                        {selectedStudent.email || "Student"}
+                      </div>
+                    </div>
+                  </div>
+                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-accent/15 text-accent-dark">
+                    Student
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-accent/10">
+                  <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                      <LogIn className="w-3 h-3 text-emerald-600" />
+                      Joined Room
+                    </div>
+                    <div className="font-mono text-xs font-bold text-emerald-700">
+                      {selectedSession.formattedStudentJoined || "Not Recorded"}
+                    </div>
+                  </div>
+
+                  <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
+                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                      <LogOut className="w-3 h-3 text-rose-600" />
+                      Left Room
+                    </div>
+                    <div className="font-mono text-xs font-bold text-rose-700">
+                      {selectedSession.formattedStudentLeft || "Not Recorded"}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted">
+                  <span>Total Time in Room:</span>
+                  <span className="font-bold text-heading">
+                    {formatSecondsToCompact(selectedSession.studentDurationSeconds)}
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* Concurrent Classroom Overlap Banner */}
+            <div className="p-3.5 rounded-xl bg-bg-alt/30 border border-primary/10 flex flex-col sm:flex-row sm:items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2">
+                <Activity className="w-4 h-4 text-accent" />
+                <span className="text-body-muted font-medium">
+                  Classroom Mutual Co-presence:
+                </span>
+                <strong className="text-heading font-mono font-bold">
+                  {formatSecondsToCompact(selectedSession.overlapDurationSeconds)}
+                </strong>
+                <span className="text-body-muted text-[11px]">
+                  (both teacher and student present together)
+                </span>
+              </div>
+
+              <div className="flex items-center gap-2 text-[11px] font-mono text-body-muted">
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-primary"></span>
+                <span>Teacher Active</span>
+                <span className="inline-block w-2.5 h-2.5 rounded-full bg-accent ml-2"></span>
+                <span>Student Active</span>
+              </div>
+            </div>
+          </div>
+
           {/* Recordings List for this particular session */}
           {selectedSession.recordings.length === 0 ? (
             <div className="p-12 rounded-2xl bg-white border border-primary/10 shadow-xs text-center space-y-4">
@@ -1017,18 +1232,18 @@ export function AdminRecordingsManager({
               </button>
             </div>
           ) : (
-            <div className="space-y-4">
+            <div className="space-y-6">
               <div className="flex items-center justify-between">
                 <h3 className="font-serif text-sm font-bold text-heading flex items-center gap-2">
                   <Layers className="w-4 h-4 text-primary" />
                   Archived Session Recordings ({selectedSession.recordings.length})
                 </h3>
                 <span className="text-xs text-body-muted">
-                  Click &apos;Watch&apos; to view in high definition or open in Supabase Cloud
+                  Recording files with participant room timestamps
                 </span>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+              <div className="space-y-6">
                 {selectedSession.recordings.map((recording, idx) => {
                   const isSupabaseCloud = recording.storageBackend === "SUPABASE";
                   const isSyncing = syncingId === recording.id;
@@ -1037,147 +1252,282 @@ export function AdminRecordingsManager({
                   return (
                     <div
                       key={recording.id}
-                      className="group relative rounded-2xl bg-white border border-primary/10 shadow-xs hover:shadow-md hover:border-primary/25 transition-all flex flex-col justify-between overflow-hidden"
+                      className="group relative rounded-2xl bg-white border border-primary/10 shadow-xs hover:shadow-md hover:border-primary/25 transition-all overflow-hidden flex flex-col lg:flex-row"
                     >
-                      {/* Video Preview Canvas Header */}
-                      <div>
-                        <div className="relative aspect-video w-full bg-gradient-to-br from-[#160A29] to-[#0E0C18] flex items-center justify-center overflow-hidden border-b border-primary/5">
-                          {/* Part badge */}
-                          <div className="absolute top-2.5 left-3 flex items-center gap-1.5">
-                            <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-black/70 text-amber-300 backdrop-blur-md border border-white/10">
-                              Part {recording.partNumber || idx + 1}
-                            </span>
-                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-black/50 text-stone-300 backdrop-blur-md border border-white/10">
-                              {selectedSession.instrument}
-                            </span>
-                          </div>
-
-                          {/* Duration Badge */}
-                          <div className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-black/75 text-white backdrop-blur-md flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-400" />
-                            {formatDuration(recording.durationSeconds)}
-                          </div>
-
-                          {/* Storage Backend Badge */}
-                          <div className="absolute bottom-2.5 left-3">
-                            {isSupabaseCloud ? (
-                              <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1">
-                                <Cloud className="w-2.5 h-2.5" />
-                                Supabase Cloud
+                      {/* Left: Video Preview & Actions (lg:w-7/12) */}
+                      <div className="lg:w-7/12 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-primary/10">
+                        <div>
+                          {/* Video Preview Canvas Header */}
+                          <div className="relative aspect-video w-full bg-gradient-to-br from-[#160A29] to-[#0E0C18] flex items-center justify-center overflow-hidden border-b border-primary/5">
+                            {/* Part badge */}
+                            <div className="absolute top-2.5 left-3 flex items-center gap-1.5">
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-black/70 text-amber-300 backdrop-blur-md border border-white/10">
+                                Part {recording.partNumber || idx + 1}
                               </span>
-                            ) : (
-                              <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-950/80 text-amber-400 border border-amber-500/30 backdrop-blur-md flex items-center gap-1">
-                                <HardDrive className="w-2.5 h-2.5" />
-                                Local Disk
+                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-black/50 text-stone-300 backdrop-blur-md border border-white/10">
+                                {selectedSession.instrument}
                               </span>
-                            )}
+                            </div>
+
+                            {/* Duration Badge */}
+                            <div className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-black/75 text-white backdrop-blur-md flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-400" />
+                              {formatDuration(recording.durationSeconds)}
+                            </div>
+
+                            {/* Storage Backend Badge */}
+                            <div className="absolute bottom-2.5 left-3">
+                              {isSupabaseCloud ? (
+                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1">
+                                  <Cloud className="w-2.5 h-2.5" />
+                                  Supabase Cloud
+                                </span>
+                              ) : (
+                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-950/80 text-amber-400 border border-amber-500/30 backdrop-blur-md flex items-center gap-1">
+                                  <HardDrive className="w-2.5 h-2.5" />
+                                  Local Disk
+                                </span>
+                              )}
+                            </div>
+
+                            {/* Centered Play Button overlay */}
+                            <button
+                              type="button"
+                              onClick={() => setPlayingRecording(recording)}
+                              className="w-13 h-13 rounded-full bg-primary/85 hover:bg-primary text-white flex items-center justify-center shadow-lg transform transition-all group-hover:scale-110 active:scale-95 cursor-pointer"
+                              title="Play Recording"
+                            >
+                              <Play className="w-5 h-5 ml-0.5 fill-current" />
+                            </button>
                           </div>
 
-                          {/* Centered Play Button overlay */}
-                          <button
-                            type="button"
-                            onClick={() => setPlayingRecording(recording)}
-                            className="w-13 h-13 rounded-full bg-primary/85 hover:bg-primary text-white flex items-center justify-center shadow-lg transform transition-all group-hover:scale-110 active:scale-95 cursor-pointer"
-                            title="Play Recording"
-                          >
-                            <Play className="w-5 h-5 ml-0.5 fill-current" />
-                          </button>
+                          {/* Card metadata */}
+                          <div className="p-4 space-y-2">
+                            <div className="flex items-center justify-between text-xs text-body-muted">
+                              <span className="font-medium text-heading">
+                                Archived: {recording.formattedDate}
+                              </span>
+                              <span className="text-[11px]">
+                                Size: {formatBytes(recording.fileSizeBytes)}
+                              </span>
+                            </div>
+
+                            <div className="text-[11px] text-body-muted font-mono truncate" title={recording.fileName}>
+                              {recording.fileName}
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Card metadata */}
-                        <div className="p-4 space-y-2.5">
-                          <div className="flex items-center justify-between text-xs text-body-muted">
-                            <span className="font-medium text-heading">
-                              Archived: {recording.formattedDate}
-                            </span>
-                            <span className="text-[11px]">
-                              Size: {formatBytes(recording.fileSizeBytes)}
-                            </span>
+                        {/* Action buttons */}
+                        <div className="p-3 bg-bg-alt/25 border-t border-primary/10 flex items-center justify-between gap-1.5">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            {/* Watch Button */}
+                            <button
+                              type="button"
+                              onClick={() => setPlayingRecording(recording)}
+                              className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
+                            >
+                              <Play className="w-3 h-3 fill-current" />
+                              Watch
+                            </button>
+
+                            {/* Open in Drive */}
+                            {isSupabaseCloud && recording.fileUrl && (
+                              <a
+                                href={recording.fileUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-bg-alt text-heading border border-primary/10 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer"
+                                title="Open in Supabase Cloud"
+                              >
+                                <ExternalLink className="w-3 h-3" />
+                                Drive
+                              </a>
+                            )}
+
+                            {/* Sync to Drive button (if stored locally) */}
+                            {!isSupabaseCloud && (
+                              <button
+                                type="button"
+                                onClick={() => handleSyncToDrive(recording.id)}
+                                disabled={isSyncing || isPending}
+                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/30 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
+                                title="Sync to Supabase Cloud"
+                              >
+                                <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin" : ""}`} />
+                                {isSyncing ? "Syncing..." : "Sync to Supabase"}
+                              </button>
+                            )}
+
+                            {/* Download Link */}
+                            <a
+                              href={recording.fileUrl}
+                              download={recording.fileName}
+                              target="_blank"
+                              rel="noreferrer"
+                              className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
+                              title="Download file"
+                            >
+                              <Download className="w-3.5 h-3.5" />
+                            </a>
+
+                            {/* Copy Link */}
+                            <button
+                              type="button"
+                              onClick={() => handleCopyLink(recording)}
+                              className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
+                              title="Copy link to clipboard"
+                            >
+                              {isCopied ? (
+                                <Check className="w-3.5 h-3.5 text-emerald-600" />
+                              ) : (
+                                <Copy className="w-3.5 h-3.5" />
+                              )}
+                            </button>
                           </div>
 
-                          <div className="text-[11px] text-body-muted font-mono truncate" title={recording.fileName}>
-                            {recording.fileName}
-                          </div>
+                          {/* Delete button */}
+                          <button
+                            type="button"
+                            onClick={() => handleDeleteRecording(recording.id)}
+                            className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-all cursor-pointer shrink-0"
+                            title="Permanently Delete Recording"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
 
-                      {/* Action buttons */}
-                      <div className="p-3 bg-bg-alt/25 border-t border-primary/10 flex items-center justify-between gap-1.5">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          {/* Watch Button */}
-                          <button
-                            type="button"
-                            onClick={() => setPlayingRecording(recording)}
-                            className="inline-flex items-center gap-1 px-3 py-1.5 rounded-lg bg-primary hover:bg-primary-hover text-white text-xs font-semibold shadow-xs transition-all active:scale-[0.98] cursor-pointer"
-                          >
-                            <Play className="w-3 h-3 fill-current" />
-                            Watch
-                          </button>
+                      {/* Right: Companion Room Timestamps Card Generated with the Recording (lg:w-5/12) */}
+                      <div className="lg:w-5/12 p-5 bg-[#FAF9FD] flex flex-col justify-between space-y-4">
+                        <div className="space-y-3">
+                          {/* Timestamps Card Header */}
+                          <div className="flex items-center justify-between pb-2 border-b border-primary/10">
+                            <div className="flex items-center gap-2">
+                              <div className="w-7 h-7 rounded-lg bg-primary/10 text-primary flex items-center justify-center">
+                                <Timer className="w-4 h-4" />
+                              </div>
+                              <div>
+                                <h4 className="text-xs font-bold text-heading font-serif">
+                                  Room Entry &amp; Exit Timestamps
+                                </h4>
+                                <span className="text-[10px] text-body-muted font-mono block">
+                                  Part #{recording.partNumber || idx + 1} Activity Card
+                                </span>
+                              </div>
+                            </div>
 
-                          {/* Open in Drive */}
-                          {isSupabaseCloud && recording.fileUrl && (
-                            <a
-                              href={recording.fileUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-bg-alt text-heading border border-primary/10 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer"
-                              title="Open in Supabase Cloud"
-                            >
-                              <ExternalLink className="w-3 h-3" />
-                              Drive
-                            </a>
-                          )}
+                            <span className="px-2 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                              <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                              Verified
+                            </span>
+                          </div>
 
-                          {/* Sync to Drive button (if stored locally) */}
-                          {!isSupabaseCloud && (
-                            <button
-                              type="button"
-                              onClick={() => handleSyncToDrive(recording.id)}
-                              disabled={isSyncing || isPending}
-                              className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-amber-500/10 hover:bg-amber-500/20 text-amber-700 border border-amber-500/30 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer disabled:opacity-50"
-                              title="Sync to Supabase Cloud"
-                            >
-                              <RefreshCw className={`w-3 h-3 ${isSyncing ? "animate-spin" : ""}`} />
-                              {isSyncing ? "Syncing..." : "Sync to Supabase"}
-                            </button>
-                          )}
+                          {/* Teacher Row Cardlet */}
+                          <div className="p-3 rounded-xl bg-white border border-primary/10 shadow-2xs space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5 font-semibold text-heading">
+                                <div className="w-5 h-5 rounded-md bg-primary text-white text-[10px] font-bold flex items-center justify-center font-serif">
+                                  T
+                                </div>
+                                <span className="truncate max-w-[140px] font-serif">
+                                  {selectedSession.teacherName}
+                                </span>
+                              </div>
+                              <span className="text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-primary/5 text-primary font-medium">
+                                Instructor
+                              </span>
+                            </div>
 
-                          {/* Download Link */}
-                          <a
-                            href={recording.fileUrl}
-                            download={recording.fileName}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
-                            title="Download file"
-                          >
-                            <Download className="w-3.5 h-3.5" />
-                          </a>
+                            <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-primary/5 text-xs">
+                              <div>
+                                <span className="text-[9px] uppercase tracking-wider text-body-muted font-mono block">
+                                  Joined Room
+                                </span>
+                                <span className="font-mono font-bold text-emerald-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
+                                  <LogIn className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  {recording.formattedTeacherJoined || selectedSession.formattedTeacherJoined || "—"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] uppercase tracking-wider text-body-muted font-mono block">
+                                  Left Room
+                                </span>
+                                <span className="font-mono font-bold text-rose-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
+                                  <LogOut className="w-3 h-3 text-rose-600 shrink-0" />
+                                  {recording.formattedTeacherLeft || selectedSession.formattedTeacherLeft || "—"}
+                                </span>
+                              </div>
+                            </div>
 
-                          {/* Copy Link */}
-                          <button
-                            type="button"
-                            onClick={() => handleCopyLink(recording)}
-                            className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
-                            title="Copy link to clipboard"
-                          >
-                            {isCopied ? (
-                              <Check className="w-3.5 h-3.5 text-emerald-600" />
-                            ) : (
-                              <Copy className="w-3.5 h-3.5" />
-                            )}
-                          </button>
+                            <div className="flex items-center justify-between text-[11px] text-body-muted pt-1 border-t border-primary/5 font-mono">
+                              <span>In-Room Duration:</span>
+                              <span className="font-semibold text-heading">
+                                {formatSecondsToCompact(recording.teacherDurationSeconds || selectedSession.teacherDurationSeconds)}
+                              </span>
+                            </div>
+                          </div>
+
+                          {/* Student Row Cardlet */}
+                          <div className="p-3 rounded-xl bg-white border border-accent/15 shadow-2xs space-y-2">
+                            <div className="flex items-center justify-between text-xs">
+                              <div className="flex items-center gap-1.5 font-semibold text-heading">
+                                <div className="w-5 h-5 rounded-md bg-accent text-white text-[10px] font-bold flex items-center justify-center font-serif">
+                                  S
+                                </div>
+                                <span className="truncate max-w-[140px] font-serif">
+                                  {selectedStudent.name}
+                                </span>
+                              </div>
+                              <span className="text-[9px] uppercase tracking-wider font-mono px-1.5 py-0.5 rounded bg-accent/10 text-accent-dark font-medium">
+                                Student
+                              </span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-2 pt-1.5 border-t border-accent/10 text-xs">
+                              <div>
+                                <span className="text-[9px] uppercase tracking-wider text-body-muted font-mono block">
+                                  Joined Room
+                                </span>
+                                <span className="font-mono font-bold text-emerald-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
+                                  <LogIn className="w-3 h-3 text-emerald-600 shrink-0" />
+                                  {recording.formattedStudentJoined || selectedSession.formattedStudentJoined || "—"}
+                                </span>
+                              </div>
+                              <div>
+                                <span className="text-[9px] uppercase tracking-wider text-body-muted font-mono block">
+                                  Left Room
+                                </span>
+                                <span className="font-mono font-bold text-rose-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
+                                  <LogOut className="w-3 h-3 text-rose-600 shrink-0" />
+                                  {recording.formattedStudentLeft || selectedSession.formattedStudentLeft || "—"}
+                                </span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between text-[11px] text-body-muted pt-1 border-t border-primary/5 font-mono">
+                              <span>In-Room Duration:</span>
+                              <span className="font-semibold text-heading">
+                                {formatSecondsToCompact(recording.studentDurationSeconds || selectedSession.studentDurationSeconds)}
+                              </span>
+                            </div>
+                          </div>
                         </div>
 
-                        {/* Delete button */}
-                        <button
-                          type="button"
-                          onClick={() => handleDeleteRecording(recording.id)}
-                          className="p-1.5 rounded-lg text-rose-500 hover:text-rose-700 hover:bg-rose-50 transition-all cursor-pointer shrink-0"
-                          title="Permanently Delete Recording"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
+                        {/* Mutual Overlap Footer */}
+                        <div className="p-2.5 rounded-xl bg-white border border-primary/10 flex items-center justify-between text-xs font-mono">
+                          <span className="text-[11px] text-body-muted flex items-center gap-1.5">
+                            <Activity className="w-3.5 h-3.5 text-accent" />
+                            Concurrent Presence:
+                          </span>
+                          <span className="font-bold text-primary">
+                            {formatSecondsToCompact(
+                              recording.overlapDurationSeconds ||
+                                recording.durationSeconds ||
+                                selectedSession.overlapDurationSeconds
+                            )}
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1257,6 +1607,29 @@ export function AdminRecordingsManager({
               >
                 Your browser does not support HTML5 video playback.
               </video>
+            </div>
+
+            {/* Modal Room Timestamps Bar */}
+            <div className="px-6 py-2.5 bg-[#0D0A17] border-t border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-300 font-mono">
+              <div className="flex items-center gap-3 flex-wrap">
+                <span className="text-[10px] text-amber-300 uppercase tracking-wider font-semibold font-mono">
+                  Room Presence:
+                </span>
+                <span className="inline-flex items-center gap-1.5 text-stone-200">
+                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
+                  Teacher: {playingRecording.formattedTeacherJoined || selectedSession?.formattedTeacherJoined || "—"} → {playingRecording.formattedTeacherLeft || selectedSession?.formattedTeacherLeft || "—"}
+                </span>
+                <span>•</span>
+                <span className="inline-flex items-center gap-1.5 text-stone-200">
+                  <span className="w-2 h-2 rounded-full bg-accent"></span>
+                  Student: {playingRecording.formattedStudentJoined || selectedSession?.formattedStudentJoined || "—"} → {playingRecording.formattedStudentLeft || selectedSession?.formattedStudentLeft || "—"}
+                </span>
+              </div>
+              {(playingRecording.overlapDurationSeconds || selectedSession?.overlapDurationSeconds) && (
+                <span className="text-[11px] text-emerald-400 font-medium">
+                  Mutual Session Time: {formatSecondsToCompact(playingRecording.overlapDurationSeconds || selectedSession?.overlapDurationSeconds)}
+                </span>
+              )}
             </div>
 
             {/* Modal Footer info */}

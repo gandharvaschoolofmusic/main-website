@@ -36,6 +36,7 @@ export function AdminTicketDetailView({
     userName: string;
     userEmail: string;
     userRole: Role;
+    userCustomId?: string | null;
   };
   messages: AdminMessageItem[];
 }) {
@@ -101,12 +102,20 @@ export function AdminTicketDetailView({
               {ticket.subject}
             </h1>
 
-            <p className="text-xs text-body">
-              From: <strong className="text-heading font-medium">{ticket.userName}</strong> ({ticket.userEmail}) • Role:{" "}
+            <div className="flex items-center gap-2 text-xs text-body flex-wrap">
+              <span>From:</span>
+              <strong className="text-heading font-medium">{ticket.userName}</strong>
+              {ticket.userCustomId && (
+                <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-[#3C096C]">
+                  {ticket.userCustomId}
+                </span>
+              )}
+              <span>({ticket.userEmail})</span>
+              <span>• Role:</span>
               <span className="text-accent-dark font-bold uppercase text-[10px] bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
                 {ticket.userRole}
               </span>
-            </p>
+            </div>
           </div>
 
           {/* Status Dropdown */}

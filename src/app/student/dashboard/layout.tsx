@@ -33,6 +33,8 @@ const getCachedStudentProfileData = unstable_cache(
   { revalidate: 60, tags: ["student-profile"] }
 );
 
+export const dynamic = "force-dynamic";
+
 export default async function StudentDashboardLayout({
   children,
 }: {

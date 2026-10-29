@@ -101,7 +101,7 @@ export function StudentLessonList({
                 : "text-body hover:text-heading"
             }`}
           >
-            Past History ({pastLessons.length})
+            Past Lessons ({pastLessons.length})
           </button>
           <button
             type="button"

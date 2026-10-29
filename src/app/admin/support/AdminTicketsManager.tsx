@@ -23,6 +23,7 @@ export interface AdminTicketItem {
   userName: string;
   userEmail: string;
   userRole: Role;
+  userCustomId?: string | null;
   messagesCount: number;
 }
 
@@ -49,7 +50,8 @@ export function AdminTicketsManager({
     const matchesSearch =
       t.subject.toLowerCase().includes(searchQuery.toLowerCase()) ||
       t.userName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      t.userEmail.toLowerCase().includes(searchQuery.toLowerCase());
+      t.userEmail.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      (t.userCustomId && t.userCustomId.toLowerCase().includes(searchQuery.toLowerCase()));
 
     return matchesStatus && matchesCategory && matchesSearch;
   });
@@ -172,9 +174,14 @@ export function AdminTicketsManager({
                   {t.subject}
                 </h3>
 
-                <div className="flex items-center gap-2 text-xs text-body">
+                <div className="flex items-center gap-2 text-xs text-body flex-wrap">
                   <span>From:</span>
                   <strong className="text-heading font-medium">{t.userName}</strong>
+                  {t.userCustomId && (
+                    <span className="font-mono text-[10px] font-bold px-1.5 py-0.5 rounded bg-purple-100 text-[#3C096C]">
+                      {t.userCustomId}
+                    </span>
+                  )}
                   <span>({t.userEmail})</span>
                   <span className="text-[10px] uppercase font-bold text-accent-dark bg-accent/10 px-1.5 py-0.5 rounded border border-accent/20">
                     {t.userRole}

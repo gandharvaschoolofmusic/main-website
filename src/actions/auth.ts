@@ -35,6 +35,7 @@ import { isAppError } from "@/lib/errors";
 import { AuthError } from "next-auth";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
 import { NotificationType } from "@prisma/client";
+import { generateNextStudentId, generateNextTeacherId } from "@/lib/id-generator";
 
 export type ActionResponse<T = unknown> = {
   success: boolean;
@@ -141,6 +142,13 @@ export async function signupAction(
 
     // 4. Create user with verified phone and role profile inside atomic transaction
     const newUser = await db.$transaction(async (tx) => {
+      let customId: string | null = null;
+      if (role === "STUDENT") {
+        customId = await generateNextStudentId(tx);
+      } else if (role === "TEACHER") {
+        customId = await generateNextTeacherId(tx);
+      }
+
       const user = await tx.user.create({
         data: {
           name,
@@ -151,6 +159,7 @@ export async function signupAction(
           role,
           timezone,
           emailVerified: null,
+          customId,
         },
       });
 

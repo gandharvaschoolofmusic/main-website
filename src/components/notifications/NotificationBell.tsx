@@ -19,6 +19,7 @@ import {
   ExternalLink,
   Music,
   ShieldCheck,
+  LifeBuoy,
 } from "lucide-react";
 import {
   getNotifications,
@@ -113,6 +114,13 @@ function getNotificationIcon(type: NotificationType) {
         icon: CircleDollarSign,
         bg: "bg-green-100 text-green-700",
         border: "border-green-200",
+      };
+    case NotificationType.NEW_SUPPORT_TICKET:
+    case NotificationType.SUPPORT_TICKET_REPLY:
+      return {
+        icon: LifeBuoy,
+        bg: "bg-rose-100 text-rose-700",
+        border: "border-rose-200",
       };
     default:
       return {

@@ -2,6 +2,8 @@ import { Resend } from "resend";
 import { logger } from "@/lib/logger";
 import { formatInViewerTimezone } from "@/lib/timezone";
 import { generateLessonIcs } from "@/lib/ical";
+import { db } from "@/lib/db";
+import { Role } from "@prisma/client";
 
 const resendApiKey = process.env.RESEND_API_KEY;
 const isResendConfigured =
@@ -471,6 +473,92 @@ export async function sendCertificateEmail({
       { error, studentEmail, certificateNumber },
       "Failed to send certificate email via Resend",
     );
+    return { success: false };
+  }
+}
+
+/**
+ * Send an email notification to all platform administrators when a support ticket is raised.
+ */
+export async function sendSupportTicketAdminEmail({
+  ticketId,
+  ticketSubject,
+  ticketCategory,
+  userName,
+  userEmail,
+  userRole,
+  userCustomId,
+  message,
+}: {
+  ticketId: string;
+  ticketSubject: string;
+  ticketCategory?: string;
+  userName: string;
+  userEmail: string;
+  userRole: string;
+  userCustomId?: string | null;
+  message: string;
+}): Promise<{ success: boolean }> {
+  const ticketUrl = `${appUrl}/admin/support/${ticketId}`;
+
+  try {
+    const admins = await db.user.findMany({
+      where: { role: Role.ADMIN },
+      select: { email: true },
+    });
+
+    const adminEmails = admins.map((a) => a.email).filter(Boolean);
+
+    if (!resend) {
+      logger.info(
+        { adminEmails, ticketId, ticketSubject, userName, ticketUrl },
+        "✉️ [DEV EMAIL] Admin Support Ticket notification simulated"
+      );
+      return { success: true };
+    }
+
+    if (adminEmails.length === 0) {
+      return { success: true };
+    }
+
+    await resend.emails.send({
+      from: fromEmail,
+      to: adminEmails,
+      subject: `🚨 [Support Ticket #${ticketId.slice(-6)}] ${ticketSubject} — ${userName} (${userCustomId || userRole})`,
+      html: `
+        <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917; background-color: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;">
+          <div style="border-bottom: 2px solid #3C096C; padding-bottom: 12px; margin-bottom: 20px;">
+            <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold; color: #3C096C;">Gandharva Support Desk</span>
+            <h1 style="color: #12072B; font-size: 20px; margin: 6px 0 0 0;">New Support Ticket Raised</h1>
+          </div>
+          
+          <div style="background-color: #f8f7fc; border-left: 4px solid #3C096C; border-radius: 6px; padding: 14px 18px; margin-bottom: 20px;">
+            <p style="margin: 0 0 6px 0; font-size: 13px; color: #57534e;"><strong>From:</strong> ${userName} (${userEmail})</p>
+            <p style="margin: 0 0 6px 0; font-size: 13px; color: #57534e;"><strong>User ID:</strong> <span style="font-family: monospace; font-weight: bold; color: #3C096C;">${userCustomId || "N/A"}</span> &middot; Role: <strong style="text-transform: capitalize;">${userRole.toLowerCase()}</strong></p>
+            ${ticketCategory ? `<p style="margin: 0 0 6px 0; font-size: 13px; color: #57534e;"><strong>Category:</strong> ${ticketCategory}</p>` : ""}
+            <p style="margin: 0; font-size: 14px; color: #12072B;"><strong>Subject:</strong> ${ticketSubject}</p>
+          </div>
+
+          <div style="background-color: #ffffff; border: 1px solid #e7e5e4; border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+            <p style="margin: 0 0 8px 0; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; color: #78716c; font-weight: bold;">Ticket Message:</p>
+            <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #292524; white-space: pre-wrap;">${message}</p>
+          </div>
+
+          <div style="text-align: center; margin: 28px 0 16px 0;">
+            <a href="${ticketUrl}" style="background-color: #3C096C; color: #ffffff; padding: 12px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block;">
+              View &amp; Reply in Admin Desk &rarr;
+            </a>
+          </div>
+
+          <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+            Gandharva School of Music Administration &middot; Automated Alert
+          </div>
+        </div>
+      `,
+    });
+    return { success: true };
+  } catch (error) {
+    logger.error({ error, ticketId }, "Failed to send support ticket email to admins via Resend");
     return { success: false };
   }
 }

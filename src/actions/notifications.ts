@@ -22,8 +22,8 @@ export async function getNotifications(limit = 30) {
   if (count === 0) {
     try {
       if (userRole === Role.ADMIN) {
-        // Find recent teachers, students, and trials to give admin real fast info right away
-        const [recentTeachers, recentStudents, pendingTrials] = await Promise.all([
+        // Find recent teachers, students, trials, and support tickets to give admin real fast info right away
+        const [recentTeachers, recentStudents, pendingTrials, openTickets] = await Promise.all([
           db.teacherProfile.findMany({
             take: 2,
             orderBy: { createdAt: "desc" },
@@ -41,9 +41,26 @@ export async function getNotifications(limit = 30) {
             orderBy: { createdAt: "desc" },
             select: { studentName: true, instrument: true },
           }),
+          db.supportTicket.findMany({
+            where: { status: "OPEN" },
+            take: 2,
+            orderBy: { createdAt: "desc" },
+            include: { user: { select: { name: true, customId: true } } },
+          }),
         ]);
 
         const initialAdminNotifications = [];
+
+        for (const tk of openTickets) {
+          initialAdminNotifications.push({
+            userId,
+            type: NotificationType.NEW_SUPPORT_TICKET,
+            title: `Support Ticket: ${tk.subject}`,
+            body: `${tk.user.name || "A student"}${tk.user.customId ? ` (${tk.user.customId})` : ""} opened a support ticket.`,
+            link: `/admin/support/${tk.id}`,
+            isRead: false,
+          });
+        }
 
         for (const t of recentTeachers) {
           initialAdminNotifications.push({
