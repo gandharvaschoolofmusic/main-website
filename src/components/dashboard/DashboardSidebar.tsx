@@ -16,6 +16,7 @@ import {
   Music2,
   MessageSquare,
   FolderArchive,
+  Video,
 } from "lucide-react";
 
 export type SidebarUserInfo = {
@@ -30,6 +31,11 @@ const STUDENT_NAV_ITEMS = [
     href: "/student/dashboard",
     icon: Clock,
     exact: true,
+  },
+  {
+    label: "Lecture Recordings",
+    href: "/student/dashboard/recordings",
+    icon: Video,
   },
   {
     label: "Learning Materials",
