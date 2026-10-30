@@ -19,20 +19,22 @@ const providers: Provider[] = [
       password: { label: "Password", type: "password" },
       phone: { label: "Phone", type: "text" },
       code: { label: "OTP Code", type: "text" },
+      idToken: { label: "Firebase ID Token", type: "text" },
       authType: { label: "Auth Type", type: "text" },
     },
     async authorize(credentials) {
-      // ─── 1. OTP Authentication (Phone + 6-digit code) ──────────────────
+      // ─── 1. OTP Authentication (Phone + 6-digit code or Firebase ID Token) ──────
       if (credentials?.authType === "otp") {
         const rawPhone = (credentials?.phone as string) || "";
         const code = (credentials?.code as string)?.trim() || "";
+        const idToken = (credentials?.idToken as string)?.trim() || undefined;
 
-        if (!rawPhone || !code) {
+        if (!rawPhone || (!code && !idToken)) {
           return null;
         }
 
         const phone = normalizePhoneNumber(rawPhone);
-        const otpValidation = await validateAndConsumePhoneOtp(phone, code);
+        const otpValidation = await validateAndConsumePhoneOtp(phone, code, idToken);
         if (!otpValidation.isValid) {
           return null;
         }

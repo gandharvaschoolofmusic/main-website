@@ -1,9 +1,16 @@
 "use client";
 
-import { useActionState, useState, useTransition, useEffect, useRef } from "react";
+import { useActionState, useState, useTransition, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
 import { FormShell } from "@/components/auth/FormShell";
 import { loginAction, sendPhoneOtpAction, verifyOtpAndLoginAction } from "@/actions/auth";
+import type { ConfirmationResult } from "firebase/auth";
+import {
+  isFirebaseConfigured,
+  createRecaptchaVerifier,
+  sendFirebaseOtp,
+  confirmFirebaseOtp,
+} from "@/lib/firebase";
 import {
   CountryCodeSelector,
   SUPPORTED_COUNTRIES,
@@ -35,9 +42,11 @@ export default function LoginPage() {
   const [otpDigits, setOtpDigits] = useState<string[]>(["", "", "", "", "", ""]);
   const [otpSent, setOtpSent] = useState(false);
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpBanner, setOtpBanner] = useState<{ message: string; previewCode?: string } | null>(null);
+  const [otpBanner, setOtpBanner] = useState<{ message: string } | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
   const [isSendingOtp, startSendOtpTransition] = useTransition();
+  const [firebaseConfirmation, setFirebaseConfirmation] = useState<ConfirmationResult | null>(null);
+  const [isVerifyingFirebase, setIsVerifyingFirebase] = useState(false);
 
   const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
 
@@ -143,25 +152,71 @@ export default function LoginPage() {
       const res = await sendPhoneOtpAction(fullNumber, "LOGIN");
       if (!res.success) {
         setOtpError(res.error || "Failed to dispatch verification code.");
-      } else {
-        setOtpSent(true);
-        setResendCooldown(30);
-        setOtpBanner({
-          message: res.message || "OTP code sent to your phone.",
-          previewCode: res.data?.previewCode,
-        });
+        return;
       }
+
+      if (isFirebaseConfigured()) {
+        try {
+          const verifier = createRecaptchaVerifier("login-recaptcha-container");
+          if (!verifier) {
+            setOtpError("Failed to initialize security verification. Please refresh.");
+            return;
+          }
+          const fbRes = await sendFirebaseOtp(fullNumber, verifier);
+          if (!fbRes.success || !fbRes.confirmationResult) {
+            setOtpError(fbRes.error || "Failed to dispatch SMS via Firebase.");
+            return;
+          }
+          setFirebaseConfirmation(fbRes.confirmationResult);
+        } catch (err: any) {
+          setOtpError(err?.message || "Failed to initiate Firebase phone verification.");
+          return;
+        }
+      }
+
+      setOtpSent(true);
+      setResendCooldown(30);
+      setOtpBanner({
+        message: isFirebaseConfigured()
+          ? `A 6-digit verification code has been dispatched to ${fullNumber}.`
+          : res.message || "OTP code sent to your phone.",
+      });
     });
   };
 
-  const handleAutoFillCode = (code: string) => {
-    const digits = code.replace(/\D/g, "").slice(0, 6).split("");
-    const nextDigits = ["", "", "", "", "", ""];
-    digits.forEach((d, i) => {
-      nextDigits[i] = d;
-    });
-    setOtpDigits(nextDigits);
-    digitRefs.current[5]?.focus();
+  const handleOtpFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
+    if (firebaseConfirmation) {
+      e.preventDefault();
+      setOtpError(null);
+      const code = otpDigits.join("");
+      if (code.length !== 6) {
+        setOtpError("Please enter the complete 6-digit verification code.");
+        return;
+      }
+
+      setIsVerifyingFirebase(true);
+      try {
+        const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, code);
+        if (!confirmRes.success || !confirmRes.idToken) {
+          setIsVerifyingFirebase(false);
+          setOtpError(confirmRes.error || "Invalid verification code.");
+          return;
+        }
+
+        const formData = new FormData();
+        formData.append("phone", getFullPhoneNumber());
+        formData.append("code", code);
+        formData.append("idToken", confirmRes.idToken);
+
+        startTransition(async () => {
+          await otpLoginFormAction(formData);
+          setIsVerifyingFirebase(false);
+        });
+      } catch (err: any) {
+        setIsVerifyingFirebase(false);
+        setOtpError(err?.message || "Verification failed. Please try again.");
+      }
+    }
   };
 
   return (
@@ -411,32 +466,21 @@ export default function LoginPage() {
             {/* State B: After OTP is sent -> Opens DOWNWARD inline matching the user's screenshot */}
             {otpSent && (
               <div className="space-y-4 pt-1 animate-fade-in">
-                {/* Dev mode OTP preview banner */}
+                {/* OTP confirmation banner - Dev Test Code completely removed */}
                 {otpBanner && (
                   <div className="rounded-xl border border-accent/40 bg-accent-subtle/50 p-2.5 space-y-1 text-xs">
                     <div className="flex items-center gap-1.5 text-accent-dark font-bold text-[11px]">
                       <CheckCircle2 className="w-3.5 h-3.5 text-accent-dark" />
                       <span>{otpBanner.message}</span>
                     </div>
-                    {otpBanner.previewCode && (
-                      <div className="flex items-center justify-between pt-1 border-t border-accent/20">
-                        <span className="text-[10px] text-body">
-                          [Dev Test Code]: <strong className="font-mono text-heading">{otpBanner.previewCode}</strong>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleAutoFillCode(otpBanner.previewCode!)}
-                          className="px-2 py-0.5 rounded-md bg-white border border-accent/40 text-[10px] font-bold text-accent-dark hover:bg-neutral-50 transition-colors cursor-pointer"
-                        >
-                          Auto-fill
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
 
+                {/* Invisible reCAPTCHA container for Firebase */}
+                <div id="login-recaptcha-container" className="hidden" aria-hidden="true" />
+
                 {/* Verification Form */}
-                <form action={otpLoginFormAction} className="space-y-4">
+                <form action={otpLoginFormAction} onSubmit={handleOtpFormSubmit} className="space-y-4">
                   <input type="hidden" name="phone" value={getFullPhoneNumber()} />
                   <input type="hidden" name="code" value={otpDigits.join("")} />
 
@@ -515,10 +559,10 @@ export default function LoginPage() {
                   {/* Golden / Amber "Login" Button matching user's reference image */}
                   <button
                     type="submit"
-                    disabled={isOtpLoginPending || otpDigits.join("").length !== 6}
+                    disabled={isOtpLoginPending || isVerifyingFirebase || otpDigits.join("").length !== 6}
                     className="entry-primary w-full"
                   >
-                    {isOtpLoginPending ? (
+                    {isOtpLoginPending || isVerifyingFirebase ? (
                       <>
                         <Loader2 className="w-5 h-5 animate-spin text-[#1E1A4D]" />
                         <span>Logging in...</span>

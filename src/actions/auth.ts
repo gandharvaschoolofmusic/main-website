@@ -124,8 +124,9 @@ export async function signupAction(
       };
     }
 
-    // 3. MANDATORY: Cryptographically verify and consume the 6-digit phone OTP
-    const otpValidation = await validateAndConsumePhoneOtp(normalizedPhone, otpCode);
+    // 3. MANDATORY: Cryptographically verify and consume the phone OTP / Firebase token
+    const firebaseIdToken = (formData.get("firebaseIdToken") as string) || undefined;
+    const otpValidation = await validateAndConsumePhoneOtp(normalizedPhone, otpCode, firebaseIdToken);
     if (!otpValidation.isValid) {
       return {
         success: false,
@@ -281,7 +282,7 @@ export async function signupAction(
 export async function sendPhoneOtpAction(
   rawPhone: string,
   purpose: "LOGIN" | "SIGNUP",
-): Promise<ActionResponse<{ phone: string; previewCode?: string }>> {
+): Promise<ActionResponse<{ phone: string }>> {
   try {
     const parsed = SendOtpSchema.safeParse({ phone: rawPhone, purpose });
     if (!parsed.success) {
@@ -350,11 +351,9 @@ export async function sendPhoneOtpAction(
 
     return {
       success: true,
-      message: `A 6-digit verification code has been sent to ${phone}.`,
-      previewUrl: token.previewCode, // Exposed in development banner for rapid testing
+      message: `A 6-digit verification code has been dispatched to ${phone}.`,
       data: {
-        phone,
-        previewCode: token.previewCode,
+        phone: token.phone,
       },
     };
   } catch (error) {
@@ -375,10 +374,11 @@ export async function sendPhoneOtpAction(
 export async function verifyPhoneOtpForSignupAction(
   rawPhone: string,
   code: string,
+  idToken?: string,
 ): Promise<ActionResponse<{ phone: string; isVerified: boolean }>> {
   try {
     const phone = normalizePhoneNumber(rawPhone);
-    if (!phone || !code || code.trim().length !== 6) {
+    if (!phone || (!code && !idToken)) {
       return {
         success: false,
         error: "Please enter the complete 6-digit verification code.",
@@ -387,8 +387,8 @@ export async function verifyPhoneOtpForSignupAction(
 
     AuthRateLimits.checkVerifyOtp(phone);
 
-    // Check token validity
-    const result = await checkPhoneOtp(phone, code);
+    // Check token validity via Firebase or database
+    const result = await checkPhoneOtp(phone, code, idToken);
     if (!result.isValid) {
       return {
         success: false,
@@ -562,6 +562,7 @@ export async function verifyOtpAndLoginAction(
 ): Promise<ActionResponse> {
   const rawPhone = (formData.get("phone") as string) || "";
   const code = (formData.get("code") as string) || "";
+  const idToken = (formData.get("idToken") as string) || undefined;
 
   const parsed = OtpLoginSchema.safeParse({ phone: rawPhone, code });
   if (!parsed.success) {
@@ -622,6 +623,7 @@ export async function verifyOtpAndLoginAction(
     await signIn("credentials", {
       phone,
       code: parsed.data.code,
+      idToken,
       authType: "otp",
       redirectTo: target,
     });

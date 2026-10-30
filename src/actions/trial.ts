@@ -22,6 +22,7 @@ const CreateTrialRequestSchema = z.object({
   studentEmail: z.string().email("Valid email address is required"),
   studentPhone: z.string().optional(),
   otpCode: z.string().optional(),
+  firebaseIdToken: z.string().optional(),
   studentNotes: z.string().optional(),
   password: z.string().optional(),
 });
@@ -182,11 +183,14 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
         };
       }
 
-      // MANDATORY: Require 6-digit OTP code for new student account creation
-      if (!validated.otpCode || validated.otpCode.trim().length !== 6) {
+      // MANDATORY: Require verification code or Firebase token for new student account creation
+      if (
+        (!validated.otpCode || validated.otpCode.trim().length !== 6) &&
+        !validated.firebaseIdToken
+      ) {
         return {
           success: false,
-          error: "Please verify your mobile number. A 6-digit OTP code is required.",
+          error: "Please verify your mobile number. A 6-digit verification code is required.",
         };
       }
 
@@ -214,8 +218,12 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
         };
       }
 
-      // Verify and consume the OTP code
-      const otpValidation = await validateAndConsumePhoneOtp(normalizedPhone, validated.otpCode.trim());
+      // Verify and consume the OTP code or Firebase token
+      const otpValidation = await validateAndConsumePhoneOtp(
+        normalizedPhone,
+        validated.otpCode ? validated.otpCode.trim() : "",
+        validated.firebaseIdToken,
+      );
       if (!otpValidation.isValid) {
         return {
           success: false,

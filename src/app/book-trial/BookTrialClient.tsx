@@ -24,6 +24,13 @@ import {
 } from "lucide-react";
 import { createTrialRequestAction } from "@/actions/trial";
 import { sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
+import type { ConfirmationResult } from "firebase/auth";
+import {
+  isFirebaseConfigured,
+  createRecaptchaVerifier,
+  sendFirebaseOtp,
+  confirmFirebaseOtp,
+} from "@/lib/firebase";
 import "@/components/auth/form-ui.css";
 import "./trial-ui.css";
 import { SplitHeading } from "@/components/ui/SplitHeading";
@@ -396,9 +403,11 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
   const [isPhoneVerified, setIsPhoneVerified] = useState(!!currentUser?.phoneVerified);
   const [verifiedOtpCode, setVerifiedOtpCode] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpBanner, setOtpBanner] = useState<{ message: string; previewCode?: string } | null>(null);
+  const [otpBanner, setOtpBanner] = useState<{ message: string } | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [firebaseConfirmation, setFirebaseConfirmation] = useState<ConfirmationResult | null>(null);
+  const [firebaseIdToken, setFirebaseIdToken] = useState<string>("");
 
   const [isSendingOtp, startSendOtpTransition] = useTransition();
   const [isVerifyingOtp, startVerifyOtpTransition] = useTransition();
@@ -447,14 +456,35 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
       if (!res.success) {
         setPhoneError(res.error || "Failed to dispatch verification code.");
-      } else {
-        setOtpSent(true);
-        setResendCooldown(30);
-        setOtpBanner({
-          message: res.message || "OTP code sent to your phone.",
-          previewCode: res.data?.previewCode,
-        });
+        return;
       }
+
+      if (isFirebaseConfigured()) {
+        try {
+          const verifier = createRecaptchaVerifier("trial-recaptcha-container");
+          if (!verifier) {
+            setPhoneError("Failed to initialize security verification. Please refresh.");
+            return;
+          }
+          const fbRes = await sendFirebaseOtp(fullPhone, verifier);
+          if (!fbRes.success || !fbRes.confirmationResult) {
+            setPhoneError(fbRes.error || "Failed to dispatch SMS via Firebase.");
+            return;
+          }
+          setFirebaseConfirmation(fbRes.confirmationResult);
+        } catch (err: any) {
+          setPhoneError(err?.message || "Failed to initiate Firebase phone verification.");
+          return;
+        }
+      }
+
+      setOtpSent(true);
+      setResendCooldown(30);
+      setOtpBanner({
+        message: isFirebaseConfigured()
+          ? `A 6-digit verification code has been dispatched to ${fullPhone}.`
+          : res.message || "OTP code sent to your phone.",
+      });
     });
   };
 
@@ -470,7 +500,19 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
     const fullPhone = getFullPhoneNumber();
 
     startVerifyOtpTransition(async () => {
-      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode);
+      let idTokenToPass: string | undefined = undefined;
+
+      if (firebaseConfirmation) {
+        const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
+        if (!confirmRes.success || !confirmRes.idToken) {
+          setOtpError(confirmRes.error || "Invalid verification code.");
+          return;
+        }
+        idTokenToPass = confirmRes.idToken;
+        setFirebaseIdToken(confirmRes.idToken);
+      }
+
+      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
       if (!res.success) {
         setOtpError(res.error || "Invalid or expired OTP code.");
       } else {
@@ -483,16 +525,13 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
     });
   };
 
-  const handleAutoFillOtp = (code: string) => {
-    setOtpCode(code);
-    handleVerifyOtp(code);
-  };
-
   const handleChangePhone = () => {
     setIsPhoneVerified(false);
     setOtpSent(false);
     setOtpCode("");
     setVerifiedOtpCode("");
+    setFirebaseConfirmation(null);
+    setFirebaseIdToken("");
     setOtpBanner(null);
     setPhoneError(null);
     setOtpError(null);
@@ -576,6 +615,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
         studentEmail,
         studentPhone: getFullPhoneNumber() || undefined,
         otpCode: !currentUser ? (verifiedOtpCode || otpCode) : undefined,
+        firebaseIdToken: !currentUser ? (firebaseIdToken || undefined) : undefined,
         studentNotes: studentNotes || undefined,
         password: !currentUser ? password : undefined,
       });
@@ -854,30 +894,18 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                   </div>
                 )}
 
-                {/* Dev mode test code banner */}
+                {/* OTP Confirmation banner - Dev Test OTP completely removed */}
                 {otpBanner && !isPhoneVerified && (
                   <div className="rounded-xl border border-accent/40 bg-accent-subtle/70 p-3 space-y-1.5 text-xs">
                     <div className="flex items-center gap-1.5 text-accent-dark font-bold">
                       <CheckCircle2 className="w-3.5 h-3.5 text-accent-dark" />
                       <span>{otpBanner.message}</span>
                     </div>
-                    {otpBanner.previewCode && (
-                      <div className="flex items-center justify-between pt-1 border-t border-accent/20">
-                        <span className="text-[11px] text-body">
-                          [Dev Test OTP]:{" "}
-                          <strong className="font-mono text-heading">{otpBanner.previewCode}</strong>
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => handleAutoFillOtp(otpBanner.previewCode!)}
-                          className="px-2 py-0.5 rounded-md bg-white border border-accent/40 text-[10px] font-bold text-accent-dark hover:bg-neutral-50 transition-colors cursor-pointer"
-                        >
-                          Auto-fill OTP
-                        </button>
-                      </div>
-                    )}
                   </div>
                 )}
+
+                {/* Invisible reCAPTCHA container for Firebase */}
+                <div id="trial-recaptcha-container" className="hidden" aria-hidden="true" />
 
                 {/* Verified State */}
                 {isPhoneVerified ? (

@@ -4,6 +4,13 @@ import { useActionState, useEffect, useState, useTransition, useRef } from "reac
 import Link from "next/link";
 import { FormShell } from "@/components/auth/FormShell";
 import { signupAction, sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
+import type { ConfirmationResult } from "firebase/auth";
+import {
+  isFirebaseConfigured,
+  createRecaptchaVerifier,
+  sendFirebaseOtp,
+  confirmFirebaseOtp,
+} from "@/lib/firebase";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import {
   CountryCodeSelector,
@@ -70,9 +77,11 @@ export default function SignupPage() {
   const [isPhoneVerified, setIsPhoneVerified] = useState(false);
   const [verifiedOtpCode, setVerifiedOtpCode] = useState("");
   const [resendCooldown, setResendCooldown] = useState(0);
-  const [otpBanner, setOtpBanner] = useState<{ message: string; previewCode?: string } | null>(null);
+  const [otpBanner, setOtpBanner] = useState<{ message: string } | null>(null);
   const [phoneError, setPhoneError] = useState<string | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
+  const [firebaseConfirmation, setFirebaseConfirmation] = useState<ConfirmationResult | null>(null);
+  const [firebaseIdToken, setFirebaseIdToken] = useState<string>("");
 
   const [isSendingOtp, startSendOtpTransition] = useTransition();
   const [isVerifyingOtp, startVerifyOtpTransition] = useTransition();
@@ -144,14 +153,35 @@ export default function SignupPage() {
       const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
       if (!res.success) {
         setPhoneError(res.error || "Failed to dispatch verification code.");
-      } else {
-        setOtpSent(true);
-        setResendCooldown(30);
-        setOtpBanner({
-          message: res.message || "OTP code sent to your phone.",
-          previewCode: res.data?.previewCode,
-        });
+        return;
       }
+
+      if (isFirebaseConfigured()) {
+        try {
+          const verifier = createRecaptchaVerifier("signup-recaptcha-container");
+          if (!verifier) {
+            setPhoneError("Failed to initialize security verification. Please refresh.");
+            return;
+          }
+          const fbRes = await sendFirebaseOtp(fullPhone, verifier);
+          if (!fbRes.success || !fbRes.confirmationResult) {
+            setPhoneError(fbRes.error || "Failed to dispatch SMS via Firebase.");
+            return;
+          }
+          setFirebaseConfirmation(fbRes.confirmationResult);
+        } catch (err: any) {
+          setPhoneError(err?.message || "Failed to initiate Firebase phone verification.");
+          return;
+        }
+      }
+
+      setOtpSent(true);
+      setResendCooldown(30);
+      setOtpBanner({
+        message: isFirebaseConfigured()
+          ? `A 6-digit verification code has been dispatched to ${fullPhone}.`
+          : res.message || "OTP code sent to your phone.",
+      });
     });
   };
 
@@ -168,7 +198,19 @@ export default function SignupPage() {
     const fullPhone = getFullPhoneNumber();
 
     startVerifyOtpTransition(async () => {
-      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode);
+      let idTokenToPass: string | undefined = undefined;
+
+      if (firebaseConfirmation) {
+        const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
+        if (!confirmRes.success || !confirmRes.idToken) {
+          setOtpError(confirmRes.error || "Invalid verification code.");
+          return;
+        }
+        idTokenToPass = confirmRes.idToken;
+        setFirebaseIdToken(confirmRes.idToken);
+      }
+
+      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
       if (!res.success) {
         setOtpError(res.error || "Invalid or expired OTP code.");
       } else {
@@ -179,16 +221,13 @@ export default function SignupPage() {
     });
   };
 
-  const handleAutoFillOtp = (code: string) => {
-    setOtpCode(code);
-    handleVerifyOtp(code);
-  };
-
   const handleChangePhone = () => {
     setIsPhoneVerified(false);
     setOtpSent(false);
     setOtpCode("");
     setVerifiedOtpCode("");
+    setFirebaseConfirmation(null);
+    setFirebaseIdToken("");
     setOtpBanner(null);
     setPhoneError(null);
     setOtpError(null);
@@ -574,30 +613,18 @@ export default function SignupPage() {
                 </div>
               )}
 
-              {/* Dev mode test code banner */}
+              {/* OTP Confirmation banner - Dev Test OTP completely removed */}
               {otpBanner && !isPhoneVerified && (
                 <div className="rounded-xl border border-accent/40 bg-accent-subtle/70 p-3 space-y-1.5 text-xs">
                   <div className="flex items-center gap-1.5 text-accent-dark font-bold">
                     <CheckCircle2 className="w-3.5 h-3.5 text-accent-dark" />
                     <span>{otpBanner.message}</span>
                   </div>
-                  {otpBanner.previewCode && (
-                    <div className="flex items-center justify-between pt-1 border-t border-accent/20">
-                      <span className="text-[11px] text-body">
-                        [Dev Test OTP]:{" "}
-                        <strong className="font-mono text-heading">{otpBanner.previewCode}</strong>
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => handleAutoFillOtp(otpBanner.previewCode!)}
-                        className="px-2 py-0.5 rounded-md bg-white border border-accent/40 text-[10px] font-bold text-accent-dark hover:bg-neutral-50 transition-colors cursor-pointer"
-                      >
-                        Auto-fill OTP
-                      </button>
-                    </div>
-                  )}
                 </div>
               )}
+
+              {/* Invisible reCAPTCHA container for Firebase */}
+              <div id="signup-recaptcha-container" className="hidden" aria-hidden="true" />
 
               {/* Verified state vs Input state */}
               {isPhoneVerified ? (
@@ -711,6 +738,7 @@ export default function SignupPage() {
               {/* Hidden fields bound to form */}
               <input type="hidden" name="phone" value={getFullPhoneNumber()} />
               <input type="hidden" name="otpCode" value={verifiedOtpCode || otpCode} />
+              <input type="hidden" name="firebaseIdToken" value={firebaseIdToken} />
             </div>
 
             {/* Full Name */}

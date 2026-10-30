@@ -1,6 +1,7 @@
 import crypto from "crypto";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { verifyFirebasePhoneToken } from "@/lib/firebase-admin";
 
 /**
  * Normalizes phone numbers to standard E.164 format.
@@ -54,27 +55,23 @@ export function generatePhoneOtp(): string {
 
 /**
  * Dispatches an SMS OTP.
- * In development / staging, logs to the console and logger.
- * Ready for SMS provider integration (Twilio / Fast2SMS / MSG91).
  */
 export async function sendSmsOtp(
   phone: string,
   code: string,
   purpose: "LOGIN" | "SIGNUP",
-): Promise<{ success: boolean; previewCode?: string }> {
+): Promise<{ success: boolean }> {
   const normalized = normalizePhoneNumber(phone);
   const purposeText = purpose === "SIGNUP" ? "account registration" : "sign in";
   const message = `Your Gandharva School of Music verification code for ${purposeText} is: ${code}. Valid for 10 minutes. Do not share this OTP with anyone.`;
 
   logger.info(
-    { phone: normalized, code, purpose },
-    `[SMS OTP Dispatched] -> ${normalized}: ${message}`,
+    { phone: normalized, purpose },
+    `[SMS OTP Dispatched] -> ${normalized}`,
   );
 
-  // In development, return previewCode so users and testing harnesses can verify effortlessly
   return {
     success: true,
-    previewCode: code,
   };
 }
 
@@ -85,7 +82,7 @@ export async function sendSmsOtp(
 export async function createPhoneOtpToken(
   rawPhone: string,
   purpose: "LOGIN" | "SIGNUP",
-): Promise<{ phone: string; code: string; previewCode?: string }> {
+): Promise<{ phone: string; code: string }> {
   const phone = normalizePhoneNumber(rawPhone);
   const code = generatePhoneOtp();
   const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
@@ -111,31 +108,47 @@ export async function createPhoneOtpToken(
     },
   });
 
-  const smsRes = await sendSmsOtp(phone, code, purpose);
+  await sendSmsOtp(phone, code, purpose);
 
   return {
     phone,
     code,
-    previewCode: smsRes.previewCode,
   };
 }
 
 /**
- * Checks whether an OTP code is valid without consuming it yet.
+ * Checks whether an OTP code or Firebase token is valid without consuming it yet.
  * Used for live frontend pre-validation before form submission.
  */
 export async function checkPhoneOtp(
   rawPhone: string,
   code: string,
+  idToken?: string,
 ): Promise<{ isValid: boolean; error?: string }> {
   const phone = normalizePhoneNumber(rawPhone);
+
+  // If Firebase ID token is provided, verify directly with Firebase
+  if (idToken && idToken.trim()) {
+    const fbRes = await verifyFirebasePhoneToken(idToken, phone);
+    if (fbRes.isValid) {
+      return { isValid: true };
+    }
+    return {
+      isValid: false,
+      error: fbRes.error || "Firebase phone verification failed.",
+    };
+  }
+
   const trimmed = code.trim();
 
-  // Find unexpired token for this phone & code
+  // Find unexpired token for this phone & code or recent verified token
   const token = await db.phoneVerificationToken.findFirst({
     where: {
       phone,
-      code: trimmed,
+      OR: [
+        { code: trimmed },
+        { code: "FIREBASE_VERIFIED" },
+      ],
       expires: { gt: new Date() },
     },
     orderBy: { createdAt: "desc" },
@@ -152,17 +165,27 @@ export async function checkPhoneOtp(
 }
 
 /**
- * Verifies a 6-digit OTP code against the database.
+ * Verifies an OTP code or Firebase ID token against the database/Firebase.
  * If valid and unexpired:
  * 1. If currently unused, atomically marks it as used.
- * 2. If already marked used within its 10-minute expiry window, accepts it as a valid
+ * 2. If already marked used within its expiry window, accepts it as a valid
  *    continuation/retry of the current registration or login session.
  */
 export async function validateAndConsumePhoneOtp(
   rawPhone: string,
   code: string,
+  idToken?: string,
 ): Promise<{ isValid: boolean; error?: string }> {
   const phone = normalizePhoneNumber(rawPhone);
+
+  // If Firebase ID token is supplied, verify it
+  if (idToken && idToken.trim()) {
+    const fbRes = await verifyFirebasePhoneToken(idToken, phone);
+    if (fbRes.isValid) {
+      return { isValid: true };
+    }
+  }
+
   const trimmed = code.trim();
 
   // 1. Check for active unconsumed token
@@ -185,12 +208,14 @@ export async function validateAndConsumePhoneOtp(
     return { isValid: true };
   }
 
-  // 2. Check for recent token in this session (unexpired, created within last 10 minutes)
-  // This allows graceful form re-submissions when validation on another field failed or rapid double-clicks
+  // 2. Check for recent token in this session (unexpired, verified via OTP or Firebase)
   const recentToken = await db.phoneVerificationToken.findFirst({
     where: {
       phone,
-      code: trimmed,
+      OR: [
+        { code: trimmed },
+        { code: "FIREBASE_VERIFIED" },
+      ],
       used: true,
       expires: { gt: new Date() },
     },
