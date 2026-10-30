@@ -15,21 +15,11 @@ const globalForPrisma = globalThis as unknown as {
 const rawConnectionString = process.env.DATABASE_URL || "";
 let connectionString = rawConnectionString;
 
-// Auto-rewrite direct Supabase host to IPv4-compatible connection pooler
-// Direct db.<ref>.supabase.co only provides IPv6 AAAA records which fails on standard IPv4 networks
-if (connectionString.includes("db.kprifflfakbucchpimvz.supabase.co")) {
-  if (!connectionString.includes("postgres.kprifflfakbucchpimvz:")) {
-    connectionString = connectionString.replace("postgres:", "postgres.kprifflfakbucchpimvz:");
-  }
-  connectionString = connectionString.replace("db.kprifflfakbucchpimvz.supabase.co", "aws-0-ap-northeast-1.pooler.supabase.com");
-}
-
-// Automatically route Supabase connections to the dedicated PgBouncer / Supavisor transaction pooler (port 6543)
-// instead of port 5432 (session mode pooler).
+// Automatically route Supabase pooler connections from port 5432 (Session mode) to port 6543 (Transaction mode)
 // Session mode pooler (port 5432) has a strict cap of 15 connections (EMAXCONNSESSION) which crashes
-// in serverless environments (Vercel) and during concurrent navigation ("Session or Data Sync Interrupted").
-// Transaction mode pooler (port 6543) supports unlimited concurrent connections.
-if (connectionString.includes(":5432")) {
+// in serverless environments (Vercel) and during concurrent navigation.
+// Transaction mode pooler (port 6543) supports scalable concurrent connections.
+if (connectionString.includes("pooler.supabase.com") && connectionString.includes(":5432")) {
   connectionString = connectionString.replace(":5432", ":6543");
 }
 
