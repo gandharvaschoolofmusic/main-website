@@ -54,12 +54,24 @@ export function createRecaptchaVerifier(
   if (!auth) return null;
 
   try {
-    // If a verifier was previously attached, safely clear it to prevent duplicate renders
-    if (typeof window !== "undefined" && (window as any).recaptchaVerifier) {
-      try {
-        (window as any).recaptchaVerifier.clear();
-      } catch {
-        // Safe fallback
+    if (typeof window !== "undefined") {
+      // 1. If an existing verifier is registered on window, safely clear it
+      const existing = (window as any).recaptchaVerifier;
+      if (existing) {
+        try {
+          existing.clear();
+        } catch {
+          // ignore
+        }
+        (window as any).recaptchaVerifier = null;
+      }
+
+      // 2. Clone and replace the container element to clear all grecaptcha internal IDs and state
+      const el = document.getElementById(containerId);
+      if (el && el.parentNode) {
+        el.innerHTML = "";
+        const clone = el.cloneNode(false) as HTMLElement;
+        el.parentNode.replaceChild(clone, el);
       }
     }
 
@@ -104,16 +116,28 @@ export async function sendFirebaseOtp(
     };
   } catch (error: any) {
     console.error("[Firebase] Error in signInWithPhoneNumber:", error);
+
+    // On any error (e.g. billing-not-enabled, invalid number), clear the verifier to allow a clean retry
+    try {
+      verifier.clear();
+      if (typeof window !== "undefined") {
+        (window as any).recaptchaVerifier = null;
+      }
+    } catch {}
+
     let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";
     if (error?.code === "auth/invalid-phone-number") {
       msg = "The mobile phone number format is invalid. Please include your country code.";
     } else if (error?.code === "auth/quota-exceeded") {
-      msg = "SMS quota exceeded for today. Please try again later.";
+      msg = "SMS quota exceeded for today. Please try again later or contact support.";
     } else if (error?.code === "auth/too-many-requests") {
       msg = "Too many attempts. Please wait a moment before requesting another code.";
+    } else if (error?.code === "auth/billing-not-enabled") {
+      msg = "Firebase SMS billing is not enabled. Please upgrade to the Blaze plan in Firebase Console, or add this number in 'Phone numbers for testing'.";
     } else if (error?.code === "auth/captcha-check-failed") {
       msg = "reCAPTCHA verification failed. Please refresh and try again.";
     }
+
     return {
       success: false,
       error: msg,
@@ -146,4 +170,3 @@ export async function confirmFirebaseOtp(
     };
   }
 }
-
