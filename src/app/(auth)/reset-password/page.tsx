@@ -11,7 +11,7 @@ import { SplitHeading } from "@/components/ui/SplitHeading";
 
 function ResetPasswordContent() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token") || "";
+  const token = searchParams.get("token") || searchParams.get("oobCode") || "";
 
   const [state, formAction, isPending] = useActionState(resetPasswordAction, {
     success: false,
