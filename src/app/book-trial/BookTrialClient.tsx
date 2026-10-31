@@ -506,6 +506,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
         const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
         if (!confirmRes.success || !confirmRes.idToken) {
           setOtpError(confirmRes.error || "Invalid verification code.");
+          setOtpCode("");
           return;
         }
         idTokenToPass = confirmRes.idToken;
@@ -515,6 +516,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
       if (!res.success) {
         setOtpError(res.error || "Invalid or expired OTP code.");
+        setOtpCode("");
       } else {
         setIsPhoneVerified(true);
         setVerifiedOtpCode(trimmedCode);

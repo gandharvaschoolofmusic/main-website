@@ -204,6 +204,8 @@ export default function SignupPage() {
         const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
         if (!confirmRes.success || !confirmRes.idToken) {
           setOtpError(confirmRes.error || "Invalid verification code.");
+          setOtpCode("");
+          otpInputRef.current?.focus();
           return;
         }
         idTokenToPass = confirmRes.idToken;
@@ -213,6 +215,8 @@ export default function SignupPage() {
       const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
       if (!res.success) {
         setOtpError(res.error || "Invalid or expired OTP code.");
+        setOtpCode("");
+        otpInputRef.current?.focus();
       } else {
         setIsPhoneVerified(true);
         setVerifiedOtpCode(trimmedCode);

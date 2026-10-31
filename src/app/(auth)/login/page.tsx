@@ -44,7 +44,8 @@ export default function LoginPage() {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [otpBanner, setOtpBanner] = useState<{ message: string } | null>(null);
   const [otpError, setOtpError] = useState<string | null>(null);
-  const [isSendingOtp, startSendOtpTransition] = useTransition();
+  const [isSendingOtp, setIsSendingOtp] = useState(false);
+  const [isShaking, setIsShaking] = useState(false);
   const [firebaseConfirmation, setFirebaseConfirmation] = useState<ConfirmationResult | null>(null);
   const [isVerifyingFirebase, setIsVerifyingFirebase] = useState(false);
 
@@ -55,6 +56,18 @@ export default function LoginPage() {
     verifyOtpAndLoginAction,
     { success: false },
   );
+
+  // Automatically clear OTP inputs and shake when an error occurs
+  useEffect(() => {
+    if (otpLoginState?.error) {
+      setIsVerifyingFirebase(false);
+      setOtpDigits(["", "", "", "", "", ""]);
+      setIsShaking(true);
+      const timer = setTimeout(() => setIsShaking(false), 500);
+      digitRefs.current[0]?.focus();
+      return () => clearTimeout(timer);
+    }
+  }, [otpLoginState?.error]);
 
   // Resend countdown timer
   useEffect(() => {
@@ -92,6 +105,14 @@ export default function LoginPage() {
 
     if (digit && index < 5) {
       digitRefs.current[index + 1]?.focus();
+    } else if (digit && index === 5) {
+      const fullCode = nextDigits.join("");
+      if (fullCode.length === 6) {
+        digitRefs.current[5]?.blur();
+        setTimeout(() => {
+          handleOtpFormSubmit();
+        }, 50);
+      }
     }
   };
 
@@ -128,10 +149,17 @@ export default function LoginPage() {
       setOtpDigits(nextDigits);
       const focusIdx = Math.min(pasted.length, 5);
       digitRefs.current[focusIdx]?.focus();
+      if (pasted.length === 6) {
+        digitRefs.current[5]?.blur();
+        setTimeout(() => {
+          handleOtpFormSubmit();
+        }, 50);
+      }
     }
   };
 
-  const handleSendOtp = () => {
+  const handleSendOtp = async () => {
+    if (isSendingOtp) return;
     setOtpError(null);
     setOtpBanner(null);
 
@@ -147,11 +175,13 @@ export default function LoginPage() {
     }
 
     const fullNumber = getFullPhoneNumber();
+    setIsSendingOtp(true);
 
-    startSendOtpTransition(async () => {
+    try {
       const res = await sendPhoneOtpAction(fullNumber, "LOGIN");
       if (!res.success) {
         setOtpError(res.error || "Failed to dispatch verification code.");
+        setIsSendingOtp(false);
         return;
       }
 
@@ -160,16 +190,19 @@ export default function LoginPage() {
           const verifier = createRecaptchaVerifier("login-recaptcha-container");
           if (!verifier) {
             setOtpError("Failed to initialize security verification. Please refresh.");
+            setIsSendingOtp(false);
             return;
           }
           const fbRes = await sendFirebaseOtp(fullNumber, verifier);
           if (!fbRes.success || !fbRes.confirmationResult) {
             setOtpError(fbRes.error || "Failed to dispatch SMS via Firebase.");
+            setIsSendingOtp(false);
             return;
           }
           setFirebaseConfirmation(fbRes.confirmationResult);
         } catch (err: any) {
           setOtpError(err?.message || "Failed to initiate Firebase phone verification.");
+          setIsSendingOtp(false);
           return;
         }
       }
@@ -181,25 +214,35 @@ export default function LoginPage() {
           ? `A 6-digit verification code has been dispatched to ${fullNumber}.`
           : res.message || "OTP code sent to your phone.",
       });
-    });
+    } catch (err: any) {
+      setOtpError(err?.message || "Failed to dispatch verification code.");
+    } finally {
+      setIsSendingOtp(false);
+    }
   };
 
-  const handleOtpFormSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
-    if (firebaseConfirmation) {
-      e.preventDefault();
-      setOtpError(null);
-      const code = otpDigits.join("");
-      if (code.length !== 6) {
-        setOtpError("Please enter the complete 6-digit verification code.");
-        return;
-      }
+  const handleOtpFormSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
+    if (e) e.preventDefault();
+    if (isVerifyingFirebase || isOtpLoginPending) return;
 
-      setIsVerifyingFirebase(true);
-      try {
+    setOtpError(null);
+    const code = otpDigits.join("");
+    if (code.length !== 6) {
+      setOtpError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    setIsVerifyingFirebase(true);
+    try {
+      if (firebaseConfirmation) {
         const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, code);
         if (!confirmRes.success || !confirmRes.idToken) {
           setIsVerifyingFirebase(false);
-          setOtpError(confirmRes.error || "Invalid verification code.");
+          setOtpError(confirmRes.error || "Invalid verification code. Please check the 6-digit code sent to your phone.");
+          setOtpDigits(["", "", "", "", "", ""]);
+          setIsShaking(true);
+          setTimeout(() => setIsShaking(false), 500);
+          digitRefs.current[0]?.focus();
           return;
         }
 
@@ -208,14 +251,20 @@ export default function LoginPage() {
         formData.append("code", code);
         formData.append("idToken", confirmRes.idToken);
 
-        startTransition(async () => {
-          await otpLoginFormAction(formData);
-          setIsVerifyingFirebase(false);
-        });
-      } catch (err: any) {
-        setIsVerifyingFirebase(false);
-        setOtpError(err?.message || "Verification failed. Please try again.");
+        await otpLoginFormAction(formData);
+      } else {
+        const formData = new FormData();
+        formData.append("phone", getFullPhoneNumber());
+        formData.append("code", code);
+        await otpLoginFormAction(formData);
       }
+    } catch (err: any) {
+      setIsVerifyingFirebase(false);
+      setOtpError(err?.message || "Verification failed. Please try again.");
+      setOtpDigits(["", "", "", "", "", ""]);
+      setIsShaking(true);
+      setTimeout(() => setIsShaking(false), 500);
+      digitRefs.current[0]?.focus();
     }
   };
 
@@ -453,13 +502,13 @@ export default function LoginPage() {
                 type="button"
                 disabled={isSendingOtp || !otpPhone.trim()}
                 onClick={handleSendOtp}
-                className="entry-primary w-full"
+                className="entry-primary w-full relative overflow-hidden transition-all duration-200"
               >
                 {isSendingOtp ? (
-                  <>
-                    <Loader2 className="w-4 h-4 animate-spin text-amber-950" />
+                  <span className="flex items-center justify-center gap-2">
+                    <Loader2 className="w-4 h-4 animate-spin text-white" />
                     <span>Sending OTP code...</span>
-                  </>
+                  </span>
                 ) : (
                   <span>Get OTP</span>
                 )}
@@ -492,7 +541,7 @@ export default function LoginPage() {
 
                     {/* 6 Individual Digit Input Boxes (Matching screenshot) */}
                     <div
-                      className="entry-otp-digits"
+                      className={`entry-otp-digits transition-all duration-200 ${isShaking ? "animate-shake ring-2 ring-error/50 rounded-xl" : ""}`}
                       style={{
                         display: "grid",
                         gridTemplateColumns: "repeat(6, minmax(0, 1fr))",
@@ -513,10 +562,11 @@ export default function LoginPage() {
                           pattern="[0-9]*"
                           maxLength={1}
                           value={digit}
+                          disabled={isVerifyingFirebase || isOtpLoginPending}
                           onChange={(e) => handleDigitChange(index, e.target.value)}
                           onKeyDown={(e) => handleDigitKeyDown(index, e)}
                           onPaste={handlePaste}
-                          className="otp-digit-input h-12 sm:h-14 w-full rounded-lg sm:rounded-xl border border-gray-300 bg-white text-center text-xl sm:text-2xl font-mono font-bold text-heading shadow-xs transition-all focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 focus:outline-none"
+                          className="otp-digit-input h-12 sm:h-14 w-full rounded-lg sm:rounded-xl border border-gray-300 bg-white text-center text-xl sm:text-2xl font-mono font-bold text-heading shadow-xs transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 focus:outline-none disabled:bg-gray-100 disabled:opacity-75"
                           style={{
                             height: "52px",
                             textAlign: "center",
@@ -560,13 +610,13 @@ export default function LoginPage() {
                   <button
                     type="submit"
                     disabled={isOtpLoginPending || isVerifyingFirebase || otpDigits.join("").length !== 6}
-                    className="entry-primary w-full"
+                    className="entry-primary w-full transition-all duration-200"
                   >
                     {isOtpLoginPending || isVerifyingFirebase ? (
-                      <>
-                        <Loader2 className="w-5 h-5 animate-spin text-[#1E1A4D]" />
-                        <span>Logging in...</span>
-                      </>
+                      <span className="flex items-center justify-center gap-2">
+                        <Loader2 className="w-5 h-5 animate-spin text-white" />
+                        <span>Verifying &amp; Logging in...</span>
+                      </span>
                     ) : (
                       <span>Login</span>
                     )}
