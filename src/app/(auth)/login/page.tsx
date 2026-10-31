@@ -2,6 +2,7 @@
 
 import { useActionState, useState, useTransition, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
+import { formatInternationalE164 } from "@/lib/phone";
 import { FormShell } from "@/components/auth/FormShell";
 import { loginAction, sendPhoneOtpAction, verifyOtpAndLoginAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
@@ -99,12 +100,7 @@ export default function LoginPage() {
 
   // Calculate formatted full number for API & display
   const getFullPhoneNumber = () => {
-    const rawInput = otpPhone.trim();
-    if (rawInput.startsWith("+")) {
-      return rawInput;
-    }
-    const cleanDigits = rawInput.replace(/\D/g, "");
-    return `${selectedCountry.dialCode}${cleanDigits}`;
+    return formatInternationalE164(selectedCountry.dialCode, otpPhone);
   };
 
   const handleDigitChange = (index: number, val: string) => {

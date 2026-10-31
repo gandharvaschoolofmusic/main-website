@@ -22,6 +22,7 @@ import {
   Sparkles,
   Piano, Guitar, Drum, ArrowLeft, ChevronDown,
 } from "lucide-react";
+import { formatInternationalE164 } from "@/lib/phone";
 import { createTrialRequestAction } from "@/actions/trial";
 import { sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
@@ -425,13 +426,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
 
   // Compute full international phone number
   const getFullPhoneNumber = () => {
-    const raw = studentPhone.trim();
-    if (!raw) return "";
-    if (raw.startsWith("+")) {
-      return raw;
-    }
-    const cleanDigits = raw.replace(/\D/g, "");
-    return `${selectedCountry.dialCode}${cleanDigits}`;
+    return formatInternationalE164(selectedCountry.dialCode, studentPhone);
   };
 
   // Pre-warm the reCAPTCHA verifier in the background

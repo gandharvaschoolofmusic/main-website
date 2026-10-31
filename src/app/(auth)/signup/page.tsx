@@ -2,6 +2,7 @@
 
 import { useActionState, useEffect, useState, useTransition, useRef } from "react";
 import Link from "next/link";
+import { formatInternationalE164 } from "@/lib/phone";
 import { FormShell } from "@/components/auth/FormShell";
 import { signupAction, sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
@@ -90,12 +91,7 @@ export default function SignupPage() {
 
   // Compute normalized full phone number
   const getFullPhoneNumber = () => {
-    const trimmed = rawPhoneNumber.trim();
-    if (trimmed.startsWith("+")) {
-      return trimmed;
-    }
-    const cleanDigits = trimmed.replace(/\D/g, "");
-    return `${selectedCountry.dialCode}${cleanDigits}`;
+    return formatInternationalE164(selectedCountry.dialCode, rawPhoneNumber);
   };
 
   useEffect(() => {

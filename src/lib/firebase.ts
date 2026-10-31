@@ -56,22 +56,19 @@ export function createRecaptchaVerifier(
   try {
     if (typeof window !== "undefined") {
       let el = document.getElementById(containerId);
-      if (!el && typeof document !== "undefined") {
-        el = document.createElement("div");
-        el.id = containerId;
-        el.className = "hidden";
-        el.style.display = "none";
-        el.setAttribute("aria-hidden", "true");
-        document.body.appendChild(el);
-      }
 
-      // 1. If an existing verifier exists and is attached to this container, reuse it safely
+      // 1. If an existing verifier is attached to this container and still healthy, reuse it safely
       const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
-      if (existing && el && (window as any).recaptchaContainerId === containerId) {
+      if (
+        existing &&
+        el &&
+        (window as any).recaptchaContainerId === containerId &&
+        typeof (existing as any)._widgetId !== "undefined"
+      ) {
         return existing;
       }
 
-      // 2. Clear any previous verifier instance
+      // 2. Clear previous verifier instance if any
       if (existing) {
         try {
           existing.clear();
@@ -81,9 +78,24 @@ export function createRecaptchaVerifier(
         (window as any).recaptchaVerifier = null;
       }
 
-      // Empty inner content without replacing or detaching React's DOM node
-      if (el) {
-        el.innerHTML = "";
+      // 3. CRITICAL: Replace container element with a fresh, virgin DOM node
+      // This severs Google grecaptcha's internal widget node mapping and completely
+      // prevents "reCAPTCHA has already been rendered in this element"!
+      if (el && el.parentNode) {
+        const freshEl = document.createElement("div");
+        freshEl.id = containerId;
+        freshEl.className = el.className || "hidden";
+        freshEl.style.display = "none";
+        freshEl.setAttribute("aria-hidden", "true");
+        el.parentNode.replaceChild(freshEl, el);
+        el = freshEl;
+      } else if (!el && typeof document !== "undefined") {
+        el = document.createElement("div");
+        el.id = containerId;
+        el.className = "hidden";
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
+        document.body.appendChild(el);
       }
     }
 
@@ -97,8 +109,14 @@ export function createRecaptchaVerifier(
       },
     });
 
-    // Pre-warm the reCAPTCHA widget in background so verify() during SMS dispatch is instantaneous
-    verifier.render().catch(() => {});
+    // Pre-warm the reCAPTCHA widget in background
+    verifier.render().then((widgetId) => {
+      if (typeof window !== "undefined") {
+        (window as any).recaptchaWidgetId = widgetId;
+      }
+    }).catch((err) => {
+      console.warn("[Firebase] reCAPTCHA render warning:", err);
+    });
 
     if (typeof window !== "undefined") {
       (window as any).recaptchaVerifier = verifier;
@@ -106,8 +124,38 @@ export function createRecaptchaVerifier(
     }
 
     return verifier;
-  } catch (error) {
+  } catch (error: any) {
     console.error("[Firebase] Error initializing RecaptchaVerifier:", error);
+
+    // Fallback: If grecaptcha threw "already been rendered", hard-replace the DOM element and retry once
+    if (typeof window !== "undefined") {
+      try {
+        const staleEl = document.getElementById(containerId);
+        if (staleEl && staleEl.parentNode) {
+          const freshEl = document.createElement("div");
+          freshEl.id = containerId;
+          freshEl.className = "hidden";
+          freshEl.style.display = "none";
+          freshEl.setAttribute("aria-hidden", "true");
+          staleEl.parentNode.replaceChild(freshEl, staleEl);
+
+          const retryVerifier = new RecaptchaVerifier(auth, containerId, {
+            size: "invisible",
+            callback: () => {},
+            "expired-callback": () => {
+              if (onExpired) onExpired();
+            },
+          });
+          retryVerifier.render().catch(() => {});
+          (window as any).recaptchaVerifier = retryVerifier;
+          (window as any).recaptchaContainerId = containerId;
+          return retryVerifier;
+        }
+      } catch (retryErr) {
+        console.error("[Firebase] Fallback RecaptchaVerifier initialization failed:", retryErr);
+      }
+    }
+
     return null;
   }
 }
@@ -133,26 +181,46 @@ export async function sendFirebaseOtp(
   } catch (error: any) {
     console.error("[Firebase] Error in signInWithPhoneNumber:", error);
 
-    // On failure, clear verifier to allow a clean retry on the next click
+    // Reset the reCAPTCHA widget token so user can retry immediately without re-rendering
     try {
-      verifier.clear();
+      const widgetId = (verifier as any)._widgetId ?? (window as any).recaptchaWidgetId;
+      if (typeof widgetId === "number" && (window as any).grecaptcha?.reset) {
+        (window as any).grecaptcha.reset(widgetId);
+      }
     } catch {}
-    if (typeof window !== "undefined") {
+
+    const isAlreadyRendered =
+      error?.message?.includes("already been rendered") ||
+      String(error).includes("already been rendered");
+
+    // Only clear verifier if DOM element needs complete recreation on next attempt
+    if (isAlreadyRendered && typeof window !== "undefined") {
+      try {
+        verifier.clear();
+      } catch {}
       (window as any).recaptchaVerifier = null;
       (window as any).recaptchaContainerId = null;
     }
 
     let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";
     if (error?.code === "auth/invalid-phone-number") {
-      msg = "The mobile phone number format is invalid. Please include your country code.";
+      msg = "Invalid mobile number format. Please ensure the country code is selected and digits are correct.";
     } else if (error?.code === "auth/quota-exceeded") {
       msg = "SMS quota exceeded for today. Please try again later or contact support.";
     } else if (error?.code === "auth/too-many-requests") {
       msg = "Too many attempts. Please wait a moment before requesting another code.";
     } else if (error?.code === "auth/billing-not-enabled") {
       msg = "Firebase SMS billing is not enabled. Please upgrade to the Blaze plan in Firebase Console, or add this phone under 'Phone numbers for testing'.";
+    } else if (
+      error?.code === "auth/blocked-at-project-level" ||
+      error?.code === "auth/phone-number-not-allowed" ||
+      error?.message?.includes("blocked-at-project-level")
+    ) {
+      msg = "SMS to this country is restricted by your Firebase project's SMS Region Policy. Enable this country in Firebase Console > Authentication > Settings > SMS region policy, or add it to 'Phone numbers for testing'.";
     } else if (error?.code === "auth/captcha-check-failed") {
-      msg = "reCAPTCHA verification failed. Please refresh and try again.";
+      msg = "Security verification check failed. Please refresh and try again.";
+    } else if (isAlreadyRendered) {
+      msg = "Security verification refreshed. Please click 'Send OTP' again to receive your code.";
     }
 
     return {
