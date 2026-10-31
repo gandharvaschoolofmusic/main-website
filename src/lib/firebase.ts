@@ -97,6 +97,9 @@ export function createRecaptchaVerifier(
       },
     });
 
+    // Pre-warm the reCAPTCHA widget in background so verify() during SMS dispatch is instantaneous
+    verifier.render().catch(() => {});
+
     if (typeof window !== "undefined") {
       (window as any).recaptchaVerifier = verifier;
       (window as any).recaptchaContainerId = containerId;

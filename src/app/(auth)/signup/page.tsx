@@ -132,6 +132,16 @@ export default function SignupPage() {
   });
 
   // Handle Send OTP
+  // Pre-warm the reCAPTCHA verifier in the background
+  useEffect(() => {
+    if (isFirebaseConfigured()) {
+      try {
+        const v = createRecaptchaVerifier("signup-recaptcha-container");
+        v?.render().catch(() => {});
+      } catch {}
+    }
+  }, []);
+
   const handleSendOtp = () => {
     setPhoneError(null);
     setOtpError(null);
@@ -150,38 +160,46 @@ export default function SignupPage() {
     const fullPhone = getFullPhoneNumber();
 
     startSendOtpTransition(async () => {
-      const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
-      if (!res.success) {
-        setPhoneError(res.error || "Failed to dispatch verification code.");
-        return;
-      }
-
-      if (isFirebaseConfigured()) {
-        try {
+      try {
+        if (isFirebaseConfigured()) {
           const verifier = createRecaptchaVerifier("signup-recaptcha-container");
           if (!verifier) {
             setPhoneError("Failed to initialize security verification. Please refresh.");
             return;
           }
-          const fbRes = await sendFirebaseOtp(fullPhone, verifier);
+
+          const [dbRes, fbRes] = await Promise.all([
+            sendPhoneOtpAction(fullPhone, "SIGNUP"),
+            sendFirebaseOtp(fullPhone, verifier),
+          ]);
+
+          if (!dbRes.success) {
+            setPhoneError(dbRes.error || "Failed to dispatch verification code.");
+            return;
+          }
+
           if (!fbRes.success || !fbRes.confirmationResult) {
             setPhoneError(fbRes.error || "Failed to dispatch SMS via Firebase.");
             return;
           }
-          setFirebaseConfirmation(fbRes.confirmationResult);
-        } catch (err: any) {
-          setPhoneError(err?.message || "Failed to initiate Firebase phone verification.");
-          return;
-        }
-      }
 
-      setOtpSent(true);
-      setResendCooldown(30);
-      setOtpBanner({
-        message: isFirebaseConfigured()
-          ? `A 6-digit verification code has been dispatched to ${fullPhone}.`
-          : res.message || "OTP code sent to your phone.",
-      });
+          setFirebaseConfirmation(fbRes.confirmationResult);
+        } else {
+          const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
+          if (!res.success) {
+            setPhoneError(res.error || "Failed to dispatch verification code.");
+            return;
+          }
+        }
+
+        setOtpSent(true);
+        setResendCooldown(30);
+        setOtpBanner({
+          message: `A 6-digit verification code has been dispatched to ${fullPhone}.`,
+        });
+      } catch (err: any) {
+        setPhoneError(err?.message || "Failed to dispatch verification code.");
+      }
     });
   };
 
