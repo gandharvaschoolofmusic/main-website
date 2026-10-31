@@ -22,7 +22,7 @@ import {
   Sparkles,
   Piano, Guitar, Drum, ArrowLeft, ChevronDown,
 } from "lucide-react";
-import { formatInternationalE164 } from "@/lib/phone";
+import { formatInternationalE164 } from "@/lib/phone-utils";
 import { createTrialRequestAction } from "@/actions/trial";
 import { sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";

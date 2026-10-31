@@ -2,7 +2,7 @@
 
 import { useActionState, useState, useTransition, useEffect, useRef, startTransition } from "react";
 import Link from "next/link";
-import { formatInternationalE164 } from "@/lib/phone";
+import { formatInternationalE164 } from "@/lib/phone-utils";
 import { FormShell } from "@/components/auth/FormShell";
 import { loginAction, sendPhoneOtpAction, verifyOtpAndLoginAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
