@@ -7,7 +7,7 @@ import {
 } from "@/actions/teacher";
 import { updateProfileAction, changePasswordAction } from "@/actions/profile";
 import { POPULAR_TIMEZONES, formatDeterministicDate } from "@/lib/timezone";
-import { INSTRUMENTS, LANGUAGES } from "@/types";
+import { INSTRUMENTS, LANGUAGES, TEACHER_SKILL_CATEGORIES } from "@/types";
 import {
   User,
   Lock,
@@ -26,6 +26,7 @@ import {
   CreditCard,
   Clock,
   CheckCircle2,
+  Mic,
 } from "lucide-react";
 import { AvatarUpload } from "@/components/profile/AvatarUpload";
 
@@ -77,6 +78,59 @@ export function TeacherProfileEditor({
   );
   const [moderateInstruments, setModerateInstruments] = useState<string[]>(
     initialModerate,
+  );
+
+  const [skillCategoryTab, setSkillCategoryTab] = useState<
+    "ALL" | "INSTRUMENTS" | "SINGING" | "DANCING"
+  >("ALL");
+
+  const displayedSkillGroups = (
+    skillCategoryTab === "ALL"
+      ? [
+          {
+            name: "Instruments",
+            icon: Music,
+            items: TEACHER_SKILL_CATEGORIES.INSTRUMENTS as readonly string[],
+          },
+          {
+            name: "Singing",
+            icon: Mic,
+            items: TEACHER_SKILL_CATEGORIES.SINGING as readonly string[],
+          },
+          {
+            name: "Dancing",
+            icon: Sparkles,
+            items: TEACHER_SKILL_CATEGORIES.DANCING as readonly string[],
+          },
+          {
+            name: "Theory & Other",
+            icon: BookOpen,
+            items: ["Music Theory", "Composition"] as readonly string[],
+          },
+        ]
+      : skillCategoryTab === "INSTRUMENTS"
+      ? [
+          {
+            name: "Instruments",
+            icon: Music,
+            items: TEACHER_SKILL_CATEGORIES.INSTRUMENTS as readonly string[],
+          },
+        ]
+      : skillCategoryTab === "SINGING"
+      ? [
+          {
+            name: "Singing",
+            icon: Mic,
+            items: TEACHER_SKILL_CATEGORIES.SINGING as readonly string[],
+          },
+        ]
+      : [
+          {
+            name: "Dancing",
+            icon: Sparkles,
+            items: TEACHER_SKILL_CATEGORIES.DANCING as readonly string[],
+          },
+        ]
   );
 
   const [selectedLanguages, setSelectedLanguages] = useState<string[]>(
@@ -446,6 +500,50 @@ export function TeacherProfileEditor({
               </div>
             </div>
 
+            {/* Category Filter Tabs */}
+            <div className="flex flex-wrap items-center justify-between gap-2 p-2.5 rounded-xl bg-white border border-border-subtle shadow-xs">
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted pl-1">
+                  Category:
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  {(
+                    [
+                      { id: "ALL", label: "All Disciplines", icon: Sparkles, count: INSTRUMENTS.length },
+                      { id: "INSTRUMENTS", label: "Instruments", icon: Music, count: TEACHER_SKILL_CATEGORIES.INSTRUMENTS.length },
+                      { id: "SINGING", label: "Singing", icon: Mic, count: TEACHER_SKILL_CATEGORIES.SINGING.length },
+                      { id: "DANCING", label: "Dancing", icon: Sparkles, count: TEACHER_SKILL_CATEGORIES.DANCING.length },
+                    ] as const
+                  ).map((cat) => {
+                    const Icon = cat.icon;
+                    const isActive = skillCategoryTab === cat.id;
+                    return (
+                      <button
+                        key={cat.id}
+                        type="button"
+                        onClick={() => setSkillCategoryTab(cat.id)}
+                        className={`px-3 py-1 rounded-lg text-xs font-semibold transition-all cursor-pointer flex items-center gap-1.5 ${
+                          isActive
+                            ? "bg-heading text-white shadow-xs font-bold"
+                            : "bg-bg-alt/60 hover:bg-bg-alt text-heading border border-border-subtle"
+                        }`}
+                      >
+                        <Icon className="w-3.5 h-3.5" />
+                        <span>{cat.label}</span>
+                        <span
+                          className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                            isActive ? "bg-white/20 text-white" : "bg-white text-body-muted border border-border-subtle"
+                          }`}
+                        >
+                          {cat.count}
+                        </span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
             {/* Two Tier Grid */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* TIER 1: EXPERTISE */}
@@ -513,29 +611,42 @@ export function TeacherProfileEditor({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-body-muted">
                     + Add / Toggle Expertise
                   </span>
-                  <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-2 rounded-lg bg-bg-alt/20 border border-border-subtle/80">
-                    {INSTRUMENTS.map((inst) => {
-                      const isExpert = expertInstruments.includes(inst);
-                      const isModerate = moderateInstruments.includes(inst);
-                      return (
-                        <button
-                          key={inst}
-                          type="button"
-                          onClick={() => toggleExpert(inst)}
-                          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
-                            isExpert
-                              ? "bg-primary text-white shadow-xs font-bold"
-                              : isModerate
-                              ? "bg-bg-alt border border-border-subtle text-body-muted opacity-60 hover:opacity-100"
-                              : "bg-white border border-border-subtle text-body hover:text-heading hover:border-primary/50"
-                          }`}
-                        >
-                          {isExpert ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                          <span>{inst}</span>
-                          {isModerate && <span className="text-[9px] text-accent font-bold">(In Moderate)</span>}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-2.5 max-h-48 overflow-y-auto p-2.5 rounded-lg bg-bg-alt/20 border border-border-subtle/80">
+                    {displayedSkillGroups.map((group) => (
+                      <div key={group.name} className="space-y-1">
+                        {skillCategoryTab === "ALL" && (
+                          <div className="flex items-center gap-1.5 pt-0.5 px-0.5 text-[10px] font-bold uppercase tracking-wider text-body-muted">
+                            <group.icon className="w-3 h-3 text-primary" />
+                            <span>{group.name}</span>
+                            <span className="text-[9px] text-body-muted/70">({group.items.length})</span>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {group.items.map((inst) => {
+                            const isExpert = expertInstruments.includes(inst);
+                            const isModerate = moderateInstruments.includes(inst);
+                            return (
+                              <button
+                                key={inst}
+                                type="button"
+                                onClick={() => toggleExpert(inst)}
+                                className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                                  isExpert
+                                    ? "bg-primary text-white shadow-xs font-bold"
+                                    : isModerate
+                                    ? "bg-bg-alt border border-border-subtle text-body-muted opacity-60 hover:opacity-100"
+                                    : "bg-white border border-border-subtle text-body hover:text-heading hover:border-primary/50"
+                                }`}
+                              >
+                                {isExpert ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                                <span>{inst}</span>
+                                {isModerate && <span className="text-[9px] text-accent font-bold">(In Moderate)</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>
@@ -605,29 +716,42 @@ export function TeacherProfileEditor({
                   <span className="text-[10px] font-bold uppercase tracking-wider text-body-muted">
                     + Add / Toggle Moderate
                   </span>
-                  <div className="flex flex-wrap gap-1 max-h-36 overflow-y-auto p-2 rounded-lg bg-bg-alt/20 border border-border-subtle/80">
-                    {INSTRUMENTS.map((inst) => {
-                      const isModerate = moderateInstruments.includes(inst);
-                      const isExpert = expertInstruments.includes(inst);
-                      return (
-                        <button
-                          key={inst}
-                          type="button"
-                          onClick={() => toggleModerate(inst)}
-                          className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
-                            isModerate
-                              ? "bg-heading text-white shadow-xs font-bold"
-                              : isExpert
-                              ? "bg-bg-alt border border-border-subtle text-body-muted opacity-60 hover:opacity-100"
-                              : "bg-white border border-border-subtle text-body hover:text-heading hover:border-accent/50"
-                          }`}
-                        >
-                          {isModerate ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
-                          <span>{inst}</span>
-                          {isExpert && <span className="text-[9px] text-primary font-bold">(In Expertise)</span>}
-                        </button>
-                      );
-                    })}
+                  <div className="space-y-2.5 max-h-48 overflow-y-auto p-2.5 rounded-lg bg-bg-alt/20 border border-border-subtle/80">
+                    {displayedSkillGroups.map((group) => (
+                      <div key={group.name} className="space-y-1">
+                        {skillCategoryTab === "ALL" && (
+                          <div className="flex items-center gap-1.5 pt-0.5 px-0.5 text-[10px] font-bold uppercase tracking-wider text-body-muted">
+                            <group.icon className="w-3 h-3 text-accent" />
+                            <span>{group.name}</span>
+                            <span className="text-[9px] text-body-muted/70">({group.items.length})</span>
+                          </div>
+                        )}
+                        <div className="flex flex-wrap gap-1">
+                          {group.items.map((inst) => {
+                            const isModerate = moderateInstruments.includes(inst);
+                            const isExpert = expertInstruments.includes(inst);
+                            return (
+                              <button
+                                key={inst}
+                                type="button"
+                                onClick={() => toggleModerate(inst)}
+                                className={`px-2 py-1 rounded-md text-[11px] font-medium transition-all cursor-pointer flex items-center gap-1 ${
+                                  isModerate
+                                    ? "bg-heading text-white shadow-xs font-bold"
+                                    : isExpert
+                                    ? "bg-bg-alt border border-border-subtle text-body-muted opacity-60 hover:opacity-100"
+                                    : "bg-white border border-border-subtle text-body hover:text-heading hover:border-accent/50"
+                                }`}
+                              >
+                                {isModerate ? <Check className="w-3 h-3" /> : <Plus className="w-3 h-3" />}
+                                <span>{inst}</span>
+                                {isExpert && <span className="text-[9px] text-primary font-bold">(In Expertise)</span>}
+                              </button>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
               </div>

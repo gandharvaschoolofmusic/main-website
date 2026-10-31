@@ -47,29 +47,79 @@ export const PASSWORD_RESET_EXPIRY_MINUTES = 30;
 /** Slot duration: lessons are booked in fixed-length slots */
 export const SLOT_DURATION_MINUTES = 60;
 
+export const TEACHER_SKILL_CATEGORIES = {
+  INSTRUMENTS: [
+    "Piano",
+    "Electronic Keyboard",
+    "Dholak",
+    "Harmonium",
+    "Acoustic Guitar",
+    "Electric Guitar",
+    "Ukulele",
+    "Violin",
+    "Flute",
+    "Tabla",
+    "Classical Guitar",
+    "Drums",
+    "Percussion",
+    "Cello",
+    "Saxophone",
+    "Bass Guitar",
+  ],
+  SINGING: [
+    "Western Vocals",
+    "Carnatic Vocals",
+    "Hindustani Vocals",
+    "Bollywood Vocals",
+    "Kannada Music",
+    "Malayalam Music",
+    "Tamil Music",
+    "Telugu Music",
+    "Voice",
+  ],
+  DANCING: [
+    "Bharatanatyam",
+    "Kathak",
+    "Bollywood Dance",
+  ],
+} as const;
+
 export const INSTRUMENTS = [
+  // INSTRUMENTS
   "Piano",
   "Electronic Keyboard",
+  "Dholak",
+  "Harmonium",
   "Acoustic Guitar",
   "Electric Guitar",
-  "Classical Guitar",
   "Ukulele",
   "Violin",
   "Flute",
   "Tabla",
+  "Classical Guitar",
+  "Drums",
+  "Percussion",
+  "Cello",
+  "Saxophone",
+  "Bass Guitar",
+
+  // SINGING
   "Western Vocals",
   "Carnatic Vocals",
   "Hindustani Vocals",
   "Bollywood Vocals",
+  "Kannada Music",
+  "Malayalam Music",
+  "Tamil Music",
+  "Telugu Music",
+  "Voice",
+
+  // DANCING
   "Bharatanatyam",
   "Kathak",
   "Bollywood Dance",
-  "Drums",
-  "Percussion",
-  "Voice",
-  "Cello",
-  "Saxophone",
-  "Bass Guitar",
+
+  // THEORY & COMPOSITION
   "Music Theory",
   "Composition",
 ] as const;
