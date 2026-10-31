@@ -65,7 +65,7 @@ export function AdminUsersManager({
   const [editPhone, setEditPhone] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editTrialCount, setEditTrialCount] = useState<number>(2);
-  const [editPayoutRupees, setEditPayoutRupees] = useState<number>(800);
+  const [editPayoutRupees, setEditPayoutRupees] = useState<number>(500);
   const [editApprovalStatus, setEditApprovalStatus] = useState<TeacherApprovalStatus>(
     TeacherApprovalStatus.PENDING,
   );
@@ -85,7 +85,7 @@ export function AdminUsersManager({
     setEditPayoutRupees(
       u.teacherProfile?.payoutPerSession
         ? u.teacherProfile.payoutPerSession / 100
-        : 800,
+        : 500,
     );
     setEditApprovalStatus(
       u.teacherProfile?.approvalStatus || TeacherApprovalStatus.PENDING,
@@ -373,7 +373,7 @@ export function AdminUsersManager({
                         <span className="text-[11px] block">
                           Payout:{" "}
                           <strong className="text-emerald-700 font-bold font-numeric">
-                            ₹{(((u.teacherProfile?.payoutPerSession ?? 80000) / 100)).toFixed(0)}
+                            ₹{(((u.teacherProfile?.payoutPerSession ?? 50000) / 100)).toFixed(0)}
                           </strong>
                         </span>
                       </div>

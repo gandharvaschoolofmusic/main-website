@@ -67,7 +67,7 @@ export interface TeacherRecord {
   languages: string[];
   yearsTeaching: number;
   hourlyRate: number; // paise
-  payoutPerSession: number; // paise (e.g. 80000 = ₹800)
+  payoutPerSession: number; // paise (e.g. 50000 = ₹500)
   upiId: string | null;
   isPublished: boolean;
   approvalStatus: TeacherApprovalStatus; // PENDING, APPROVED, REJECTED
@@ -429,7 +429,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
     : 0;
   const payoutRupees = selectedTeacher
     ? Math.round(selectedTeacher.payoutPerSession / 100)
-    : 800;
+    : 500;
 
   // Initials generator
   const getInitials = (name: string) => {
@@ -1966,7 +1966,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               <div className="space-y-6 animate-in fade-in duration-200">
                 {/* Financial Summary Strip */}
                 {(() => {
-                  const rateMinor = selectedTeacher.payoutPerSession || 80000;
+                  const rateMinor = selectedTeacher.payoutPerSession || 50000;
                   const rateRupees = Math.round(rateMinor / 100);
                   const completedLessonsOnly = selectedTeacher.lessons.filter(
                     (l) => l.status === "COMPLETED"

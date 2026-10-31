@@ -55,7 +55,7 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
     const formattedSessions: AdminSessionPayoutItem[] = lessons.map((l) => {
       const isPaid = l.payoutStatus === "PAID";
       const payoutPerSessionMinor =
-        l.teacherProfile?.payoutPerSession || 80000;
+        l.teacherProfile?.payoutPerSession || 50000;
       const rateRupees = payoutPerSessionMinor / 100;
       const amountRupees = (l.payoutAmountMinor || payoutPerSessionMinor) / 100;
 

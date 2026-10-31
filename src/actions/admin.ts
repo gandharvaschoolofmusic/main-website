@@ -220,7 +220,7 @@ export async function getEnrollmentScheduleAction(
           name: t.name || "Teacher",
           email: t.email,
           instruments: t.teacherProfile?.instruments || [],
-          payoutRupees: (t.teacherProfile?.payoutPerSession || 80000) / 100,
+          payoutRupees: (t.teacherProfile?.payoutPerSession || 50000) / 100,
         };
       }
     }
@@ -233,7 +233,7 @@ export async function getEnrollmentScheduleAction(
       status: l.status,
       teacherId: l.teacherId,
       teacherName: l.teacher?.name || "Assigned Teacher",
-      payoutRupees: (l.teacher?.teacherProfile?.payoutPerSession || 80000) / 100,
+      payoutRupees: (l.teacher?.teacherProfile?.payoutPerSession || 50000) / 100,
     }));
 
     return {
@@ -941,7 +941,7 @@ export async function updateUserAdminAction(input: {
           where: { userId: input.userId },
           create: {
             userId: input.userId,
-            payoutPerSession: input.payoutPerSession ?? 80000,
+            payoutPerSession: input.payoutPerSession ?? 50000,
             instruments: ["Piano"],
             approvalStatus: input.teacherApprovalStatus ?? TeacherApprovalStatus.PENDING,
             approvedAt: input.teacherApprovalStatus === TeacherApprovalStatus.APPROVED ? new Date() : null,
@@ -2379,7 +2379,7 @@ export async function markLessonPayoutAction(input: {
         input.amountMinor ??
         lesson.payoutAmountMinor ??
         lesson.teacherProfile?.payoutPerSession ??
-        80000;
+        50000;
 
       await db.lesson.update({
         where: { id: input.lessonId },

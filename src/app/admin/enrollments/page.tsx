@@ -208,7 +208,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
   for (const t of dbTeachers) {
     teacherMap.set(t.id, {
       name: t.name || "Faculty Teacher",
-      payoutRupees: Math.round((t.teacherProfile?.payoutPerSession || 80000) / 100),
+      payoutRupees: Math.round((t.teacherProfile?.payoutPerSession || 50000) / 100),
     });
   }
 
@@ -297,7 +297,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
     name: t.name || "Faculty Teacher",
     email: t.email,
     instruments: t.teacherProfile?.instruments || [],
-    payoutRupees: Math.round((t.teacherProfile?.payoutPerSession || 80000) / 100),
+    payoutRupees: Math.round((t.teacherProfile?.payoutPerSession || 50000) / 100),
   }));
 
   const formattedStudents: StudentOption[] = dbStudents.map((s) => ({

@@ -557,7 +557,7 @@ export function AdminEnrollmentsManager({
           status: l.status || "SCHEDULED",
           teacherId: l.teacherId || null,
           teacherName: l.teacherName || "Faculty Mentor",
-          payoutRupees: 800,
+          payoutRupees: 500,
         }));
 
         setEnrollments((prev) =>
@@ -747,7 +747,7 @@ export function AdminEnrollmentsManager({
           status: l.status || "SCHEDULED",
           teacherId: l.teacherId || null,
           teacherName: l.teacherName || "Faculty Mentor",
-          payoutRupees: 800,
+          payoutRupees: 500,
         }));
 
         const newEnr: EnrollmentRecord = {
@@ -778,7 +778,7 @@ export function AdminEnrollmentsManager({
           courseDurationWeeks: 12,
           teacherId: teacherObj?.id || null,
           teacherName: teacherObj?.name || null,
-          teacherPayoutRupees: teacherObj?.payoutRupees || 800,
+          teacherPayoutRupees: teacherObj?.payoutRupees || 500,
           sessionsRemaining: allotSessions > 0 ? allotSessions : (ctx.request?.courseSessionCount || 24),
           sessionsTotal:
             ctx.request?.courseSessionCount ||
@@ -957,7 +957,7 @@ export function AdminEnrollmentsManager({
           status: "SCHEDULED",
           teacherId: selectedTeacherId,
           teacherName: teacherObj?.name || "Assigned Faculty",
-          payoutRupees: teacherObj?.payoutRupees || 800,
+          payoutRupees: teacherObj?.payoutRupees || 500,
         };
 
         setEnrollments((prev) =>
@@ -1080,7 +1080,7 @@ export function AdminEnrollmentsManager({
                       ...l,
                       teacherId: newTeacherId,
                       teacherName: tObj?.name || "Assigned Faculty",
-                      payoutRupees: tObj?.payoutRupees || 800,
+                      payoutRupees: tObj?.payoutRupees || 500,
                     }
                   : l
               ),
@@ -2128,12 +2128,12 @@ export function AdminEnrollmentsManager({
                                       ...item,
                                       teacherId: selectedTeacherId,
                                       teacherName: currentTeacher?.name || null,
-                                      teacherPayoutRupees: currentTeacher?.payoutRupees || 800,
+                                      teacherPayoutRupees: currentTeacher?.payoutRupees || 500,
                                       lessons: item.lessons.map((l) => ({
                                         ...l,
                                         teacherId: selectedTeacherId,
                                         teacherName: currentTeacher?.name || "Assigned Faculty",
-                                        payoutRupees: currentTeacher?.payoutRupees || 800,
+                                        payoutRupees: currentTeacher?.payoutRupees || 500,
                                       })),
                                     }
                                   : item

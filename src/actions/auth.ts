@@ -193,7 +193,7 @@ export async function signupAction(
             moderateInstruments: [],
             yearsTeaching,
             hourlyRate: 150000, // ₹1,500 default rate (configured in teacher profile / admin)
-            payoutPerSession: 80000, // ₹800 default session payout
+            payoutPerSession: 50000, // ₹500 default session payout
             currency: "INR",
             languages: ["English"],
             isPublished: false,
