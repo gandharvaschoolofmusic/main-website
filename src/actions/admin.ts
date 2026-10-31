@@ -1275,30 +1275,114 @@ export async function bulkGenerateCourseLessonsAdminAction(input: {
   }
 }
 
-export async function deleteCourseAdminAction(courseId: string): Promise<AdminActionResponse> {
+export async function deleteCourseAdminAction(
+  courseId: string,
+  options?: { force?: boolean }
+): Promise<AdminActionResponse> {
   try {
     await requireRole(Role.ADMIN);
 
-    const enrollmentsCount = await db.enrollment.count({
-      where: { courseId },
+    const course = await db.course.findUnique({
+      where: { id: courseId },
+      include: {
+        _count: {
+          select: { enrollments: true },
+        },
+      },
     });
 
-    if (enrollmentsCount > 0) {
+    if (!course) {
+      return { success: false, error: "Course not found." };
+    }
+
+    const enrollmentsCount = course._count.enrollments;
+
+    if (enrollmentsCount > 0 && !options?.force) {
       return {
         success: false,
-        error: `Cannot delete course: ${enrollmentsCount} active student enrollment(s) exist. Unpublish the course instead.`,
+        error: `Cannot delete course: ${enrollmentsCount} active student enrollment(s) exist. Confirm deletion with force to delete the course and all associated enrollment records.`,
       };
     }
 
-    await db.course.delete({ where: { id: courseId } });
+    await db.$transaction(async (tx) => {
+      // 1. If force-deleting with enrollments:
+      if (enrollmentsCount > 0) {
+        const enrollments = await tx.enrollment.findMany({
+          where: { courseId },
+          select: { id: true },
+        });
+        const enrollmentIds = enrollments.map((e) => e.id);
+
+        if (enrollmentIds.length > 0) {
+          // Delete certificates
+          await tx.certificate.deleteMany({
+            where: { enrollmentId: { in: enrollmentIds } },
+          });
+
+          // Unlink enrollment from courseEnrollmentRequest
+          await tx.courseEnrollmentRequest.updateMany({
+            where: { enrollmentId: { in: enrollmentIds } },
+            data: { enrollmentId: null },
+          });
+
+          // Unlink payments
+          await tx.payment.updateMany({
+            where: { enrollmentId: { in: enrollmentIds } },
+            data: { enrollmentId: null },
+          });
+
+          // Delete lessons associated with these enrollments
+          await tx.lesson.deleteMany({
+            where: { enrollmentId: { in: enrollmentIds } },
+          });
+
+          // Delete enrollments
+          await tx.enrollment.deleteMany({
+            where: { id: { in: enrollmentIds } },
+          });
+        }
+      }
+
+      // 2. Unlink ResourceShare records
+      await tx.resourceShare.updateMany({
+        where: { courseId },
+        data: { courseId: null },
+      });
+
+      // 3. Delete CourseEnrollmentRequest
+      await tx.courseEnrollmentRequest.deleteMany({
+        where: { courseId },
+      });
+
+      // 4. Delete CourseLesson
+      await tx.courseLesson.deleteMany({
+        where: { courseId },
+      });
+
+      // 5. Delete CourseTeacher
+      await tx.courseTeacher.deleteMany({
+        where: { courseId },
+      });
+
+      // 6. Delete Course
+      await tx.course.delete({
+        where: { id: courseId },
+      });
+    });
 
     revalidatePath("/admin/courses");
     revalidatePath("/courses");
+    revalidatePath("/student/dashboard/courses");
     revalidateTag("admin-courses", "max");
     revalidateTag("courses", "max");
+
+    logger.info(
+      { courseId, title: course.title, force: Boolean(options?.force) },
+      "Course deleted by admin"
+    );
     return { success: true };
   } catch (error) {
-    logger.error({ error }, "Error deleting course");
+    logger.error({ error, courseId }, "Error deleting course");
     return { success: false, error: "Failed to delete course." };
   }
 }

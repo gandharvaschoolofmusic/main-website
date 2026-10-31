@@ -373,10 +373,19 @@ export function AdminCoursesManager({
   };
 
   const handleDelete = (c: AdminCourseItem) => {
-    if (!confirm(`Are you sure you want to delete course "${c.title}"?`)) return;
+    let force = false;
+    if (c.enrollmentsCount > 0) {
+      const confirmed = confirm(
+        `Warning: Course "${c.title}" currently has ${c.enrollmentsCount} active student enrollment(s).\n\nDeleting this course will permanently remove the course and its enrollment records.\n\nDo you want to proceed and permanently delete this course?`
+      );
+      if (!confirmed) return;
+      force = true;
+    } else {
+      if (!confirm(`Are you sure you want to delete course "${c.title}"?`)) return;
+    }
 
     startTransition(async () => {
-      const res = await deleteCourseAdminAction(c.id);
+      const res = await deleteCourseAdminAction(c.id, { force });
       if (!res.success) {
         alert(res.error || "Failed to delete course.");
       } else {
