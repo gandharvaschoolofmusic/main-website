@@ -1306,7 +1306,7 @@ export function AdminCoursesManager({
       {/* ── CREATE / EDIT COURSE MODAL ─────────────────────────────────────── */}
       {modalMode && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4 backdrop-blur-xs animate-fade-in">
-          <div className="w-full max-w-2xl rounded-3xl border border-border-default bg-white p-6 sm:p-7 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto custom-scrollbar">
+          <div className="w-full max-w-2xl rounded-2xl border border-border-default bg-white p-5 sm:p-6 shadow-2xl space-y-3.5 max-h-[88vh] overflow-y-auto custom-scrollbar">
             <div className="flex items-start justify-between border-b border-border-default pb-3">
               <div>
                 <span className="text-[10px] font-bold uppercase tracking-wider text-accent-dark">
@@ -1476,474 +1476,363 @@ export function AdminCoursesManager({
                 </div>
               </div>
 
-                            {/* ── Course Tuition & Session Pricing (Countrywise & Discount) ── */}
-              <div className="rounded-2xl border border-purple-200/80 bg-white p-4.5 space-y-4 shadow-xs">
-                {/* Header */}
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 border-b border-slate-100 pb-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-purple-50 border border-purple-100 flex items-center justify-center text-primary">
-                      <CreditCard className="w-4 h-4" />
+                                          {/* ── Course Tuition & Session Pricing (Compact Countrywise & Discount) ── */}
+              <div className="rounded-2xl border border-purple-200/80 bg-white p-3.5 space-y-3 shadow-2xs">
+                {/* Header & Inline Discount Bar */}
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-2.5 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-lg bg-purple-50 border border-purple-100 flex items-center justify-center text-primary shrink-0">
+                      <CreditCard className="w-3.5 h-3.5" />
                     </div>
                     <div>
                       <h4 className="text-xs font-bold text-heading flex items-center gap-1.5">
-                        Course Tuition &amp; Countrywise Session Pricing
+                        Countrywise Session Pricing
                       </h4>
-                      <p className="text-[11px] text-body">
-                        Enter price per session countrywise. Total course amount is calculated as: <strong>Per-Session Price × {sessionCount} Sessions</strong>.
+                      <p className="text-[10px] text-body-muted">
+                        Per-session fee × {sessionCount} sessions {discountPercent > 0 ? `(-${discountPercent}% OFF)` : ""}
                       </p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-[10px] font-bold text-purple-700 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200">
-                      {sessionCount} Sessions Total
+
+                  {/* Inline Discount Control */}
+                  <div className="flex items-center gap-1.5 bg-purple-50/80 px-2 py-1 rounded-xl border border-purple-200/70">
+                    <span className="text-[10px] font-bold text-purple-900 flex items-center gap-1">
+                      <Percent className="w-3 h-3 text-purple-600" />
+                      Discount:
                     </span>
+                    <div className="relative w-14">
+                      <input
+                        type="number"
+                        min={0}
+                        max={90}
+                        value={discountPercent}
+                        onChange={(e) => {
+                          const val = Math.min(90, Math.max(0, Number(e.target.value) || 0));
+                          setDiscountPercent(val);
+                          const total = Math.round(sessionRateINR * sessionCount * (1 - val / 100));
+                          setPriceRupees(total);
+                        }}
+                        className="w-full pl-1.5 pr-4 py-0.5 text-xs font-bold text-purple-950 bg-white border border-purple-300 rounded-md text-right focus:outline-none focus:border-purple-600 font-numeric"
+                      />
+                      <span className="absolute right-1 top-1/2 -translate-y-1/2 text-[10px] font-bold text-purple-700 pointer-events-none">%</span>
+                    </div>
+                    <div className="flex items-center gap-0.5">
+                      {[0, 10, 15, 20, 25].map((pct) => (
+                        <button
+                          key={pct}
+                          type="button"
+                          onClick={() => {
+                            setDiscountPercent(pct);
+                            const total = Math.round(sessionRateINR * sessionCount * (1 - pct / 100));
+                            setPriceRupees(total);
+                          }}
+                          className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
+                            discountPercent === pct
+                              ? "bg-purple-700 text-white"
+                              : "bg-white text-purple-900 border border-purple-200 hover:bg-purple-100"
+                          }`}
+                        >
+                          {pct === 0 ? "0%" : `${pct}%`}
+                        </button>
+                      ))}
+                    </div>
                   </div>
                 </div>
 
-                {/* Discount Option Controller */}
-                <div className="p-3.5 rounded-xl bg-gradient-to-r from-purple-50/90 via-indigo-50/50 to-purple-50/90 border border-purple-200/80 space-y-2.5">
-                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                    <div className="flex items-center gap-2">
-                      <div className="w-6 h-6 rounded-lg bg-purple-600 text-white flex items-center justify-center font-bold text-xs shadow-2xs">
-                        <Percent className="w-3.5 h-3.5" />
+                {/* Compact 2-Column Grid of 8 Country Tiers */}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {/* 1. India */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-purple-200/80 bg-purple-50/20 hover:border-purple-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇮🇳</span>
+                        <span className="text-xs font-bold text-heading">India</span>
+                        <span className="text-[9px] font-bold text-purple-700 bg-purple-100/70 px-1.5 py-0.2 rounded border border-purple-200">₹ INR</span>
                       </div>
-                      <div>
-                        <h5 className="text-xs font-bold text-purple-950 flex items-center gap-1.5">
-                          Course Discount Option
-                          {discountPercent > 0 && (
-                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-100 px-2 py-0.5 rounded-full border border-emerald-300">
-                              {discountPercent}% OFF Active
-                            </span>
-                          )}
-                        </h5>
-                        <p className="text-[11px] text-purple-800/80">
-                          Cut the overall course price by applying a percentage discount across all country tiers.
-                        </p>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateINR).base.toLocaleString("en-IN")}</span>
+                            <strong className="text-emerald-700 font-bold">₹{calculateTierTotal(sessionRateINR).discounted.toLocaleString("en-IN")}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">₹{calculateTierTotal(sessionRateINR).base.toLocaleString("en-IN")}</strong>
+                        )}
                       </div>
                     </div>
-                    <div className="flex items-center gap-2 shrink-0">
-                      <label className="text-xs font-bold text-purple-950">Discount:</label>
-                      <div className="relative w-24">
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/70 pointer-events-none">₹</span>
                         <input
                           type="number"
                           min={0}
-                          max={90}
-                          value={discountPercent}
+                          value={sessionRateINR}
                           onChange={(e) => {
-                            const val = Math.min(90, Math.max(0, Number(e.target.value) || 0));
-                            setDiscountPercent(val);
-                            const total = Math.round(sessionRateINR * sessionCount * (1 - val / 100));
+                            const val = Number(e.target.value);
+                            setSessionRateINR(val);
+                            setPerSessionCost(val);
+                            const total = Math.round(val * sessionCount * (1 - discountPercent / 100));
                             setPriceRupees(total);
                           }}
-                          className="w-full rounded-lg bg-white border border-purple-300 px-2.5 py-1 text-xs font-bold text-purple-950 text-right pr-6 focus:outline-none focus:border-purple-600 focus:ring-1 focus:ring-purple-500 font-numeric shadow-2xs"
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
-                        <span className="absolute right-2 top-1/2 -translate-y-1/2 text-xs font-bold text-purple-700 pointer-events-none">
-                          %
-                        </span>
                       </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
                     </div>
                   </div>
 
-                  {/* Preset Buttons */}
-                  <div className="flex flex-wrap items-center gap-1.5 pt-1 border-t border-purple-200/60">
-                    <span className="text-[10px] font-semibold text-purple-900 mr-1">Presets:</span>
-                    {[0, 10, 15, 20, 25, 30, 40, 50].map((pct) => (
-                      <button
-                        key={pct}
-                        type="button"
-                        onClick={() => {
-                          setDiscountPercent(pct);
-                          const total = Math.round(sessionRateINR * sessionCount * (1 - pct / 100));
-                          setPriceRupees(total);
-                        }}
-                        className={`px-2.5 py-0.5 rounded-md text-[11px] font-bold transition-all ${
-                          discountPercent === pct
-                            ? "bg-purple-700 text-white shadow-xs"
-                            : "bg-white text-purple-900 border border-purple-200 hover:bg-purple-100"
-                        }`}
-                      >
-                        {pct === 0 ? "No Discount (0%)" : `${pct}% OFF`}
-                      </button>
-                    ))}
+                  {/* 2. USA */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-slate-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇺🇸</span>
+                        <span className="text-xs font-bold text-heading">USA</span>
+                        <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">$ USD</span>
+                      </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</strong>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/70 pointer-events-none">$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateUSD}
+                          onChange={(e) => setSessionRateUSD(Number(e.target.value))}
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
                   </div>
-                </div>
 
-                {/* Countrywise Pricing Grid */}
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between text-xs font-semibold text-heading px-0.5">
-                    <span>Country / Regional Tiers</span>
-                    <span className="text-[11px] text-body-muted font-normal">
-                      Formula: Per-Session Fee × {sessionCount} Sessions {discountPercent > 0 ? `(-${discountPercent}% OFF)` : ""}
-                    </span>
+                  {/* 3. Canada */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-slate-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇨🇦</span>
+                        <span className="text-xs font-bold text-heading">Canada</span>
+                        <span className="text-[9px] font-bold text-red-700 bg-red-50 px-1.5 py-0.2 rounded border border-red-200">CA$ CAD</span>
+                      </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">CA${calculateTierTotal(sessionRateCAD).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">CA${calculateTierTotal(sessionRateCAD).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">CA${calculateTierTotal(sessionRateCAD).base.toLocaleString()}</strong>
+                        )}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-body/70 pointer-events-none">CA$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateCAD}
+                          onChange={(e) => setSessionRateCAD(Number(e.target.value))}
+                          className="w-22 pl-7 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    {/* 1. India */}
-                    <div className="p-3 rounded-xl border border-purple-200 bg-purple-50/30 space-y-2 hover:border-purple-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇮🇳</span>
-                          <span>India</span>
-                          <span className="text-[10px] font-bold text-purple-700 bg-purple-100/80 px-1.5 py-0.5 rounded">INR (₹)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">Domestic base</span>
+                  {/* 4. UK */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-slate-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇬🇧</span>
+                        <span className="text-xs font-bold text-heading">UK</span>
+                        <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">£ GBP</span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (₹)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">₹</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateINR}
-                            onChange={(e) => {
-                              const val = Number(e.target.value);
-                              setSessionRateINR(val);
-                              setPerSessionCost(val);
-                              const total = Math.round(val * sessionCount * (1 - discountPercent / 100));
-                              setPriceRupees(total);
-                            }}
-                            className="w-full rounded-xl bg-white border border-border-default pl-7 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-purple-100/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateINR).base.toLocaleString("en-IN")}</span>
-                              <span className="font-bold text-emerald-700">₹{calculateTierTotal(sessionRateINR).discounted.toLocaleString("en-IN")}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-purple-950">₹{calculateTierTotal(sessionRateINR).base.toLocaleString("en-IN")}</span>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">£{calculateTierTotal(sessionRateGBP).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">£{calculateTierTotal(sessionRateGBP).base.toLocaleString()}</strong>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/70 pointer-events-none">£</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateGBP}
+                          onChange={(e) => setSessionRateGBP(Number(e.target.value))}
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
+                  </div>
 
-                    {/* 2. USA */}
-                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇺🇸</span>
-                          <span>USA</span>
-                          <span className="text-[10px] font-bold text-blue-700 bg-blue-100/80 px-1.5 py-0.5 rounded">USD ($)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">US &amp; Global standard</span>
+                  {/* 5. Rest European Countries (ire, ger, etc.) */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-slate-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇪🇺</span>
+                        <span className="text-xs font-bold text-heading">Europe <span className="text-[10px] font-normal text-body-muted">(ire, ger)</span></span>
+                        <span className="text-[9px] font-bold text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">€ EUR</span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session ($)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">$</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateUSD}
-                            onChange={(e) => setSessionRateUSD(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-7 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-heading">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">€{calculateTierTotal(sessionRateEUR).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">€{calculateTierTotal(sessionRateEUR).base.toLocaleString()}</strong>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/70 pointer-events-none">€</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateEUR}
+                          onChange={(e) => setSessionRateEUR(Number(e.target.value))}
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
+                  </div>
 
-                    {/* 3. Canada */}
-                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇨🇦</span>
-                          <span>Canada</span>
-                          <span className="text-[10px] font-bold text-red-700 bg-red-100/80 px-1.5 py-0.5 rounded">CAD (CA$)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">Canadian Dollar</span>
+                  {/* 6. Singapore */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-slate-200/80 bg-slate-50/30 hover:border-slate-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇸🇬</span>
+                        <span className="text-xs font-bold text-heading">Singapore</span>
+                        <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">S$ SGD</span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (CA$)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">CA$</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateCAD}
-                            onChange={(e) => setSessionRateCAD(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-10 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">CA${calculateTierTotal(sessionRateCAD).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">CA${calculateTierTotal(sessionRateCAD).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-heading">CA${calculateTierTotal(sessionRateCAD).base.toLocaleString()}</span>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</strong>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-body/70 pointer-events-none">S$</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateSGD}
+                          onChange={(e) => setSessionRateSGD(Number(e.target.value))}
+                          className="w-20 pl-6 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
+                  </div>
 
-                    {/* 4. UK */}
-                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇬🇧</span>
-                          <span>UK</span>
-                          <span className="text-[10px] font-bold text-amber-700 bg-amber-100/80 px-1.5 py-0.5 rounded">GBP (£)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">British Pound</span>
+                  {/* 7. Saudi, UAE */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-emerald-200/80 bg-emerald-50/20 hover:border-emerald-300 transition-colors">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🇸🇦 🇦🇪</span>
+                        <span className="text-xs font-bold text-heading">Saudi, UAE</span>
+                        <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.2 rounded border border-emerald-200">₹ INR</span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (£)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">£</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateGBP}
-                            onChange={(e) => setSessionRateGBP(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-7 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">£{calculateTierTotal(sessionRateGBP).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-heading">£{calculateTierTotal(sessionRateGBP).base.toLocaleString()}</span>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateSaudiUAE).base.toLocaleString("en-IN")}</span>
+                            <strong className="text-emerald-700 font-bold">₹{calculateTierTotal(sessionRateSaudiUAE).discounted.toLocaleString("en-IN")}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">₹{calculateTierTotal(sessionRateSaudiUAE).base.toLocaleString("en-IN")}</strong>
+                        )}
                       </div>
                     </div>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/70 pointer-events-none">₹</span>
+                        <input
+                          type="number"
+                          min={0}
+                          value={sessionRateSaudiUAE}
+                          onChange={(e) => setSessionRateSaudiUAE(Number(e.target.value))}
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                        />
+                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
+                    </div>
+                  </div>
 
-                    {/* 5. Rest European Countries (ire, ger, etc.) */}
-                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇪🇺</span>
-                          <span>Rest European Countries</span>
-                          <span className="text-[10px] font-bold text-blue-800 bg-blue-100/80 px-1.5 py-0.5 rounded">EUR (€)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">Germany, Ireland, etc.</span>
+                  {/* 8. Remaining countries */}
+                  <div className="flex items-center justify-between p-2 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/20">
+                    <div className="min-w-0 pr-1">
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-sm">🌐</span>
+                        <span className="text-xs font-bold text-heading">Remaining</span>
+                        <span className="text-[9px] font-bold text-indigo-700 bg-indigo-100/70 px-1.5 py-0.2 rounded border border-indigo-200">$ USD</span>
+                        <span className="text-[9px] font-medium text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded">Auto</span>
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (€)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">€</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateEUR}
-                            onChange={(e) => setSessionRateEUR(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-7 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">€{calculateTierTotal(sessionRateEUR).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-heading">€{calculateTierTotal(sessionRateEUR).base.toLocaleString()}</span>
-                          )}
-                        </div>
+                      <div className="text-[10px] text-body-muted font-numeric mt-0.5">
+                        Total: {discountPercent > 0 ? (
+                          <span className="space-x-1">
+                            <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
+                            <strong className="text-emerald-700 font-bold">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong>
+                          </span>
+                        ) : (
+                          <strong className="text-heading font-bold">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</strong>
+                        )}
                       </div>
                     </div>
-
-                    {/* 6. Singapore */}
-                    <div className="p-3 rounded-xl border border-slate-200 bg-slate-50/50 space-y-2 hover:border-slate-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇸🇬</span>
-                          <span>Singapore</span>
-                          <span className="text-[10px] font-bold text-rose-700 bg-rose-100/80 px-1.5 py-0.5 rounded">SGD (S$)</span>
-                        </span>
-                        <span className="text-[10px] text-body-muted font-medium">Singapore Dollar</span>
+                    <div className="flex items-center gap-1 shrink-0">
+                      <div className="relative">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-[11px] font-bold text-body/50 pointer-events-none">$</span>
+                        <input
+                          type="number"
+                          disabled
+                          value={sessionRateUSD}
+                          className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading/70 bg-slate-100/80 border border-slate-200/80 rounded-lg text-right cursor-not-allowed"
+                        />
                       </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (S$)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">S$</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateSGD}
-                            onChange={(e) => setSessionRateSGD(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-8 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-slate-200/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-heading">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 7. Saudi, UAE */}
-                    <div className="p-3 rounded-xl border border-emerald-200/80 bg-emerald-50/30 space-y-2 hover:border-emerald-300 transition-colors">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🇸🇦 🇦🇪</span>
-                          <span>Saudi, UAE</span>
-                          <span className="text-[10px] font-bold text-emerald-800 bg-emerald-100/80 px-1.5 py-0.5 rounded">INR (₹)</span>
-                        </span>
-                        <span className="text-[10px] text-emerald-800 font-medium">Billed in ₹ INR</span>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (₹)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">₹</span>
-                          <input
-                            type="number"
-                            min={0}
-                            required
-                            value={sessionRateSaudiUAE}
-                            onChange={(e) => setSessionRateSaudiUAE(Number(e.target.value))}
-                            className="w-full rounded-xl bg-white border border-border-default pl-7 pr-3 py-1.5 text-xs text-heading font-numeric font-bold focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-emerald-100/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateSaudiUAE).base.toLocaleString("en-IN")}</span>
-                              <span className="font-bold text-emerald-700">₹{calculateTierTotal(sessionRateSaudiUAE).discounted.toLocaleString("en-IN")}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-emerald-950">₹{calculateTierTotal(sessionRateSaudiUAE).base.toLocaleString("en-IN")}</span>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
-                    {/* 8. Remaining countries */}
-                    <div className="p-3 rounded-xl border border-dashed border-indigo-200 bg-indigo-50/20 space-y-2">
-                      <div className="flex items-center justify-between">
-                        <span className="text-xs font-bold text-heading flex items-center gap-1.5">
-                          <span>🌐</span>
-                          <span>Remaining countries</span>
-                          <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/80 px-1.5 py-0.5 rounded">USD ($)</span>
-                        </span>
-                        <span className="text-[10px] font-bold text-indigo-700 bg-indigo-100/80 px-2 py-0.5 rounded-full border border-indigo-200">
-                          Auto-mirrors USA
-                        </span>
-                      </div>
-                      <div className="space-y-1">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Price per session (same as USA)
-                        </label>
-                        <div className="relative">
-                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-body font-numeric font-bold text-xs">$</span>
-                          <input
-                            type="number"
-                            disabled
-                            value={sessionRateUSD}
-                            className="w-full rounded-xl bg-slate-100/80 border border-border-default/60 pl-7 pr-3 py-1.5 text-xs text-heading/70 font-numeric font-bold cursor-not-allowed"
-                          />
-                        </div>
-                      </div>
-                      <div className="pt-1.5 border-t border-indigo-100/80 flex items-center justify-between text-[11px]">
-                        <span className="text-body-muted">Course Amount ({sessionCount} sess):</span>
-                        <div className="font-numeric">
-                          {discountPercent > 0 ? (
-                            <span className="space-x-1">
-                              <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
-                              <span className="font-bold text-emerald-700">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</span>
-                            </span>
-                          ) : (
-                            <span className="font-bold text-indigo-950">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
-                          )}
-                        </div>
-                      </div>
+                      <span className="text-[10px] text-body-muted font-medium">/sess</span>
                     </div>
                   </div>
                 </div>
 
-                {/* Live Summary Strip */}
-                <div className="p-3 rounded-xl bg-purple-50/80 border border-purple-200/60 space-y-1.5 text-[11px] text-[#1E1A4D]">
-                  <div className="flex items-center justify-between">
-                    <span className="flex items-center gap-1.5 font-bold">
-                      <Sparkles className="w-3.5 h-3.5 text-[#3C096C]" />
-                      <span>Tuition Summary ({sessionCount} sessions):</span>
-                    </span>
-                    {discountPercent > 0 && (
-                      <span className="font-bold text-emerald-700 bg-emerald-100/80 px-2 py-0.5 rounded-md border border-emerald-300">
-                        {discountPercent}% Promotional Discount Applied
-                      </span>
-                    )}
+                {/* Sleek Summary Strip */}
+                <div className="px-3 py-2 rounded-xl bg-purple-50/70 border border-purple-200/60 flex flex-wrap items-center justify-between gap-1.5 text-[11px] font-numeric text-[#1E1A4D]">
+                  <div className="flex items-center gap-1.5 font-sans font-bold text-xs text-purple-900">
+                    <Sparkles className="w-3.5 h-3.5 text-primary" />
+                    <span>Summary ({sessionCount} sessions):</span>
                   </div>
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-1 border-t border-purple-200/50 font-numeric">
-                    <div>
-                      <span className="text-[10px] text-body-muted block">🇮🇳 India Total</span>
-                      <strong className="text-purple-900 font-bold">₹{calculateTierTotal(sessionRateINR).discounted.toLocaleString("en-IN")}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-body-muted block">🇺🇸 USA/Global Total</span>
-                      <strong className="text-purple-900 font-bold">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-body-muted block">🇬🇧 UK Total</span>
-                      <strong className="text-purple-900 font-bold">£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</strong>
-                    </div>
-                    <div>
-                      <span className="text-[10px] text-body-muted block">🇪🇺 Europe Total</span>
-                      <strong className="text-purple-900 font-bold">€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</strong>
-                    </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-0.5 text-[11px]">
+                    <span>🇮🇳 <strong>₹{calculateTierTotal(sessionRateINR).discounted.toLocaleString("en-IN")}</strong></span>
+                    <span>🇺🇸 <strong>${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong></span>
+                    <span>🇬🇧 <strong>£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</strong></span>
+                    <span>🇪🇺 <strong>€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</strong></span>
+                    <span>🇨🇦 <strong>CA${calculateTierTotal(sessionRateCAD).discounted.toLocaleString()}</strong></span>
+                    <span>🇸🇬 <strong>S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</strong></span>
                   </div>
                 </div>
               </div>
