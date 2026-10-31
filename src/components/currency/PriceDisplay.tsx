@@ -1,12 +1,14 @@
 "use client";
 
 import { useCurrency } from "@/context/CurrencyContext";
-import { getCourseTierPricing, CourseTierLevel } from "@/lib/pricing-tiers";
+import { getCourseTierPricing, CourseTierLevel, CoursePricingMetadata } from "@/lib/pricing-tiers";
 
 interface PriceDisplayProps {
   priceMinorUnits?: number;
   level?: CourseTierLevel | string;
   sessionCount?: number;
+  description?: string | null;
+  pricingMetadata?: CoursePricingMetadata | null;
   size?: "xs" | "sm" | "md" | "lg" | "xl" | "2xl" | "3xl";
   showOriginalStrike?: boolean;
   showOriginalINR?: boolean;
@@ -20,6 +22,8 @@ export function PriceDisplay({
   priceMinorUnits,
   level,
   sessionCount = 24,
+  description,
+  pricingMetadata,
   size = "lg",
   showOriginalStrike = true,
   showOriginalINR = false,
@@ -30,9 +34,16 @@ export function PriceDisplay({
 }: PriceDisplayProps) {
   const { convertPrice, isInternational, currency } = useCurrency();
 
-  // If level is provided, use official tier rates with original & offer strikethrough
-  const tierPricing = level
-    ? getCourseTierPricing({ level, sessionCount, currency })
+  // Calculate pricing breakdown taking into account level, custom rates, priceMinorUnits, and discount
+  const tierPricing = (level || priceMinorUnits !== undefined || description || pricingMetadata)
+    ? getCourseTierPricing({
+        level,
+        sessionCount,
+        currency,
+        priceMinorUnits,
+        description,
+        pricingMetadata,
+      })
     : null;
 
   // Fallback if level not provided

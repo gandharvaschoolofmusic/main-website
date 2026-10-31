@@ -21,6 +21,7 @@ import { CourseEmiBreakdown } from "@/components/courses/CourseEmiBreakdown";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import { formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
 import { PriceDisplay } from "@/components/currency/PriceDisplay";
+import { cleanDescriptionText } from "@/lib/pricing-tiers";
 
 export default async function StudentCourseDetailPage({
   params,
@@ -140,7 +141,7 @@ export default async function StudentCourseDetailPage({
           </h1>
 
           <p className="text-sm sm:text-base text-body leading-relaxed max-w-3xl">
-            {course.description}
+            {cleanDescriptionText(course.description)}
           </p>
         </div>
 
@@ -341,6 +342,7 @@ export default async function StudentCourseDetailPage({
                     priceMinorUnits={course.priceMinorUnits}
                     level={course.level}
                     sessionCount={course.sessionCount}
+                    description={course.description}
                     size="2xl"
                     showOriginalStrike
                     showDiscountBadge
@@ -356,6 +358,7 @@ export default async function StudentCourseDetailPage({
             priceMinorUnits={course.priceMinorUnits}
             level={course.level}
             sessionCount={course.sessionCount}
+            description={course.description}
           />
 
           {/* Request Course Admission Modal / Actions */}
@@ -366,6 +369,8 @@ export default async function StudentCourseDetailPage({
             sessionCount={course.sessionCount}
             durationWeeks={course.durationWeeks}
             priceMinorUnits={course.priceMinorUnits}
+            description={course.description}
+            level={course.level}
             isAlreadyEnrolled={!!existingEnrollment}
             pendingRequest={pendingRequest}
             isAuthenticated={true}

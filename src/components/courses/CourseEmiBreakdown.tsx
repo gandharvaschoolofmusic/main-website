@@ -8,6 +8,7 @@ export interface CourseEmiBreakdownProps {
   priceMinorUnits?: number;
   level?: CourseTierLevel | string;
   sessionCount?: number;
+  description?: string | null;
   interactive?: boolean;
   compact?: boolean;
   allowEmi?: boolean;
@@ -21,10 +22,17 @@ export function CourseEmiBreakdown({
   priceMinorUnits,
   level,
   sessionCount = 24,
+  description,
   compact = false,
 }: CourseEmiBreakdownProps) {
   const { currency, isInternational } = useCurrency();
-  const pricing = getCourseTierPricing({ level, sessionCount, currency });
+  const pricing = getCourseTierPricing({
+    level,
+    sessionCount,
+    currency,
+    priceMinorUnits,
+    description,
+  });
 
   if (compact) {
     return (

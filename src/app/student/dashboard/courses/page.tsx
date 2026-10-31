@@ -15,52 +15,7 @@ export const metadata = {
     "Explore accredited diploma and certificate courses in classical instruments, vocals, and dance.",
 };
 
-import { unstable_cache } from "next/cache";
-
-const getCachedStudentCoursesData = unstable_cache(
-  async (userId: string, validDiscipline?: Discipline, validLevel?: CourseLevel) => {
-    const [courses, allPublishedCourses, allMyEnrollments, myRequests] = await Promise.all([
-      db.course.findMany({
-        where: {
-          isPublished: true,
-          ...(validDiscipline ? { discipline: validDiscipline } : {}),
-          ...(validLevel ? { level: validLevel } : {}),
-        },
-        orderBy: { priceMinorUnits: "asc" },
-      }),
-      db.course.findMany({
-        where: { isPublished: true },
-        select: { id: true, discipline: true, level: true },
-      }),
-      db.enrollment.findMany({
-        where: { studentId: userId },
-        include: { course: true },
-        orderBy: { startedAt: "desc" },
-      }),
-      db.courseEnrollmentRequest.findMany({
-        where: { studentId: userId },
-        include: { course: true },
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
-
-    const teacherIds = allMyEnrollments
-      .map((e) => e.teacherId)
-      .filter(Boolean) as string[];
-
-    const dbTeachers =
-      teacherIds.length > 0
-        ? await db.user.findMany({
-            where: { id: { in: teacherIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-
-    return { courses, allPublishedCourses, allMyEnrollments, myRequests, dbTeachers };
-  },
-  ["student-courses-catalog"],
-  { revalidate: 60, tags: ["courses", "student-enrollments"] }
-);
+export const dynamic = "force-dynamic";
 
 export default async function StudentCoursesPage({
   searchParams,
@@ -82,58 +37,42 @@ export default async function StudentCoursesPage({
       ? (upperLevel as CourseLevel)
       : undefined;
 
-  let courses: any[] = [];
-  let allPublishedCourses: any[] = [];
-  let allMyEnrollments: any[] = [];
-  let myRequests: any[] = [];
-  let dbTeachers: any[] = [];
+  const [courses, allPublishedCourses, allMyEnrollments, myRequests] = await Promise.all([
+    db.course.findMany({
+      where: {
+        isPublished: true,
+        ...(validDiscipline ? { discipline: validDiscipline } : {}),
+        ...(validLevel ? { level: validLevel } : {}),
+      },
+      orderBy: { priceMinorUnits: "asc" },
+    }),
+    db.course.findMany({
+      where: { isPublished: true },
+      select: { id: true, discipline: true, level: true },
+    }),
+    db.enrollment.findMany({
+      where: { studentId: user.id },
+      include: { course: true },
+      orderBy: { startedAt: "desc" },
+    }),
+    db.courseEnrollmentRequest.findMany({
+      where: { studentId: user.id },
+      include: { course: true },
+      orderBy: { createdAt: "desc" },
+    }),
+  ]);
 
-  try {
-    const data = await getCachedStudentCoursesData(user.id, validDiscipline, validLevel);
-    courses = data.courses;
-    allPublishedCourses = data.allPublishedCourses;
-    allMyEnrollments = data.allMyEnrollments;
-    myRequests = data.myRequests;
-    dbTeachers = data.dbTeachers;
-  } catch (err) {
-    console.error("Failed to load cached student courses:", err);
-    [courses, allPublishedCourses, allMyEnrollments, myRequests] = await Promise.all([
-      db.course.findMany({
-        where: {
-          isPublished: true,
-          ...(validDiscipline ? { discipline: validDiscipline } : {}),
-          ...(validLevel ? { level: validLevel } : {}),
-        },
-        orderBy: { priceMinorUnits: "asc" },
-      }),
-      db.course.findMany({
-        where: { isPublished: true },
-        select: { id: true, discipline: true, level: true },
-      }),
-      db.enrollment.findMany({
-        where: { studentId: user.id },
-        include: { course: true },
-        orderBy: { startedAt: "desc" },
-      }),
-      db.courseEnrollmentRequest.findMany({
-        where: { studentId: user.id },
-        include: { course: true },
-        orderBy: { createdAt: "desc" },
-      }),
-    ]);
+  const teacherIds = allMyEnrollments
+    .map((e: any) => e.teacherId)
+    .filter(Boolean) as string[];
 
-    const teacherIds = allMyEnrollments
-      .map((e: any) => e.teacherId)
-      .filter(Boolean) as string[];
-
-    dbTeachers =
-      teacherIds.length > 0
-        ? await db.user.findMany({
-            where: { id: { in: teacherIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-  }
+  const dbTeachers =
+    teacherIds.length > 0
+      ? await db.user.findMany({
+          where: { id: { in: teacherIds } },
+          select: { id: true, name: true },
+        })
+      : [];
 
   const teacherMap = new Map<string, string>();
   for (const t of dbTeachers) {

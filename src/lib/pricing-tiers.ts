@@ -80,46 +80,172 @@ export function normalizeCourseLevel(level?: string | null): CourseTierLevel {
   return "BEGINNER";
 }
 
+export interface CoursePricingRates {
+  INR: number;
+  SA_UAE: number;
+  USD: number;
+  CAD: number;
+  GBP: number;
+  EUR: number;
+  SGD: number;
+}
+
+export interface CoursePricingMetadata {
+  discountPercent: number;
+  rates: CoursePricingRates;
+}
+
+export function parsePricingFromDescription(description?: string | null): CoursePricingMetadata | null {
+  if (!description) return null;
+  const match = description.match(/<!--\s*pricing:\s*([\s\S]*?)\s*-->/);
+  if (!match) return null;
+  try {
+    const parsed = JSON.parse(match[1]);
+    if (parsed && parsed.rates) {
+      return {
+        discountPercent: typeof parsed.discountPercent === "number" ? parsed.discountPercent : 0,
+        rates: {
+          INR: Number(parsed.rates.INR) || 800,
+          SA_UAE: Number(parsed.rates.SA_UAE) || Number(parsed.rates.INR) || 800,
+          USD: Number(parsed.rates.USD) || 16,
+          CAD: Number(parsed.rates.CAD) || 22,
+          GBP: Number(parsed.rates.GBP) || 12,
+          EUR: Number(parsed.rates.EUR) || 15,
+          SGD: Number(parsed.rates.SGD) || 21,
+        },
+      };
+    }
+  } catch {}
+  return null;
+}
+
+export function cleanDescriptionText(description?: string | null): string {
+  if (!description) return "";
+  return description.replace(/\s*<!--\s*pricing:[\s\S]*?-->/g, "").trim();
+}
+
 /**
- * Calculates official localized pricing breakdown for any course level and session count.
+ * Calculates official localized pricing breakdown for any course level and session count,
+ * taking into account custom course rates, actual priceMinorUnits, and admin promotional discounts.
  */
 export function getCourseTierPricing({
   level,
   sessionCount = 24,
   currency = "INR",
+  priceMinorUnits,
+  description,
+  pricingMetadata,
 }: {
   level?: string | null;
   sessionCount?: number;
   currency?: CurrencyCode;
+  priceMinorUnits?: number;
+  description?: string | null;
+  pricingMetadata?: CoursePricingMetadata | null;
 }): CoursePricingBreakdown {
   const normLevel = normalizeCourseLevel(level);
   const tierDef = LEVEL_PER_SESSION_RATES[normLevel];
   const config = SUPPORTED_CURRENCIES[currency] || SUPPORTED_CURRENCIES.INR;
   const count = sessionCount > 0 ? sessionCount : 24;
 
+  const meta = pricingMetadata || parsePricingFromDescription(description);
+
   let perSessionOffer = 0;
   let perSessionOriginal = 0;
+  let totalOffer = 0;
+  let totalOriginal = 0;
+  let discountPercent = 0;
 
-  if (currency === "INR") {
-    perSessionOffer = tierDef.inr.offer;
-    perSessionOriginal = tierDef.inr.original;
-  } else if (currency === "USD") {
-    perSessionOffer = tierDef.usd.offer;
-    perSessionOriginal = tierDef.usd.original;
+  if (meta) {
+    discountPercent = meta.discountPercent || 0;
+
+    // Per-session rate based on viewer currency
+    if (currency === "INR") {
+      perSessionOriginal = meta.rates.INR;
+    } else if (currency === "USD") {
+      perSessionOriginal = meta.rates.USD;
+    } else if (currency === "CAD") {
+      perSessionOriginal = meta.rates.CAD;
+    } else if (currency === "GBP") {
+      perSessionOriginal = meta.rates.GBP;
+    } else if (currency === "EUR") {
+      perSessionOriginal = meta.rates.EUR;
+    } else if (currency === "SGD") {
+      perSessionOriginal = meta.rates.SGD;
+    } else {
+      const rate = config.rateFromUSD ?? 1;
+      perSessionOriginal = Math.round(meta.rates.USD * rate);
+    }
+
+    totalOriginal = perSessionOriginal * count;
+
+    if (discountPercent > 0) {
+      if (currency === "INR" && priceMinorUnits && priceMinorUnits > 0) {
+        totalOffer = Math.round(priceMinorUnits / 100);
+      } else {
+        totalOffer = Math.max(0, Math.round(totalOriginal * (1 - discountPercent / 100)));
+      }
+      perSessionOffer = Math.max(1, Math.round(totalOffer / count));
+    } else {
+      if (currency === "INR" && priceMinorUnits && priceMinorUnits > 0) {
+        totalOffer = Math.round(priceMinorUnits / 100);
+        perSessionOffer = Math.max(1, Math.round(totalOffer / count));
+        totalOriginal = totalOffer;
+        perSessionOriginal = perSessionOffer;
+      } else {
+        totalOffer = totalOriginal;
+        perSessionOffer = perSessionOriginal;
+      }
+    }
+  } else if (priceMinorUnits !== undefined && priceMinorUnits > 0) {
+    const inrOfferTotal = Math.round(priceMinorUnits / 100);
+    const inrBaseTotal = tierDef.inr.offer * count;
+
+    if (currency === "INR") {
+      totalOffer = inrOfferTotal;
+      perSessionOffer = Math.round(totalOffer / count);
+      if (totalOffer < inrBaseTotal) {
+        totalOriginal = inrBaseTotal;
+        perSessionOriginal = tierDef.inr.offer;
+        discountPercent = Math.round(((totalOriginal - totalOffer) / totalOriginal) * 100);
+      } else {
+        totalOriginal = totalOffer;
+        perSessionOriginal = perSessionOffer;
+      }
+    } else {
+      const rate = config.rateFromUSD ?? 1;
+      perSessionOffer = Math.round(tierDef.usd.offer * rate);
+      perSessionOriginal = Math.round(tierDef.usd.original * rate);
+      totalOriginal = perSessionOriginal * count;
+      totalOffer = Math.round((inrOfferTotal / (tierDef.inr.offer * count)) * totalOriginal);
+      if (totalOffer < totalOriginal) {
+        discountPercent = Math.round(((totalOriginal - totalOffer) / totalOriginal) * 100);
+      }
+    }
   } else {
-    // Other international currencies convert from USD base rate
-    const rate = config.rateFromUSD ?? 1;
-    perSessionOffer = Math.round(tierDef.usd.offer * rate);
-    perSessionOriginal = Math.round(tierDef.usd.original * rate);
+    // Default fallback to tier definition table
+    if (currency === "INR") {
+      perSessionOffer = tierDef.inr.offer;
+      perSessionOriginal = tierDef.inr.original;
+    } else if (currency === "USD") {
+      perSessionOffer = tierDef.usd.offer;
+      perSessionOriginal = tierDef.usd.original;
+    } else {
+      const rate = config.rateFromUSD ?? 1;
+      perSessionOffer = Math.round(tierDef.usd.offer * rate);
+      perSessionOriginal = Math.round(tierDef.usd.original * rate);
+    }
+
+    totalOffer = perSessionOffer * count;
+    totalOriginal = perSessionOriginal * count;
+    discountPercent =
+      perSessionOriginal > perSessionOffer
+        ? Math.round(((perSessionOriginal - perSessionOffer) / perSessionOriginal) * 100)
+        : 0;
   }
 
-  const totalOffer = perSessionOffer * count;
-  const totalOriginal = perSessionOriginal * count;
   const savingsTotal = Math.max(0, totalOriginal - totalOffer);
-  const discountPercent =
-    perSessionOriginal > perSessionOffer
-      ? Math.round(((perSessionOriginal - perSessionOffer) / perSessionOriginal) * 100)
-      : 0;
+  const isDiscounted = discountPercent > 0 && totalOriginal > totalOffer;
 
   // Helper for formatting
   const formatAmount = (amt: number): string => {
@@ -151,7 +277,7 @@ export function getCourseTierPricing({
     discountPercent,
     savingsTotal,
     formattedSavingsTotal: formatAmount(savingsTotal),
-    isDiscounted: discountPercent > 0,
+    isDiscounted,
     isInternational: currency !== "INR",
   };
 }

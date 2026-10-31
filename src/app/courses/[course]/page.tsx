@@ -226,6 +226,7 @@ export default async function Page({
                   priceMinorUnits={course.priceMinorUnits}
                   level={course.level}
                   sessionCount={course.sessionCount}
+                  description={course.description}
                   size="3xl"
                   showOriginalStrike
                   showDiscountBadge
@@ -238,6 +239,7 @@ export default async function Page({
               priceMinorUnits={course.priceMinorUnits}
               level={course.level}
               sessionCount={course.sessionCount}
+              description={course.description}
             />
 
             <CourseEnrollmentRequestModal
@@ -247,6 +249,8 @@ export default async function Page({
               sessionCount={course.sessionCount}
               durationWeeks={course.durationWeeks}
               priceMinorUnits={course.priceMinorUnits}
+              description={course.description}
+              level={course.level}
               isAlreadyEnrolled={isAlreadyEnrolled}
               pendingRequest={pendingRequest}
               isAuthenticated={!!user}

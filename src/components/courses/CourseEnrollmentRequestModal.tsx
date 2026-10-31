@@ -28,6 +28,8 @@ export interface CourseEnrollmentRequestModalProps {
   sessionCount: number;
   durationWeeks: number;
   priceMinorUnits: number;
+  description?: string | null;
+  level?: string | null;
   isAlreadyEnrolled?: boolean;
   pendingRequest?: {
     id: string;
@@ -46,6 +48,8 @@ export function CourseEnrollmentRequestModal({
   sessionCount,
   durationWeeks,
   priceMinorUnits,
+  description,
+  level,
   isAlreadyEnrolled = false,
   pendingRequest = null,
   isAuthenticated = true,
@@ -323,7 +327,9 @@ export function CourseEnrollmentRequestModal({
                   </label>
                   <CourseEmiBreakdown
                     priceMinorUnits={priceMinorUnits}
+                    level={level ?? undefined}
                     sessionCount={sessionCount}
+                    description={description ?? undefined}
                   />
                 </div>
 

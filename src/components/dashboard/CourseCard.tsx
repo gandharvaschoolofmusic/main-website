@@ -4,6 +4,7 @@ import Link from "next/link";
 import { Clock, BookOpen, Award, ArrowRight } from "lucide-react";
 import { Discipline, CourseLevel } from "@/types";
 import { PriceDisplay } from "@/components/currency/PriceDisplay";
+import { cleanDescriptionText } from "@/lib/pricing-tiers";
 
 export type CourseCardProps = {
   course: {
@@ -79,7 +80,7 @@ export function CourseCard({ course, basePath = "/student/dashboard/courses" }: 
 
         {/* Description */}
         <p className="text-xs text-body line-clamp-2 leading-relaxed">
-          {course.description}
+          {cleanDescriptionText(course.description)}
         </p>
 
         {/* Metrics Pill Grid */}
@@ -103,6 +104,7 @@ export function CourseCard({ course, basePath = "/student/dashboard/courses" }: 
             priceMinorUnits={course.priceMinorUnits}
             level={course.level}
             sessionCount={course.sessionCount}
+            description={course.description}
             size="lg"
             showOriginalStrike
             showDiscountBadge
