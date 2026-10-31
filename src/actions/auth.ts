@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { hashPassword } from "@/lib/password";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import {
@@ -246,6 +247,18 @@ export async function signupAction(
       }
     } catch {
       // Non-blocking notification emission
+    }
+
+    // Invalidate admin and student caches immediately so the new user appears instantly
+    try {
+      revalidatePath("/admin/students");
+      revalidatePath("/admin/users");
+      revalidatePath("/admin/teachers");
+      revalidatePath("/admin");
+      revalidateTag("admin-students", "max");
+      revalidateTag("students", "max");
+    } catch {
+      // Non-blocking cache revalidation
     }
 
     const message =

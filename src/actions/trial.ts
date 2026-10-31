@@ -379,6 +379,8 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
     try {
       revalidatePath("/student/dashboard");
       revalidatePath("/admin/trials");
+      revalidatePath("/admin/students");
+      revalidatePath("/admin/users");
       revalidatePath("/admin");
     } catch {
       // Ignored outside Next.js request lifecycle
