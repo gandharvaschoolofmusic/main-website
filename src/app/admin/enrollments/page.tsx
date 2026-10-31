@@ -68,6 +68,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
           },
           select: {
             id: true,
+            customId: true,
             name: true,
             email: true,
             phone: true,
@@ -109,6 +110,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
             student: {
               select: {
                 id: true,
+                customId: true,
                 name: true,
                 email: true,
                 phone: true,
@@ -180,6 +182,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
             student: {
               select: {
                 id: true,
+                customId: true,
                 name: true,
                 email: true,
               },
@@ -218,6 +221,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
     return {
       id: e.id,
       studentId: e.studentId,
+      studentCustomId: e.student.customId || null,
       studentName: e.student.name || "Student",
       studentEmail: e.student.email,
       studentPhone: e.student.phone,
@@ -302,6 +306,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
 
   const formattedStudents: StudentOption[] = dbStudents.map((s) => ({
     id: s.id,
+    customId: s.customId || null,
     name: s.name || "Student",
     email: s.email,
     timezone: s.timezone || "Asia/Kolkata",
@@ -326,6 +331,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
   const formattedCourseRequests: AdminCourseEnrollmentRequestItem[] = dbCourseRequests.map((r) => ({
     id: r.id,
     studentId: r.studentId,
+    studentCustomId: r.student?.customId || null,
     studentName: r.student.name || "Student",
     studentEmail: r.student.email,
     courseId: r.courseId,
@@ -352,7 +358,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       formattedCourseRequests,
     };
   },
-  ["admin-enrollments-data-v1"],
+  ["admin-enrollments-data-v2"],
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 

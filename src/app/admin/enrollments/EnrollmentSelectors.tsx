@@ -152,11 +152,11 @@ export function SearchableStudentSelector({
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase().trim();
       result = result.filter((s) => {
-        const code = `stu-${s.id.slice(-4)}`.toLowerCase();
+        const studentCode = (s.customId || `S${s.id.slice(-4)}`).toLowerCase();
         return (
           s.name.toLowerCase().includes(q) ||
           s.email.toLowerCase().includes(q) ||
-          code.includes(q) ||
+          studentCode.includes(q) ||
           (s.phone && s.phone.includes(q))
         );
       });
@@ -196,7 +196,7 @@ export function SearchableStudentSelector({
               </span>
               {selectedStudent ? (
                 <span className="px-2 py-0.5 rounded-md bg-purple-50 text-[#3C096C] font-mono text-[10px] font-bold border border-purple-200/80">
-                  STU-{selectedStudent.id.slice(-4)}
+                  {selectedStudent.customId || `S${selectedStudent.id.slice(-4).toUpperCase()}`}
                 </span>
               ) : (
                 <span className="px-2 py-0.5 rounded-md bg-amber-50 text-amber-900 text-[10px] font-bold border border-amber-200">
@@ -261,7 +261,7 @@ export function SearchableStudentSelector({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${students.length} students by name, email, or STU code...`}
+                placeholder={`Search ${students.length} students by name, email, or student ID (e.g. S0001)...`}
                 className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 bg-white text-xs text-heading placeholder:text-gray-400 focus:outline-none focus:border-[#3C096C] focus:ring-2 focus:ring-[#3C096C]/15 shadow-2xs transition-all"
               />
               {searchQuery && (
@@ -393,7 +393,7 @@ export function SearchableStudentSelector({
                             {s.name}
                           </p>
                           <span className="text-[10px] font-mono font-semibold text-purple-700 bg-purple-50 px-1.5 py-0.2 rounded border border-purple-200/60">
-                            STU-{s.id.slice(-4)}
+                            {s.customId || `S${s.id.slice(-4).toUpperCase()}`}
                           </span>
                         </div>
 

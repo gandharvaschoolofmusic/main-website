@@ -86,6 +86,7 @@ export interface EnrollmentPaymentItem {
 export interface EnrollmentRecord {
   id: string;
   studentId: string;
+  studentCustomId?: string | null;
   studentName: string;
   studentEmail: string;
   studentPhone?: string | null;
@@ -139,6 +140,7 @@ export interface FacultyOption {
 
 export interface StudentOption {
   id: string;
+  customId?: string | null;
   name: string;
   email: string;
   timezone: string;
@@ -163,6 +165,7 @@ export interface TrialLeadOption {
 export interface AdminCourseEnrollmentRequestItem {
   id: string;
   studentId: string;
+  studentCustomId?: string | null;
   studentName: string;
   studentEmail: string;
   courseId: string;
@@ -607,6 +610,7 @@ export function AdminEnrollmentsManager({
       (activeEnrollment
         ? {
             id: activeEnrollment.studentId,
+            customId: activeEnrollment.studentCustomId || null,
             name: activeEnrollment.studentName,
             email: activeEnrollment.studentEmail,
             timezone: activeEnrollment.studentTimezone,
@@ -1470,7 +1474,7 @@ export function AdminEnrollmentsManager({
                     {currentStudent?.name}
                   </h2>
                   <span className="px-2 py-0.5 rounded-md bg-purple-50 text-[#3C096C] font-mono text-[11px] font-bold border border-purple-200/80">
-                    STU-{currentStudent?.id.slice(-4)}
+                    {currentStudent?.customId || (currentStudent?.id ? `S${currentStudent.id.slice(-4).toUpperCase()}` : "S0001")}
                   </span>
                   {studentEnrollments.length > 0 ? (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 text-[10px] font-bold border border-emerald-200">
