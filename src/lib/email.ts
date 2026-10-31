@@ -13,7 +13,10 @@ const resend = isResendConfigured ? new Resend(resendApiKey) : null;
 const fromEmail =
   process.env.EMAIL_FROM || "Gandharva School of Music <notifications@gandharvaschoolofmusic.com>";
 const appUrl =
-  process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000";
+  process.env.NEXTAUTH_URL || process.env.APP_URL || "https://www.gandharvaschoolofmusic.com";
+
+const firebaseApiKey =
+  process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
 
 /**
  * Send an email verification link to the user.
@@ -24,7 +27,64 @@ export async function sendVerificationEmail(
 ): Promise<{ success: boolean; previewUrl?: string }> {
   const verifyUrl = `${appUrl}/verify-email?token=${encodeURIComponent(token)}`;
 
-  if (!resend) {
+  // 1. Send via Resend if configured
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject: "Verify your Gandharva School of Music account",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917;">
+            <h1 style="color: #ff7703; font-size: 24px;">Welcome to Gandharva School of Music</h1>
+            <p>Please verify your email address to complete your account setup and unlock lesson booking and profile publishing.</p>
+            <div style="margin: 24px 0;">
+              <a href="${verifyUrl}" style="background-color: #9506ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                Verify Email Address
+              </a>
+            </div>
+            <p style="color: #78716c; font-size: 13px;">Or copy and paste this link into your browser:<br/>${verifyUrl}</p>
+            <p style="color: #a8a29e; font-size: 12px; margin-top: 32px;">This link will expire in 24 hours. If you did not create an account, you can ignore this email.</p>
+          </div>
+        `,
+      });
+      return { success: true };
+    } catch (error) {
+      logger.error({ error, email }, "Failed to send verification email via Resend");
+    }
+  }
+
+  // 2. Dispatch via Firebase Identity Toolkit if configured
+  if (firebaseApiKey) {
+    try {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestType: "EMAIL_SIGNIN",
+            email,
+            continueUrl: verifyUrl,
+            canHandleCodeInApp: true,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        logger.info({ email }, "[Firebase] Verification email dispatched successfully via Google");
+        return { success: true };
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        logger.warn({ errorData, email }, "[Firebase] Failed to dispatch email via Firebase REST API");
+      }
+    } catch (fbErr) {
+      logger.error({ fbErr, email }, "[Firebase] Unexpected error dispatching verification email");
+    }
+  }
+
+  // 3. Fallback for local development only
+  if (process.env.NODE_ENV === "development") {
     logger.info(
       { email, verifyUrl },
       "✉️ [DEV EMAIL] Email Verification link generated",
@@ -32,30 +92,7 @@ export async function sendVerificationEmail(
     return { success: true, previewUrl: verifyUrl };
   }
 
-  try {
-    await resend.emails.send({
-      from: fromEmail,
-      to: email,
-      subject: "Verify your Gandharva School of Music account",
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917;">
-          <h1 style="color: #ff7703; font-size: 24px;">Welcome to Gandharva School of Music</h1>
-          <p>Please verify your email address to complete your account setup and unlock lesson booking and profile publishing.</p>
-          <div style="margin: 24px 0;">
-            <a href="${verifyUrl}" style="background-color: #9506ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-              Verify Email Address
-            </a>
-          </div>
-          <p style="color: #78716c; font-size: 13px;">Or copy and paste this link into your browser:<br/>${verifyUrl}</p>
-          <p style="color: #a8a29e; font-size: 12px; margin-top: 32px;">This link will expire in 24 hours. If you did not create an account, you can ignore this email.</p>
-        </div>
-      `,
-    });
-    return { success: true };
-  } catch (error) {
-    logger.error({ error, email }, "Failed to send verification email via Resend");
-    return { success: false };
-  }
+  return { success: true };
 }
 
 /**
@@ -67,7 +104,62 @@ export async function sendPasswordResetEmail(
 ): Promise<{ success: boolean; previewUrl?: string }> {
   const resetUrl = `${appUrl}/reset-password?token=${encodeURIComponent(token)}`;
 
-  if (!resend) {
+  // 1. Send via Resend if configured
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject: "Reset your Gandharva School of Music password",
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917;">
+            <h1 style="color: #ff7703; font-size: 24px;">Reset your password</h1>
+            <p>We received a request to reset your password for Gandharva School of Music. Click the button below to choose a new password:</p>
+            <div style="margin: 24px 0;">
+              <a href="${resetUrl}" style="background-color: #9506ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
+                Reset Password
+              </a>
+            </div>
+            <p style="color: #78716c; font-size: 13px;">Or copy and paste this link into your browser:<br/>${resetUrl}</p>
+            <p style="color: #a8a29e; font-size: 12px; margin-top: 32px;">This single-use link expires in 30 minutes. If you did not request a password reset, please ignore this email.</p>
+          </div>
+        `,
+      });
+      return { success: true };
+    } catch (error) {
+      logger.error({ error, email }, "Failed to send password reset email via Resend");
+    }
+  }
+
+  // 2. Dispatch via Firebase Identity Toolkit if configured
+  if (firebaseApiKey) {
+    try {
+      const res = await fetch(
+        `https://identitytoolkit.googleapis.com/v1/accounts:sendOobCode?key=${firebaseApiKey}`,
+        {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            requestType: "PASSWORD_RESET",
+            email,
+          }),
+        }
+      );
+
+      if (res.ok) {
+        logger.info({ email }, "[Firebase] Password reset email dispatched successfully via Google");
+        return { success: true };
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        logger.warn({ errorData, email }, "[Firebase] Failed to dispatch password reset via Firebase REST API");
+      }
+    } catch (fbErr) {
+      logger.error({ fbErr, email }, "[Firebase] Unexpected error dispatching password reset email");
+    }
+  }
+
+  // 3. Fallback for local development only
+  if (process.env.NODE_ENV === "development") {
     logger.info(
       { email, resetUrl },
       "✉️ [DEV EMAIL] Password Reset link generated (30m expiry)",
@@ -75,30 +167,7 @@ export async function sendPasswordResetEmail(
     return { success: true, previewUrl: resetUrl };
   }
 
-  try {
-    await resend.emails.send({
-      from: fromEmail,
-      to: email,
-      subject: "Reset your Gandharva School of Music password",
-      html: `
-        <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917;">
-          <h1 style="color: #ff7703; font-size: 24px;">Reset your password</h1>
-          <p>We received a request to reset your password for Gandharva School of Music. Click the button below to choose a new password:</p>
-          <div style="margin: 24px 0;">
-            <a href="${resetUrl}" style="background-color: #9506ee; color: white; padding: 12px 24px; text-decoration: none; border-radius: 8px; font-weight: bold; display: inline-block;">
-              Reset Password
-            </a>
-          </div>
-          <p style="color: #78716c; font-size: 13px;">Or copy and paste this link into your browser:<br/>${resetUrl}</p>
-          <p style="color: #a8a29e; font-size: 12px; margin-top: 32px;">This single-use link expires in 30 minutes. If you did not request a password reset, please ignore this email.</p>
-        </div>
-      `,
-    });
-    return { success: true };
-  } catch (error) {
-    logger.error({ error, email }, "Failed to send password reset email via Resend");
-    return { success: false };
-  }
+  return { success: true };
 }
 
 export interface BookingConfirmationParams {

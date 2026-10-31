@@ -8,7 +8,7 @@ import { SplitHeading } from "@/components/ui/SplitHeading";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
-  const token = searchParams.get("token");
+  const token = searchParams.get("token") || searchParams.get("oobCode");
 
   const [isPending, startTransition] = useTransition();
   const [result, setResult] = useState<{
@@ -193,16 +193,6 @@ function VerifyEmailContent() {
                           </Link>
                         </div>
                       )}
-                      {resendResult.previewUrl && (
-                        <div className="mt-2 pt-2 border-t border-accent/20">
-                          <a
-                            href={resendResult.previewUrl}
-                            className="text-accent-dark underline hover:text-accent font-mono text-[11px] break-all"
-                          >
-                            Click here to verify (Local Dev Link)
-                          </a>
-                        </div>
-                      )}
                     </div>
                   )}
                 </div>
@@ -289,16 +279,6 @@ function VerifyEmailContent() {
                       >
                         Sign In Now
                       </Link>
-                    </div>
-                  )}
-                  {resendResult.previewUrl && (
-                    <div className="mt-2 pt-2 border-t border-accent/20">
-                      <a
-                        href={resendResult.previewUrl}
-                        className="text-accent-dark underline hover:text-accent font-mono text-[11px] break-all"
-                      >
-                        Click here to verify (Local Dev Link)
-                      </a>
                     </div>
                   )}
                 </div>

@@ -831,7 +831,33 @@ export async function verifyEmailAction(
       };
     }
 
-    const email = await consumeEmailVerificationToken(token);
+    let email = await consumeEmailVerificationToken(token);
+    if (!email) {
+      // Check if token is a Firebase oobCode
+      const firebaseApiKey =
+        process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
+      if (firebaseApiKey) {
+        try {
+          const fbRes = await fetch(
+            `https://identitytoolkit.googleapis.com/v1/accounts:update?key=${firebaseApiKey}`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ oobCode: token }),
+            }
+          );
+          if (fbRes.ok) {
+            const fbData = (await fbRes.json()) as { email?: string };
+            if (fbData.email) {
+              email = fbData.email;
+            }
+          }
+        } catch (fbErr) {
+          logger.warn({ fbErr, token }, "Failed to verify token with Firebase");
+        }
+      }
+    }
+
     if (!email) {
       // If token not found, check if the current active session user is already verified
       try {

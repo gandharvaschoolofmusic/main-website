@@ -88,20 +88,6 @@ export default function ForgotPasswordPage() {
               {state.message}
             </div>
 
-            {state.previewUrl && (
-              <div className="rounded-xl border border-accent/30 bg-accent/5 p-4 text-left">
-                <p className="text-xs font-bold text-accent-dark uppercase tracking-wider">
-                  [Dev Mode] Password Reset Link:
-                </p>
-                <a
-                  href={state.previewUrl}
-                  className="mt-1.5 block break-all text-xs text-accent-dark underline hover:text-accent font-mono"
-                >
-                  {state.previewUrl}
-                </a>
-              </div>
-            )}
-
             <Link
               href="/login"
               className="btn-tactile block w-full rounded-xl bg-primary py-3 text-center text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-light"

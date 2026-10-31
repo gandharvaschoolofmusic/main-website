@@ -271,21 +271,6 @@ export default function SignupPage() {
               )}
             </p>
 
-            {/* Development mode preview link */}
-            {state.previewUrl && (
-              <div className="rounded-xl border border-accent/40 bg-accent-subtle/50 p-4 text-left">
-                <p className="text-xs font-bold text-accent-dark uppercase tracking-wider">
-                  [Dev Mode] Verification Link:
-                </p>
-                <a
-                  href={state.previewUrl}
-                  className="mt-1.5 block break-all text-xs text-accent-dark underline hover:text-accent font-mono"
-                >
-                  {state.previewUrl}
-                </a>
-              </div>
-            )}
-
             <div className="pt-2">
               <Link
                 href="/login"
