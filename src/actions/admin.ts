@@ -1093,11 +1093,56 @@ export async function saveCourseAdminAction(input: {
     revalidatePath("/admin/courses");
     revalidatePath("/courses");
     revalidatePath("/student/dashboard/courses");
+    revalidateTag("admin-courses", "max");
+    revalidateTag("courses", "max");
 
     return { success: true, data: { id: courseId! } };
   } catch (error) {
     logger.error({ error }, "Error saving course");
     return { success: false, error: "Failed to save course. Check slug uniqueness." };
+  }
+}
+
+export async function toggleCoursePublishAdminAction(input: {
+  courseId: string;
+  isPublished: boolean;
+}): Promise<AdminActionResponse<{ id: string; isPublished: boolean }>> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const existingCourse = await db.course.findUnique({
+      where: { id: input.courseId },
+      select: { id: true, slug: true, title: true, isPublished: true },
+    });
+
+    if (!existingCourse) {
+      return { success: false, error: "Course not found." };
+    }
+
+    const updated = await db.course.update({
+      where: { id: input.courseId },
+      data: { isPublished: input.isPublished },
+      select: { id: true, isPublished: true },
+    });
+
+    revalidatePath("/admin/courses");
+    revalidatePath("/courses");
+    if (existingCourse.slug) {
+      revalidatePath(`/courses/${existingCourse.slug}`);
+    }
+    revalidatePath("/student/dashboard/courses");
+    revalidateTag("admin-courses", "max");
+    revalidateTag("courses", "max");
+
+    logger.info(
+      { courseId: input.courseId, title: existingCourse.title, isPublished: input.isPublished },
+      "Course publication status toggled by admin"
+    );
+
+    return { success: true, data: updated };
+  } catch (error) {
+    logger.error({ error, courseId: input.courseId }, "Error toggling course publication status");
+    return { success: false, error: "Failed to update course publication status." };
   }
 }
 
@@ -1249,6 +1294,8 @@ export async function deleteCourseAdminAction(courseId: string): Promise<AdminAc
 
     revalidatePath("/admin/courses");
     revalidatePath("/courses");
+    revalidateTag("admin-courses", "max");
+    revalidateTag("courses", "max");
     return { success: true };
   } catch (error) {
     logger.error({ error }, "Error deleting course");

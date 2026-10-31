@@ -7,6 +7,7 @@ import { Discipline, CourseLevel } from "@prisma/client";
 import {
   saveCourseAdminAction,
   deleteCourseAdminAction,
+  toggleCoursePublishAdminAction,
   saveCourseLessonAdminAction,
   deleteCourseLessonAdminAction,
   bulkGenerateCourseLessonsAdminAction,
@@ -35,6 +36,9 @@ import {
   Music,
   CreditCard,
   Mic,
+  Globe,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 
 export interface AdminCourseLessonItem {
@@ -99,6 +103,8 @@ export function AdminCoursesManager({
   // Filter tab: ALL, INSTRUMENTS, or SINGING
   const [disciplineTab, setDisciplineTab] = useState<"ALL" | "INSTRUMENTS" | "SINGING">("ALL");
   const [levelFilter, setLevelFilter] = useState<"ALL" | CourseLevel>("ALL");
+  const [publicationFilter, setPublicationFilter] = useState<"ALL" | "PUBLISHED" | "DRAFT">("ALL");
+  const [togglingCourseId, setTogglingCourseId] = useState<string | null>(null);
 
   // Curriculum Management Drawer/Modal State
   const [curriculumCourse, setCurriculumCourse] = useState<AdminCourseItem | null>(null);
@@ -382,6 +388,46 @@ export function AdminCoursesManager({
     });
   };
 
+  const handleTogglePublish = async (c: AdminCourseItem) => {
+    if (togglingCourseId) return;
+    const nextPublishedState = !c.isPublished;
+    setTogglingCourseId(c.id);
+
+    // Optimistically update local state immediately
+    setCourses((prev) =>
+      prev.map((item) =>
+        item.id === c.id ? { ...item, isPublished: nextPublishedState } : item
+      )
+    );
+
+    try {
+      const res = await toggleCoursePublishAdminAction({
+        courseId: c.id,
+        isPublished: nextPublishedState,
+      });
+
+      if (!res.success) {
+        // Revert on failure
+        setCourses((prev) =>
+          prev.map((item) =>
+            item.id === c.id ? { ...item, isPublished: c.isPublished } : item
+          )
+        );
+        alert(res.error || "Failed to update course publication status.");
+      }
+    } catch {
+      // Revert on network exception
+      setCourses((prev) =>
+        prev.map((item) =>
+          item.id === c.id ? { ...item, isPublished: c.isPublished } : item
+        )
+      );
+      alert("Network error updating course publication status.");
+    } finally {
+      setTogglingCourseId(null);
+    }
+  };
+
   // ── Curriculum & Lesson Actions ───────────────────────────────────────────
 
   const openCurriculumDrawer = (course: AdminCourseItem) => {
@@ -588,6 +634,13 @@ export function AdminCoursesManager({
         return false;
       }
 
+      if (publicationFilter === "PUBLISHED" && !c.isPublished) {
+        return false;
+      }
+      if (publicationFilter === "DRAFT" && c.isPublished) {
+        return false;
+      }
+
       if (searchQuery.trim()) {
         const q = searchQuery.toLowerCase().trim();
         const matchesTitle = c.title.toLowerCase().includes(q);
@@ -600,7 +653,7 @@ export function AdminCoursesManager({
 
       return true;
     });
-  }, [courses, disciplineTab, levelFilter, searchQuery]);
+  }, [courses, disciplineTab, levelFilter, publicationFilter, searchQuery]);
 
   return (
     <div className="space-y-6">
@@ -707,47 +760,97 @@ export function AdminCoursesManager({
           </div>
         </div>
 
-        {/* Level Filters: All Levels, Foundation, Beginner, Intermediate, Advanced */}
-        <div className="flex items-center gap-2 flex-wrap pt-2.5 border-t border-slate-100 text-xs">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted mr-1">
-            Proficiency Level:
-          </span>
-          {(["ALL", "FOUNDATION", "BEGINNER", "INTERMEDIATE", "ADVANCED"] as const).map((lvl) => {
-            const count = lvl === "ALL"
-              ? courses.filter((c) => {
-                  if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
-                  if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
-                  return true;
-                }).length
-              : courses.filter((c) => {
-                  if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
-                  if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
-                  return String(c.level).toUpperCase() === lvl;
-                }).length;
-            const label = lvl === "ALL" ? "All Levels" : lvl.charAt(0) + lvl.slice(1).toLowerCase();
-            const isActive = levelFilter === lvl;
-            return (
-              <button
-                key={lvl}
-                type="button"
-                onClick={() => setLevelFilter(lvl as any)}
-                className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
-                  isActive
-                    ? "bg-accent text-white shadow-xs"
-                    : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
-                }`}
-              >
-                <span>{label}</span>
-                <span
-                  className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
-                    isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+        {/* Level Filters & Publication Status Filters */}
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
+          {/* Level Filters: All Levels, Foundation, Beginner, Intermediate, Advanced */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted mr-1">
+              Proficiency Level:
+            </span>
+            {(["ALL", "FOUNDATION", "BEGINNER", "INTERMEDIATE", "ADVANCED"] as const).map((lvl) => {
+              const count = lvl === "ALL"
+                ? courses.filter((c) => {
+                    if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
+                    if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                    return true;
+                  }).length
+                : courses.filter((c) => {
+                    if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
+                    if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                    return String(c.level).toUpperCase() === lvl;
+                  }).length;
+              const label = lvl === "ALL" ? "All Levels" : lvl.charAt(0) + lvl.slice(1).toLowerCase();
+              const isActive = levelFilter === lvl;
+              return (
+                <button
+                  key={lvl}
+                  type="button"
+                  onClick={() => setLevelFilter(lvl as any)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
+                    isActive
+                      ? "bg-accent text-white shadow-xs"
+                      : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
                   }`}
                 >
-                  {count}
-                </span>
-              </button>
-            );
-          })}
+                  <span>{label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                      isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Status Filters: All Statuses, Published, Draft */}
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted mr-1">
+              Catalog Status:
+            </span>
+            {(["ALL", "PUBLISHED", "DRAFT"] as const).map((st) => {
+              const count = st === "ALL"
+                ? courses.length
+                : st === "PUBLISHED"
+                ? courses.filter((c) => c.isPublished).length
+                : courses.filter((c) => !c.isPublished).length;
+              const label = st === "ALL" ? "All" : st === "PUBLISHED" ? "Published" : "Draft";
+              const isActive = publicationFilter === st;
+              return (
+                <button
+                  key={st}
+                  type="button"
+                  onClick={() => setPublicationFilter(st)}
+                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
+                    isActive
+                      ? st === "PUBLISHED"
+                        ? "bg-emerald-600 text-white shadow-xs"
+                        : st === "DRAFT"
+                        ? "bg-amber-600 text-white shadow-xs"
+                        : "bg-[#3C096C] text-white shadow-xs"
+                      : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
+                  }`}
+                >
+                  {st === "PUBLISHED" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                  )}
+                  {st === "DRAFT" && (
+                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
+                  )}
+                  <span>{label}</span>
+                  <span
+                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                      isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
         </div>
       </div>
 
@@ -837,15 +940,32 @@ export function AdminCoursesManager({
                       )}
                     </div>
 
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePublish(c)}
+                      disabled={togglingCourseId === c.id}
+                      title={
                         c.isPublished
-                          ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                          : "bg-amber-50 text-amber-700 border border-amber-200"
+                          ? "Click to unpublish course (hide from student catalog)"
+                          : "Click to publish course (make live for students)"
+                      }
+                      className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider border flex items-center gap-1.5 transition-all cursor-pointer shadow-2xs hover:scale-105 active:scale-95 disabled:opacity-50 disabled:pointer-events-none ${
+                        c.isPublished
+                          ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100"
+                          : "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100"
                       }`}
                     >
-                      {c.isPublished ? "Published" : "Draft"}
-                    </span>
+                      {togglingCourseId === c.id ? (
+                        <Loader2 className="w-2.5 h-2.5 animate-spin text-current" />
+                      ) : (
+                        <span
+                          className={`w-1.5 h-1.5 rounded-full ${
+                            c.isPublished ? "bg-emerald-500 animate-pulse" : "bg-amber-500"
+                          }`}
+                        />
+                      )}
+                      <span>{c.isPublished ? "Published" : "Draft"}</span>
+                    </button>
                   </div>
 
                   {/* Course Title & Description */}
@@ -968,7 +1088,33 @@ export function AdminCoursesManager({
                     /{c.slug}
                   </span>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {/* Direct 1-Click Publish / Unpublish Button */}
+                    <button
+                      type="button"
+                      onClick={() => handleTogglePublish(c)}
+                      disabled={togglingCourseId === c.id}
+                      className={`px-3 py-1.5 rounded-xl text-xs font-semibold flex items-center gap-1.5 transition-all shadow-2xs active:scale-[0.98] cursor-pointer disabled:opacity-50 ${
+                        c.isPublished
+                          ? "border border-amber-300/80 bg-amber-50 hover:bg-amber-100/90 text-amber-900"
+                          : "border border-emerald-600 bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs"
+                      }`}
+                      title={
+                        c.isPublished
+                          ? "Unpublish course (hide from student catalog)"
+                          : "Publish course (make live on student catalog)"
+                      }
+                    >
+                      {togglingCourseId === c.id ? (
+                        <Loader2 className="w-3.5 h-3.5 animate-spin text-current" />
+                      ) : c.isPublished ? (
+                        <EyeOff className="w-3.5 h-3.5 text-amber-700" />
+                      ) : (
+                        <Globe className="w-3.5 h-3.5 text-white" />
+                      )}
+                      <span>{c.isPublished ? "Unpublish" : "Publish"}</span>
+                    </button>
+
                     <button
                       type="button"
                       onClick={() => openCurriculumDrawer(c)}

@@ -61,7 +61,7 @@ async function deleteUser(identifier: string) {
     });
     await tx.trialRequest.deleteMany({
       where: {
-        OR: [{ studentId: user.id }, { teacherId: user.id }],
+        OR: [{ studentId: user.id }, { allottedTeacherId: user.id }],
       },
     });
 
@@ -80,7 +80,7 @@ async function deleteUser(identifier: string) {
 
     // 5. Delete event registrations
     await tx.eventRegistration.deleteMany({
-      where: { userId: user.id },
+      where: { studentId: user.id },
     });
 
     // 6. Delete resources and shares
@@ -101,7 +101,7 @@ async function deleteUser(identifier: string) {
       where: { userId: user.id },
     });
     await tx.payment.deleteMany({
-      where: { userId: user.id },
+      where: { studentId: user.id },
     });
 
     // 9. Delete sessions & accounts
@@ -139,3 +139,4 @@ const target = process.argv[2];
 deleteUser(target)
   .catch(console.error)
   .finally(() => db.$disconnect());
+
