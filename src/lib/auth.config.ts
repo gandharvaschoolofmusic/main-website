@@ -142,6 +142,7 @@ export const authConfig: NextAuthConfig = {
         if (session.user?.role) token.role = session.user.role;
         if (session.user?.emailVerified) token.emailVerified = session.user.emailVerified;
         if (session.user?.timezone) token.timezone = session.user.timezone;
+        if (session.user?.email) token.email = session.user.email;
         if (session.user?.image !== undefined) token.picture = session.user.image;
       }
 

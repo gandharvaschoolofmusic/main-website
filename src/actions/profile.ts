@@ -5,6 +5,8 @@ import { requireUser } from "@/lib/auth-helpers";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
+import crypto from "crypto";
+import { sendEmailUpdateVerificationEmail } from "@/lib/email";
 
 import fs from "fs";
 import path from "path";
@@ -237,5 +239,209 @@ export async function changePasswordAction(input: ChangePasswordInput) {
   } catch (error) {
     logger.error({ error }, "Failed to change password");
     return { success: false, error: "Failed to change password." };
+  }
+}
+
+export async function requestEmailUpdateAction({
+  newEmail,
+}: {
+  newEmail: string;
+}): Promise<{
+  success: boolean;
+  message?: string;
+  error?: string;
+  devCode?: string;
+}> {
+  try {
+    const user = await requireUser();
+
+    const normalizedEmail = (newEmail || "").trim().toLowerCase();
+
+    // Basic format validation
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!normalizedEmail || !emailRegex.test(normalizedEmail)) {
+      return { success: false, error: "Please enter a valid email address." };
+    }
+
+    if (user.email && normalizedEmail === user.email.toLowerCase()) {
+      return {
+        success: false,
+        error: "The new email address must be different from your current email.",
+      };
+    }
+
+    // Check if new email is already used by another account
+    const existing = await db.user.findUnique({
+      where: { email: normalizedEmail },
+      select: { id: true },
+    });
+
+    if (existing && existing.id !== user.id) {
+      return {
+        success: false,
+        error: "This email address is already in use by another account.",
+      };
+    }
+
+    // Generate 6-digit numeric OTP code
+    const otpCode = crypto.randomInt(100000, 999999).toString();
+    const tokenSecret = crypto.randomBytes(16).toString("hex");
+    const tokenPayload = `${normalizedEmail}:::${otpCode}:::${tokenSecret}`;
+    const expires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutes TTL
+    const identifier = `email-update:${user.id}`;
+
+    // Clean up any existing tokens for this user
+    await db.verificationToken.deleteMany({
+      where: { identifier },
+    });
+
+    // Create token
+    await db.verificationToken.create({
+      data: {
+        identifier,
+        token: tokenPayload,
+        expires,
+      },
+    });
+
+    // Send verification email
+    await sendEmailUpdateVerificationEmail({
+      email: normalizedEmail,
+      otpCode,
+      userName: user.name || "Instructor",
+    });
+
+    logger.info(
+      { userId: user.id, newEmail: normalizedEmail },
+      "Email update OTP dispatched",
+    );
+
+    return {
+      success: true,
+      message: `A 6-digit verification code has been dispatched to ${normalizedEmail}.`,
+      devCode: process.env.NODE_ENV === "development" ? otpCode : undefined,
+    };
+  } catch (error) {
+    logger.error({ error }, "Failed to request email update");
+    return {
+      success: false,
+      error: "Unable to process email update request. Please try again.",
+    };
+  }
+}
+
+export async function verifyEmailUpdateAction({
+  newEmail,
+  otpCode,
+}: {
+  newEmail: string;
+  otpCode: string;
+}): Promise<{
+  success: boolean;
+  email?: string;
+  message?: string;
+  error?: string;
+}> {
+  try {
+    const user = await requireUser();
+
+    const normalizedEmail = (newEmail || "").trim().toLowerCase();
+    const cleanedCode = (otpCode || "").trim().replace(/\D/g, "");
+
+    if (!cleanedCode || cleanedCode.length !== 6) {
+      return {
+        success: false,
+        error: "Please enter a valid 6-digit verification code.",
+      };
+    }
+
+    const identifier = `email-update:${user.id}`;
+    const record = await db.verificationToken.findFirst({
+      where: { identifier },
+    });
+
+    if (!record) {
+      return {
+        success: false,
+        error: "No active verification request found. Please request a new code.",
+      };
+    }
+
+    if (record.expires < new Date()) {
+      await db.verificationToken.deleteMany({ where: { identifier } });
+      return {
+        success: false,
+        error: "The verification code has expired. Please request a new code.",
+      };
+    }
+
+    const [pendingEmail, storedOtp] = record.token.split(":::");
+
+    if (pendingEmail !== normalizedEmail) {
+      return {
+        success: false,
+        error: "Email address does not match the verification request.",
+      };
+    }
+
+    if (storedOtp !== cleanedCode) {
+      return {
+        success: false,
+        error: "Invalid verification code. Please check your email and try again.",
+      };
+    }
+
+    // Final safety check: ensure email wasn't registered by someone else in the interim
+    const conflict = await db.user.findFirst({
+      where: {
+        email: normalizedEmail,
+        NOT: { id: user.id },
+      },
+      select: { id: true },
+    });
+
+    if (conflict) {
+      return {
+        success: false,
+        error: "This email address was recently taken by another account.",
+      };
+    }
+
+    // Atomically update user's email
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        email: normalizedEmail,
+        emailVerified: new Date(),
+      },
+    });
+
+    // Delete the used token
+    await db.verificationToken.deleteMany({ where: { identifier } });
+
+    logger.info(
+      { userId: user.id, oldEmail: user.email, newEmail: normalizedEmail },
+      "User email address verified and updated successfully",
+    );
+
+    if (user.role === "TEACHER") {
+      revalidatePath("/teacher/dashboard/profile");
+      revalidatePath("/teacher/dashboard");
+    } else {
+      revalidatePath("/student/dashboard/profile");
+      revalidatePath("/student/dashboard");
+    }
+
+    return {
+      success: true,
+      email: normalizedEmail,
+      message: "Your email address has been updated successfully!",
+    };
+  } catch (error) {
+    logger.error({ error }, "Failed to verify email update");
+    return {
+      success: false,
+      error: "Unable to complete email update. Please try again.",
+    };
   }
 }

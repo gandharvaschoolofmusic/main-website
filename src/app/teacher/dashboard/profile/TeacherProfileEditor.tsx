@@ -1,11 +1,17 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
+import { useRouter } from "next/navigation";
 import {
   updateTeacherProfileAction,
   updateTeacherPaymentDetailsAction,
 } from "@/actions/teacher";
-import { updateProfileAction, changePasswordAction } from "@/actions/profile";
+import {
+  updateProfileAction,
+  changePasswordAction,
+  requestEmailUpdateAction,
+  verifyEmailUpdateAction,
+} from "@/actions/profile";
 import { POPULAR_TIMEZONES, formatDeterministicDate } from "@/lib/timezone";
 import { INSTRUMENTS, LANGUAGES, TEACHER_SKILL_CATEGORIES } from "@/types";
 import {
@@ -27,6 +33,10 @@ import {
   Clock,
   CheckCircle2,
   Mic,
+  Mail,
+  Edit3,
+  Send,
+  RefreshCw,
 } from "lucide-react";
 import { AvatarUpload } from "@/components/profile/AvatarUpload";
 
@@ -59,6 +69,90 @@ export function TeacherProfileEditor({
   user,
   profile,
 }: TeacherProfileEditorProps) {
+  const router = useRouter();
+  const [currentEmail, setCurrentEmail] = useState(user.email);
+
+  // Email Update Modal State
+  const [isUpdateEmailOpen, setIsUpdateEmailOpen] = useState(false);
+  const [emailStep, setEmailStep] = useState<"REQUEST" | "VERIFY">("REQUEST");
+  const [newEmailInput, setNewEmailInput] = useState("");
+  const [emailOtpInput, setEmailOtpInput] = useState("");
+  const [isSendingEmailOtp, startSendingEmailOtpTransition] = useTransition();
+  const [isVerifyingEmailOtp, startVerifyingEmailOtpTransition] = useTransition();
+  const [emailModalError, setEmailModalError] = useState<string | null>(null);
+  const [emailModalSuccess, setEmailModalSuccess] = useState<string | null>(null);
+  const [emailResendCooldown, setEmailResendCooldown] = useState(0);
+
+  useEffect(() => {
+    if (emailResendCooldown <= 0) return;
+    const timer = setInterval(() => {
+      setEmailResendCooldown((prev) => (prev > 0 ? prev - 1 : 0));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, [emailResendCooldown]);
+
+  const handleRequestEmailUpdate = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    setEmailModalError(null);
+    setEmailModalSuccess(null);
+
+    const targetEmail = newEmailInput.trim().toLowerCase();
+    if (!targetEmail) {
+      setEmailModalError("Please enter your new email address.");
+      return;
+    }
+
+    startSendingEmailOtpTransition(async () => {
+      const res = await requestEmailUpdateAction({ newEmail: targetEmail });
+      if (!res.success) {
+        setEmailModalError(res.error || "Failed to dispatch verification code.");
+      } else {
+        setEmailStep("VERIFY");
+        setEmailOtpInput("");
+        setEmailResendCooldown(60);
+        setEmailModalSuccess(res.message || `Verification code sent to ${targetEmail}`);
+      }
+    });
+  };
+
+  const handleVerifyEmailUpdate = (e: React.FormEvent) => {
+    e.preventDefault();
+    setEmailModalError(null);
+    setEmailModalSuccess(null);
+
+    const targetEmail = newEmailInput.trim().toLowerCase();
+    const cleanOtp = emailOtpInput.trim().replace(/\D/g, "");
+
+    if (!cleanOtp || cleanOtp.length !== 6) {
+      setEmailModalError("Please enter the complete 6-digit verification code.");
+      return;
+    }
+
+    startVerifyingEmailOtpTransition(async () => {
+      const res = await verifyEmailUpdateAction({
+        newEmail: targetEmail,
+        otpCode: cleanOtp,
+      });
+
+      if (!res.success) {
+        setEmailModalError(res.error || "Invalid verification code.");
+      } else {
+        const updated = res.email || targetEmail;
+        setCurrentEmail(updated);
+        setEmailModalSuccess(res.message || "Email address updated successfully!");
+        setTimeout(() => {
+          setIsUpdateEmailOpen(false);
+          setEmailStep("REQUEST");
+          setNewEmailInput("");
+          setEmailOtpInput("");
+          setEmailModalError(null);
+          setEmailModalSuccess(null);
+          router.refresh();
+        }, 1200);
+      }
+    });
+  };
+
   // Account fields
   const [name, setName] = useState(user.name);
   const [timezone, setTimezone] = useState(user.timezone || "UTC");
@@ -403,28 +497,42 @@ export function TeacherProfileEditor({
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-heading">
-                Full Name
-              </label>
-              <input
-                type="text"
-                required
-                value={name}
-                onChange={(e) => setName(e.target.value)}
-                className="w-full rounded-xl bg-white border border-border-default px-3.5 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
-              />
-            </div>
-
-            <div className="space-y-1.5">
-              <label className="text-xs font-semibold text-heading">
-                Email Address
-              </label>
-              <input
-                type="email"
-                disabled
-                value={user.email}
-                className="w-full rounded-xl bg-neutral-100 border border-neutral-200 px-3.5 py-2 text-xs text-body/60 cursor-not-allowed"
-              />
+              <div className="flex items-center justify-between">
+                <label className="text-xs font-semibold text-heading flex items-center gap-1.5">
+                  <Mail className="w-3.5 h-3.5 text-primary" />
+                  <span>Email Address</span>
+                </label>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsUpdateEmailOpen(true);
+                    setEmailStep("REQUEST");
+                    setNewEmailInput("");
+                    setEmailOtpInput("");
+                    setEmailModalError(null);
+                    setEmailModalSuccess(null);
+                  }}
+                  className="inline-flex items-center gap-1 text-[11px] font-bold text-primary hover:text-primary-dark transition-colors cursor-pointer hover:underline"
+                >
+                  <Edit3 className="w-3 h-3" />
+                  <span>Update Email</span>
+                </button>
+              </div>
+              <div className="relative">
+                <input
+                  type="email"
+                  disabled
+                  value={currentEmail}
+                  className="w-full rounded-xl bg-neutral-100/90 border border-neutral-200 px-3.5 py-2 text-xs text-heading font-medium cursor-not-allowed pr-28 shadow-xs"
+                />
+                <span className="absolute right-2.5 top-1/2 -translate-y-1/2 px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-100 text-emerald-800 border border-emerald-200/80 flex items-center gap-1 shadow-xs">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  <span>Verified</span>
+                </span>
+              </div>
+              <p className="text-[11px] text-body-muted">
+                Your sign-in email & notification inbox. Click <strong>Update Email</strong> to change it with verification.
+              </p>
             </div>
           </div>
 
@@ -977,6 +1085,198 @@ export function TeacherProfileEditor({
           </div>
         </form>
       </div>
+    
+
+      {/* Update Email Verification Modal */}
+      {isUpdateEmailOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-border-default p-6 shadow-2xl space-y-5 animate-in zoom-in-95 duration-150">
+            {/* Modal Header */}
+            <div className="flex items-start justify-between border-b border-border-default/60 pb-3.5">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-primary/10 text-primary flex items-center justify-center shrink-0">
+                  <Mail className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="font-serif text-base font-bold text-heading">
+                    {emailStep === "REQUEST" ? "Update Email Address" : "Verify New Email"}
+                  </h3>
+                  <p className="text-xs text-body-muted">
+                    {emailStep === "REQUEST"
+                      ? "A 6-digit code will be dispatched to confirm ownership."
+                      : `Enter the 6-digit code dispatched to ${newEmailInput}`}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsUpdateEmailOpen(false)}
+                className="p-1 rounded-lg text-body-muted hover:text-heading hover:bg-bg-alt transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Alerts */}
+            {emailModalError && (
+              <div className="p-3 rounded-xl bg-red-50 border border-red-200 text-xs text-red-700 flex items-start gap-2 animate-in fade-in">
+                <AlertCircle className="w-4 h-4 text-red-600 shrink-0 mt-0.5" />
+                <span>{emailModalError}</span>
+              </div>
+            )}
+            {emailModalSuccess && (
+              <div className="p-3 rounded-xl bg-emerald-50 border border-emerald-200 text-xs text-emerald-800 flex items-start gap-2 animate-in fade-in">
+                <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                <span>{emailModalSuccess}</span>
+              </div>
+            )}
+
+            {emailStep === "REQUEST" ? (
+              <form onSubmit={handleRequestEmailUpdate} className="space-y-4">
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-body-muted">
+                    Current Email Address
+                  </label>
+                  <input
+                    type="text"
+                    disabled
+                    value={currentEmail}
+                    className="w-full rounded-xl bg-bg-alt/70 border border-border-subtle px-3.5 py-2 text-xs text-body-muted cursor-not-allowed font-mono"
+                  />
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-semibold text-heading">
+                    New Email Address <span className="text-rose-500">*</span>
+                  </label>
+                  <input
+                    type="email"
+                    required
+                    autoFocus
+                    placeholder="e.g. maestro@gandharva.org"
+                    value={newEmailInput}
+                    onChange={(e) => setNewEmailInput(e.target.value)}
+                    className="w-full rounded-xl bg-white border border-border-default px-3.5 py-2.5 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
+                  />
+                  <p className="text-[11px] text-body-muted">
+                    Must be an active email address. We will dispatch a 6-digit confirmation code.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-end gap-2.5 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsUpdateEmailOpen(false)}
+                    className="px-4 py-2 rounded-xl border border-border-default bg-white text-xs font-semibold text-heading hover:bg-bg-alt transition-colors cursor-pointer"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSendingEmailOtp || !newEmailInput.trim()}
+                    className="px-5 py-2 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+                  >
+                    {isSendingEmailOtp ? (
+                      <>
+                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                        <span>Sending Code...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Send className="w-3.5 h-3.5" />
+                        <span>Send Verification Code</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </form>
+            ) : (
+              <form onSubmit={handleVerifyEmailUpdate} className="space-y-4">
+                <div className="p-3 rounded-xl bg-bg-alt/60 border border-border-subtle flex items-center justify-between gap-2">
+                  <div className="text-xs">
+                    <span className="text-body-muted">Verifying: </span>
+                    <strong className="text-heading font-mono">{newEmailInput}</strong>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setEmailStep("REQUEST");
+                      setEmailOtpInput("");
+                      setEmailModalError(null);
+                    }}
+                    className="text-[11px] font-semibold text-primary hover:underline cursor-pointer"
+                  >
+                    Change
+                  </button>
+                </div>
+
+                <div className="space-y-1.5 text-center">
+                  <label className="text-xs font-semibold text-heading block">
+                    Enter 6-Digit Verification Code
+                  </label>
+                  <input
+                    type="text"
+                    inputMode="numeric"
+                    pattern="[0-9]*"
+                    maxLength={6}
+                    autoFocus
+                    placeholder="••••••"
+                    value={emailOtpInput}
+                    onChange={(e) => setEmailOtpInput(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                    className="w-48 mx-auto text-center font-mono text-2xl font-bold tracking-[0.4em] rounded-xl bg-white border-2 border-primary/40 focus:border-primary px-3 py-2 text-heading focus:outline-none focus:ring-2 focus:ring-primary/20 shadow-xs"
+                  />
+                  <p className="text-[11px] text-body-muted">
+                    Code expires in 15 minutes. Check spam folder if not in inbox.
+                  </p>
+                </div>
+
+                <div className="flex items-center justify-between pt-2 border-t border-border-subtle">
+                  <button
+                    type="button"
+                    onClick={() => handleRequestEmailUpdate()}
+                    disabled={isSendingEmailOtp || emailResendCooldown > 0}
+                    className="text-xs font-semibold text-primary hover:text-primary-dark disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1"
+                  >
+                    <RefreshCw className={`w-3 h-3 ${isSendingEmailOtp ? "animate-spin" : ""}`} />
+                    <span>
+                      {emailResendCooldown > 0
+                        ? `Resend in ${emailResendCooldown}s`
+                        : "Resend Code"}
+                    </span>
+                  </button>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsUpdateEmailOpen(false)}
+                      className="px-3.5 py-1.5 rounded-xl border border-border-default bg-white text-xs font-semibold text-heading hover:bg-bg-alt transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={isVerifyingEmailOtp || emailOtpInput.length !== 6}
+                      className="px-4 py-1.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs disabled:opacity-60 disabled:cursor-not-allowed cursor-pointer flex items-center gap-1.5"
+                    >
+                      {isVerifyingEmailOtp ? (
+                        <>
+                          <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                          <span>Verifying...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Check className="w-3.5 h-3.5" />
+                          <span>Verify & Update</span>
+                        </>
+                      )}
+                    </button>
+                  </div>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

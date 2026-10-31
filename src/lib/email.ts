@@ -96,8 +96,77 @@ export async function sendVerificationEmail(
 }
 
 /**
- * Send a single-use 30-minute password reset link.
+ * Send a 6-digit verification code to confirm an email address update.
  */
+export async function sendEmailUpdateVerificationEmail({
+  email,
+  otpCode,
+  userName,
+}: {
+  email: string;
+  otpCode: string;
+  userName?: string;
+}): Promise<{ success: boolean }> {
+  const brandName = "Gandharva School of Music";
+  const subject = `Your ${brandName} email verification code: ${otpCode}`;
+
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h1 style="color: #6d1b7b; font-size: 22px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
+              <p style="color: #78716c; font-size: 13px; margin: 0;">Faculty Account Security</p>
+            </div>
+            
+            <p style="font-size: 14px; line-height: 1.6; color: #374151;">
+              Hello ${userName || "Instructor"},
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #374151;">
+              You requested to update the email address associated with your Gandharva School of Music profile to this address. Use the verification code below to confirm and complete this change:
+            </p>
+            
+            <div style="text-align: center; margin: 28px 0;">
+              <div style="display: inline-block; background-color: #fbf6ee; border: 2px dashed #ff7703; border-radius: 12px; padding: 14px 28px;">
+                <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #6d1b7b; font-family: monospace;">
+                  ${otpCode}
+                </span>
+              </div>
+              <p style="font-size: 12px; color: #b45309; margin-top: 10px; font-weight: 600;">
+                ⏱️ Valid for 15 minutes
+              </p>
+            </div>
+
+            <p style="font-size: 12px; color: #6b7280; line-height: 1.5;">
+              If you did not request this email change, please ignore this message. Your account remains secure and your current email will not be changed.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="font-size: 11px; color: #9ca3af; text-align: center; margin: 0;">
+              Gandharva School of Music &bull; Faculty Portal Security
+            </p>
+          </div>
+        `,
+      });
+      return { success: true };
+    } catch (error) {
+      logger.error({ error, email }, "Failed to send email update verification code via Resend");
+    }
+  }
+
+  // Fallback for development or when Resend key is not configured
+  logger.info(
+    { email, otpCode },
+    `✉️ [EMAIL UPDATE OTP] Dispatched 6-digit verification code to ${email}: ${otpCode}`,
+  );
+
+  return { success: true };
+}
+
 export async function sendPasswordResetEmail(
   email: string,
   token: string,
