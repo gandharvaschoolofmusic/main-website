@@ -46,9 +46,10 @@ export async function generateMetadata({
       select: { title: true, description: true },
     });
     if (dbCourse) {
+      const cleanDesc = dbCourse.description.replace(/\s*<!--\s*pricing:[\s\S]*?-->/g, "").trim();
       return {
         title: `${dbCourse.title} | Gandharva School of Music`,
-        description: dbCourse.description.slice(0, 160),
+        description: cleanDesc.slice(0, 160),
       };
     }
   } catch {
@@ -157,7 +158,7 @@ export default async function Page({
             />
 
             <p className="text-sm sm:text-base text-body leading-relaxed max-w-3xl">
-              {course.description}
+              {course.description.replace(/\s*<!--\s*pricing:[\s\S]*?-->/g, "").trim()}
             </p>
           </div>
 
