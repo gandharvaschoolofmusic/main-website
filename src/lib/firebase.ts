@@ -55,8 +55,14 @@ export function createRecaptchaVerifier(
 
   try {
     if (typeof window !== "undefined") {
-      // 1. If an existing verifier is registered on window, safely clear it
-      const existing = (window as any).recaptchaVerifier;
+      // 1. If an existing verifier exists and is attached to this container, reuse it safely
+      const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
+      const el = document.getElementById(containerId);
+      if (existing && el && (window as any).recaptchaContainerId === containerId) {
+        return existing;
+      }
+
+      // 2. Clear any previous verifier instance
       if (existing) {
         try {
           existing.clear();
@@ -66,12 +72,9 @@ export function createRecaptchaVerifier(
         (window as any).recaptchaVerifier = null;
       }
 
-      // 2. Clone and replace the container element to clear all grecaptcha internal IDs and state
-      const el = document.getElementById(containerId);
-      if (el && el.parentNode) {
+      // Empty inner content without replacing or detaching React's DOM node
+      if (el) {
         el.innerHTML = "";
-        const clone = el.cloneNode(false) as HTMLElement;
-        el.parentNode.replaceChild(clone, el);
       }
     }
 
@@ -87,6 +90,7 @@ export function createRecaptchaVerifier(
 
     if (typeof window !== "undefined") {
       (window as any).recaptchaVerifier = verifier;
+      (window as any).recaptchaContainerId = containerId;
     }
 
     return verifier;
@@ -117,13 +121,14 @@ export async function sendFirebaseOtp(
   } catch (error: any) {
     console.error("[Firebase] Error in signInWithPhoneNumber:", error);
 
-    // On any error (e.g. billing-not-enabled, invalid number), clear the verifier to allow a clean retry
+    // On failure, clear verifier to allow a clean retry on the next click
     try {
       verifier.clear();
-      if (typeof window !== "undefined") {
-        (window as any).recaptchaVerifier = null;
-      }
     } catch {}
+    if (typeof window !== "undefined") {
+      (window as any).recaptchaVerifier = null;
+      (window as any).recaptchaContainerId = null;
+    }
 
     let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";
     if (error?.code === "auth/invalid-phone-number") {
@@ -133,7 +138,7 @@ export async function sendFirebaseOtp(
     } else if (error?.code === "auth/too-many-requests") {
       msg = "Too many attempts. Please wait a moment before requesting another code.";
     } else if (error?.code === "auth/billing-not-enabled") {
-      msg = "Firebase SMS billing is not enabled. Please upgrade to the Blaze plan in Firebase Console, or add this number in 'Phone numbers for testing'.";
+      msg = "Firebase SMS billing is not enabled. Please upgrade to the Blaze plan in Firebase Console, or add this phone under 'Phone numbers for testing'.";
     } else if (error?.code === "auth/captcha-check-failed") {
       msg = "reCAPTCHA verification failed. Please refresh and try again.";
     }
