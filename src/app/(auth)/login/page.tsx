@@ -444,6 +444,9 @@ export default function LoginPage() {
               </p>
             </div>
 
+            {/* Invisible reCAPTCHA container for Firebase (Always mounted in DOM) */}
+            <div id="login-recaptcha-container" className="hidden" aria-hidden="true" />
+
             {/* State A: Before OTP is sent -> "Get OTP" Button */}
             {!otpSent && (
               <button
@@ -475,9 +478,6 @@ export default function LoginPage() {
                     </div>
                   </div>
                 )}
-
-                {/* Invisible reCAPTCHA container for Firebase */}
-                <div id="login-recaptcha-container" className="hidden" aria-hidden="true" />
 
                 {/* Verification Form */}
                 <form action={otpLoginFormAction} onSubmit={handleOtpFormSubmit} className="space-y-4">

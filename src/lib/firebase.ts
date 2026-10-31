@@ -55,9 +55,18 @@ export function createRecaptchaVerifier(
 
   try {
     if (typeof window !== "undefined") {
+      let el = document.getElementById(containerId);
+      if (!el && typeof document !== "undefined") {
+        el = document.createElement("div");
+        el.id = containerId;
+        el.className = "hidden";
+        el.style.display = "none";
+        el.setAttribute("aria-hidden", "true");
+        document.body.appendChild(el);
+      }
+
       // 1. If an existing verifier exists and is attached to this container, reuse it safely
       const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
-      const el = document.getElementById(containerId);
       if (existing && el && (window as any).recaptchaContainerId === containerId) {
         return existing;
       }
