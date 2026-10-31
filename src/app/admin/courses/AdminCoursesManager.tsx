@@ -30,8 +30,7 @@ import {
   Sparkles,
   ArrowRight,
   GraduationCap,
-  CalendarCheck,
-  UserCheck,
+    UserCheck,
   RotateCcw,
   Music,
   CreditCard,
@@ -274,10 +273,7 @@ export function AdminCoursesManager({
     setFormError(null);
     setFormSuccess(false);
 
-    if (startDate && endDate && new Date(startDate) > new Date(endDate)) {
-      setFormError("Course start date cannot be after end date.");
-      return;
-    }
+    
 
     startTransition(async () => {
       const res = await saveCourseAdminAction({
@@ -997,11 +993,11 @@ export function AdminCoursesManager({
                         </span>
                       ) : formattedStartDate ? (
                         <span>
-                          Starts: <strong>{formattedStartDate}</strong> (Flexible End)
+                          Starts: <strong>{formattedStartDate}</strong>
                         </span>
                       ) : (
-                        <span className="text-body-muted italic">
-                          No fixed dates set (Click Edit to configure)
+                        <span className="text-body-muted font-medium">
+                          Flexible Schedule · {c.sessionCount} Sessions
                         </span>
                       )}
                     </div>
@@ -1035,7 +1031,7 @@ export function AdminCoursesManager({
                       </div>
                     ) : (
                       <p className="text-[11px] text-amber-700 bg-amber-50 px-2.5 py-1 rounded-lg border border-amber-200/60 inline-block">
-                        ⚠️ No teachers allotted yet. Assign instructors via Edit.
+                        Faculty gurus allotted per student enrollment.
                       </p>
                     )}
                   </div>
@@ -1222,239 +1218,7 @@ export function AdminCoursesManager({
                 </div>
               </div>
 
-              {/* Start Date & End Date */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3.5 rounded-2xl bg-bg-alt/30 border border-border-default/60">
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-heading flex items-center gap-1.5">
-                    <Calendar className="w-3.5 h-3.5 text-accent-dark" />
-                    <span>Course Start Date</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={startDate}
-                    onChange={(e) => setStartDate(e.target.value)}
-                    className="w-full rounded-xl bg-white border border-border-default px-3 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
-                  />
-                  <span className="text-[10px] text-body-muted block">
-                    When the first batch or lesson session begins
-                  </span>
-                </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-xs font-semibold text-heading flex items-center gap-1.5">
-                    <CalendarCheck className="w-3.5 h-3.5 text-accent-dark" />
-                    <span>Course End Date</span>
-                  </label>
-                  <input
-                    type="date"
-                    value={endDate}
-                    onChange={(e) => setEndDate(e.target.value)}
-                    className="w-full rounded-xl bg-white border border-border-default px-3 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
-                  />
-                  <span className="text-[10px] text-body-muted block">
-                    Target completion date for final masterclass
-                  </span>
-                </div>
-              </div>
-
-              {/* ── Allot Faculty Teachers to this Course (Optimized for ~700 Gurus) ── */}
-              <div className="space-y-3 p-4 rounded-2xl bg-slate-50/80 border border-slate-200/90 shadow-2xs">
-                {/* Header with Title and Selected Count Badge */}
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <div className="w-8 h-8 rounded-xl bg-purple-100 text-purple-700 flex items-center justify-center shrink-0">
-                      <Users className="w-4 h-4" />
-                    </div>
-                    <div>
-                      <label className="text-xs font-bold text-heading flex items-center gap-2">
-                        <span>Allot Faculty Teachers to this Course</span>
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-purple-700 border border-purple-200">
-                          {selectedTeacherIds.length} assigned
-                        </span>
-                      </label>
-                      <p className="text-[11px] text-body mt-0.5">
-                        Assign accredited faculty gurus to conduct sessions and 1-on-1 masterclasses for this course.
-                      </p>
-                    </div>
-                  </div>
-
-                  {selectedTeacherIds.length > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => setSelectedTeacherIds([])}
-                      className="text-[11px] font-semibold text-rose-600 hover:text-rose-700 hover:underline cursor-pointer"
-                    >
-                      Clear All ({selectedTeacherIds.length})
-                    </button>
-                  )}
-                </div>
-
-                {/* Shelf of Currently Assigned Gurus (Tactile Chips) */}
-                {selectedTeacherIds.length > 0 ? (
-                  <div className="space-y-1.5 pt-1">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-body-muted block">
-                      Currently Assigned ({selectedTeacherIds.length}):
-                    </span>
-                    <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto custom-scrollbar pr-2">
-                      {selectedTeacherIds.map((id) => {
-                        const t = facultyTeachers.find((tch) => tch.id === id);
-                        if (!t) return null;
-                        return (
-                          <span
-                            key={id}
-                            className="inline-flex items-center gap-2 px-2.5 py-1 rounded-xl bg-white border border-purple-200/90 text-xs font-semibold text-[#1E1A4D] shadow-2xs hover:border-purple-300 transition-all group"
-                          >
-                            <span className="w-5 h-5 rounded-full bg-gradient-to-br from-[#3C096C] to-[#7B2CBF] text-white text-[9px] font-bold flex items-center justify-center shrink-0">
-                              {(t.name || "T")[0].toUpperCase()}
-                            </span>
-                            <span className="truncate max-w-[130px]">{t.name || t.email}</span>
-                            <button
-                              type="button"
-                              onClick={() => toggleTeacherSelection(id)}
-                              className="w-4 h-4 rounded-full hover:bg-slate-100 flex items-center justify-center text-gray-400 hover:text-rose-600 transition-colors cursor-pointer"
-                              title="Remove guru"
-                            >
-                              <X className="w-3 h-3 stroke-[2.5]" />
-                            </button>
-                          </span>
-                        );
-                      })}
-                    </div>
-                  </div>
-                ) : (
-                  <div className="p-2.5 rounded-xl bg-white border border-dashed border-slate-200 text-center">
-                    <span className="text-[11px] text-body-muted">
-                      No instructors assigned yet. Use the search bar below to find and allot gurus.
-                    </span>
-                  </div>
-                )}
-
-                {/* Search & Filter Toolbar for 700+ Teachers */}
-                <div className="space-y-2 pt-1 border-t border-slate-200/60">
-                  <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
-                    {/* Search Input */}
-                    <div className="relative flex-1">
-                      <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
-                      <input
-                        type="text"
-                        value={teacherSearchQuery}
-                        onChange={(e) => setTeacherSearchQuery(e.target.value)}
-                        placeholder={`Search ${facultyTeachers.length > 0 ? facultyTeachers.length : '700+'} faculty by name, email, or instrument...`}
-                        className="w-full pl-8 pr-7 py-2 text-xs rounded-xl bg-white border border-slate-200 text-heading placeholder-gray-400 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-2xs transition-all"
-                      />
-                      {teacherSearchQuery && (
-                        <button
-                          type="button"
-                          onClick={() => setTeacherSearchQuery("")}
-                          className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 p-0.5 cursor-pointer"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Quick Filter: All vs Matching Instrument */}
-                    {instrument && (
-                      <button
-                        type="button"
-                        onClick={() =>
-                          setTeacherFilterCategory((prev) =>
-                            prev === "MATCHING_INSTRUMENT" ? "ALL" : "MATCHING_INSTRUMENT"
-                          )
-                        }
-                        className={`px-3 py-2 rounded-xl text-xs font-semibold whitespace-nowrap transition-all border cursor-pointer active:scale-[0.98] ${
-                          teacherFilterCategory === "MATCHING_INSTRUMENT"
-                            ? "bg-[#3C096C] text-white border-[#3C096C] shadow-xs"
-                            : "bg-white text-gray-600 border-slate-200 hover:border-slate-300"
-                        }`}
-                      >
-                        {teacherFilterCategory === "MATCHING_INSTRUMENT" ? `✓ ` : ``}
-                        Gurus for {instrument}
-                      </button>
-                    )}
-                  </div>
-
-                  {/* Scrollable Teacher Roster Directory */}
-                  <div className="max-h-52 overflow-y-auto custom-scrollbar divide-y divide-slate-100 rounded-xl border border-slate-200/80 bg-white shadow-2xs pr-1.5">
-                    {filteredTeachersForModal.length === 0 ? (
-                      <div className="p-6 text-center text-xs text-body-muted space-y-1">
-                        <p className="font-semibold text-heading">No instructors match &ldquo;{teacherSearchQuery}&rdquo;</p>
-                        <p className="text-[11px]">Try clearing search keywords or switching filter.</p>
-                        {teacherSearchQuery && (
-                          <button
-                            type="button"
-                            onClick={() => setTeacherSearchQuery("")}
-                            className="mt-1 text-xs text-primary font-bold hover:underline cursor-pointer"
-                          >
-                            Clear Search
-                          </button>
-                        )}
-                      </div>
-                    ) : (
-                      filteredTeachersForModal.slice(0, 50).map((teacher) => {
-                        const isSelected = selectedTeacherIds.includes(teacher.id);
-                        return (
-                          <div
-                            key={teacher.id}
-                            onClick={() => toggleTeacherSelection(teacher.id)}
-                            className={`p-2.5 pl-3 pr-3.5 flex items-center justify-between gap-3 text-xs transition-colors cursor-pointer select-none ${
-                              isSelected
-                                ? "bg-purple-50/70 hover:bg-purple-50"
-                                : "hover:bg-slate-50"
-                            }`}
-                          >
-                            <div className="flex items-center gap-2.5 min-w-0">
-                              <span
-                                className={`w-7 h-7 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 border ${
-                                  isSelected
-                                    ? "bg-[#3C096C] text-white border-[#3C096C]"
-                                    : "bg-slate-100 text-slate-700 border-slate-200"
-                                }`}
-                              >
-                                {(teacher.name || "T")[0].toUpperCase()}
-                              </span>
-                              <div className="min-w-0">
-                                <p className="font-bold text-heading truncate leading-tight">
-                                  {teacher.name || "Teacher"}
-                                </p>
-                                <p className="text-[10px] text-body-muted truncate mt-0.5">
-                                  {teacher.instruments.length > 0
-                                    ? teacher.instruments.join(" · ")
-                                    : teacher.email}
-                                </p>
-                              </div>
-                            </div>
-
-                            {/* Action Button / Pill */}
-                            <button
-                              type="button"
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all shrink-0 active:scale-[0.97] cursor-pointer ${
-                                isSelected
-                                  ? "bg-[#3C096C] text-white shadow-2xs"
-                                  : "bg-slate-100 text-slate-700 hover:bg-purple-100 hover:text-purple-700 border border-slate-200"
-                              }`}
-                            >
-                              {isSelected ? "✓ Assigned" : "+ Add"}
-                            </button>
-                          </div>
-                        );
-                      })
-                    )}
-                  </div>
-
-                  {/* Showing count indicator */}
-                  <div className="flex items-center justify-between text-[10px] text-body-muted px-1">
-                    <span>
-                      Showing {Math.min(filteredTeachersForModal.length, 50)} of {facultyTeachers.length} registered faculty gurus
-                    </span>
-                    {filteredTeachersForModal.length > 50 && (
-                      <span className="text-primary font-medium">
-                        Type in search to refine
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
+              
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div className="space-y-1.5">
