@@ -57,8 +57,8 @@ const getCachedAdminStudentsData = unstable_cache(
                 select: { name: true },
               },
             },
-            orderBy: { startsAt: "desc" },
-            take: 25, // Reduced from 100
+            orderBy: { startsAt: "asc" },
+            take: 100,
           },
           payments: {
             include: {

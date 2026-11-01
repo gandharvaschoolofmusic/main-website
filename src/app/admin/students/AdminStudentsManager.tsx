@@ -407,6 +407,20 @@ export function AdminStudentsManager({
       )
     : [];
 
+  // Combined for Overview: upcoming classes shown first (next upcoming first in ascending chronological order), followed by recent past classes
+  const overviewLessons = selectedStudent
+    ? (() => {
+        const combined = [...upcomingLessons, ...pastLessons];
+        if (combined.length > 0) return combined.slice(0, 5);
+        return [...selectedStudent.lessons]
+          .sort(
+            (a, b) =>
+              new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime()
+          )
+          .slice(0, 5);
+      })()
+    : [];
+
   // Student timeline events
   const timelineEvents: {
     id: string;
@@ -1142,12 +1156,12 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       </div>
 
                       <div className="space-y-3">
-                        {selectedStudent.lessons.length === 0 ? (
+                        {overviewLessons.length === 0 ? (
                           <div className="p-4 rounded-xl bg-neutral-50 text-center text-xs text-body/60">
                             No scheduled or completed lessons for this student.
                           </div>
                         ) : (
-                          selectedStudent.lessons.slice(0, 5).map((l, idx) => {
+                          overviewLessons.map((l, idx) => {
                             const lDate = new Date(l.startsAt);
                             const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
                             const isPastTime = Date.now() >= endTime.getTime();
