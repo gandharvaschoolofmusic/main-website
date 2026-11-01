@@ -21,11 +21,14 @@ function getSupabaseClient(): SupabaseClient | null {
 
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
     "https://kprifflfakbucchpimvz.supabase.co";
 
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
+    process.env.SUPABASE_SERVICE_KEY ||
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY;
 
   if (!url || !key) {
     return null;
@@ -47,8 +50,12 @@ function getSupabaseClient(): SupabaseClient | null {
 export function isStorageConfigured(): boolean {
   return !!(
     (process.env.SUPABASE_SERVICE_ROLE_KEY ||
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) &&
-    (process.env.NEXT_PUBLIC_SUPABASE_URL || "https://kprifflfakbucchpimvz.supabase.co")
+      process.env.SUPABASE_SERVICE_KEY ||
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
+      process.env.SUPABASE_ANON_KEY) &&
+    (process.env.NEXT_PUBLIC_SUPABASE_URL ||
+      process.env.SUPABASE_URL ||
+      "https://kprifflfakbucchpimvz.supabase.co")
   );
 }
 
@@ -59,11 +66,11 @@ export async function uploadToSupabase(
   fileName: string,
   mimeType: string,
   options?: {
-    bucket?: StorageBucket;
+    bucket?: StorageBucket | string;
     preserveExactName?: boolean;
   },
 ): Promise<StorageUploadResult> {
-  const bucket: StorageBucket = options?.bucket || "resources";
+  let bucket = options?.bucket || "resources";
   const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
   const finalName = options?.preserveExactName
     ? sanitized
@@ -77,12 +84,64 @@ export async function uploadToSupabase(
   }
 
   // Upload directly to Supabase File Storage Bucket
-  const { data, error } = await client.storage
+  let { data, error } = await client.storage
     .from(bucket)
     .upload(finalName, fileBuffer, {
       contentType: mimeType || "application/octet-stream",
       upsert: true,
     });
+
+  // If Bucket not found, attempt auto-creation or fallback to available bucket
+  if (error && (error.message?.toLowerCase().includes("bucket not found") || (error as any).statusCode === "404" || (error as any).statusCode === 404)) {
+    logger.warn({ bucket, error: error.message }, "Target bucket not found, attempting auto-creation");
+
+    try {
+      const { error: createErr } = await client.storage.createBucket(bucket, {
+        public: true,
+      });
+
+      if (!createErr) {
+        const retry = await client.storage
+          .from(bucket)
+          .upload(finalName, fileBuffer, {
+            contentType: mimeType || "application/octet-stream",
+            upsert: true,
+          });
+        data = retry.data;
+        error = retry.error;
+      }
+    } catch (createCatch) {
+      logger.warn({ createCatch }, "Auto-create bucket failed");
+    }
+
+    // If still error, inspect available buckets in project and use one of them
+    if (error) {
+      try {
+        const { data: buckets } = await client.storage.listBuckets();
+        if (buckets && buckets.length > 0) {
+          const alternate =
+            buckets.find((b) => b.name === "resources" || b.name === "chat-attachments" || b.name === "recordings") ||
+            buckets[0];
+          if (alternate && alternate.name !== bucket) {
+            logger.info({ fromBucket: bucket, fallbackBucket: alternate.name }, "Retrying upload with existing bucket");
+            const altUpload = await client.storage
+              .from(alternate.name)
+              .upload(finalName, fileBuffer, {
+                contentType: mimeType || "application/octet-stream",
+                upsert: true,
+              });
+            if (altUpload.data?.path) {
+              data = altUpload.data;
+              error = null;
+              bucket = alternate.name as StorageBucket;
+            }
+          }
+        }
+      } catch (listErr) {
+        logger.warn({ listErr }, "Could not list fallback buckets");
+      }
+    }
+  }
 
   if (error || !data?.path) {
     logger.error(

@@ -1125,23 +1125,51 @@ export async function uploadCourseStructurePdfAction(
       return { success: false, error: "PDF size cannot exceed 25MB." };
     }
 
-    const { uploadToSupabase, isStorageConfigured } = await import("@/lib/supabase-storage");
-
-    if (!isStorageConfigured()) {
-      return { success: false, error: "Storage backend is not configured." };
-    }
-
     const arrayBuffer = await file.arrayBuffer();
     const buffer = Buffer.from(arrayBuffer);
 
-    const result = await uploadToSupabase(buffer, file.name, "application/pdf", {
-      bucket: "resources",
-    });
+    let fileUrl: string | null = null;
+
+    // 1. Try Supabase Storage
+    try {
+      const { uploadToSupabase, isStorageConfigured } = await import("@/lib/supabase-storage");
+      if (isStorageConfigured()) {
+        const result = await uploadToSupabase(buffer, file.name, "application/pdf", {
+          bucket: "resources",
+        });
+        if (result?.fileUrl) {
+          fileUrl = result.fileUrl;
+        }
+      }
+    } catch (storageErr) {
+      logger.warn({ storageErr }, "Supabase storage upload failed, attempting local fallback");
+    }
+
+    // 2. Fallback to public web uploads directory if cloud bucket is missing or unconfigured
+    if (!fileUrl) {
+      try {
+        const fs = await import("fs");
+        const path = await import("path");
+        const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const finalName = `${Date.now()}_${sanitized}`;
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "courses");
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        fs.writeFileSync(path.join(uploadDir, finalName), buffer);
+        fileUrl = `/uploads/courses/${finalName}`;
+      } catch (fsErr) {
+        logger.error({ fsErr }, "Local disk storage fallback failed");
+        return { success: false, error: "Failed to store file on storage service or disk." };
+      }
+    }
 
     return {
       success: true,
       data: {
-        url: result.fileUrl,
+        url: fileUrl,
         fileName: file.name,
       },
     };
