@@ -276,17 +276,58 @@ export function AdminCoursesManager({
       const formData = new FormData();
       formData.append("file", file);
 
-      const res = await uploadCourseStructurePdfAction(formData);
-      if (res.success && res.data) {
-        setStructurePdfUrl(res.data.url);
-        setStructurePdfName(res.data.fileName || file.name);
+      let uploadSuccess = false;
+      let uploadResult: { url: string; fileName: string } | null = null;
+      let uploadErrMsg: string | null = null;
+
+      // 1. Direct API endpoint upload (handles up to 25MB without Server Action body limits)
+      try {
+        const response = await fetch("/api/courses/structure-pdf", {
+          method: "POST",
+          body: formData,
+        });
+
+        const json = await response.json().catch(() => null);
+
+        if (response.ok && json?.success && json?.data) {
+          uploadSuccess = true;
+          uploadResult = json.data;
+        } else if (json?.error) {
+          uploadErrMsg = json.error;
+        }
+      } catch (fetchErr: any) {
+        uploadErrMsg = fetchErr?.message || null;
+      }
+
+      // 2. Fallback to Server Action if direct API wasn't reached
+      if (!uploadSuccess) {
+        try {
+          const res = await uploadCourseStructurePdfAction(formData);
+          if (res.success && res.data) {
+            uploadSuccess = true;
+            uploadResult = res.data;
+          } else if (res.error) {
+            uploadErrMsg = res.error;
+          }
+        } catch (actionErr: any) {
+          if (!uploadErrMsg) {
+            uploadErrMsg = actionErr?.message || null;
+          }
+        }
+      }
+
+      if (uploadSuccess && uploadResult) {
+        setStructurePdfUrl(uploadResult.url);
+        setStructurePdfName(uploadResult.fileName || file.name);
         setPdfSuccessMsg("Course structure PDF uploaded successfully!");
         setTimeout(() => setPdfSuccessMsg(null), 3000);
       } else {
-        setPdfUploadError(res.error || "Failed to upload PDF.");
+        setPdfUploadError(uploadErrMsg || "Failed to upload course structure PDF.");
       }
-    } catch {
-      setPdfUploadError("An unexpected error occurred while uploading the PDF.");
+    } catch (err: any) {
+      setPdfUploadError(
+        err?.message || (typeof err === "string" ? err : "An unexpected error occurred while uploading the PDF.")
+      );
     } finally {
       setIsUploadingPdf(false);
       if (pdfInputRef.current) pdfInputRef.current.value = "";

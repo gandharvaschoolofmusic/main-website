@@ -1173,6 +1173,7 @@ export async function uploadCourseStructurePdfAction(
     const buffer = Buffer.from(arrayBuffer);
 
     let fileUrl: string | null = null;
+    let cloudErrorMsg: string | null = null;
 
     // 1. Try Supabase Storage
     try {
@@ -1186,6 +1187,7 @@ export async function uploadCourseStructurePdfAction(
         }
       }
     } catch (storageErr) {
+      cloudErrorMsg = storageErr instanceof Error ? storageErr.message : String(storageErr);
       logger.warn({ storageErr }, "Supabase storage upload failed, attempting local fallback");
     }
 
@@ -1205,8 +1207,13 @@ export async function uploadCourseStructurePdfAction(
         fs.writeFileSync(path.join(uploadDir, finalName), buffer);
         fileUrl = `/uploads/courses/${finalName}`;
       } catch (fsErr) {
-        logger.error({ fsErr }, "Local disk storage fallback failed");
-        return { success: false, error: "Failed to store file on storage service or disk." };
+        logger.error({ fsErr, cloudErrorMsg }, "Local disk storage fallback failed");
+        return {
+          success: false,
+          error:
+            cloudErrorMsg ||
+            "Failed to store file on storage service or server disk.",
+        };
       }
     }
 

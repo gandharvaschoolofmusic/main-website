@@ -22,7 +22,7 @@ function getSupabaseClient(): SupabaseClient | null {
   const url =
     process.env.NEXT_PUBLIC_SUPABASE_URL ||
     process.env.SUPABASE_URL ||
-    "https://kprifflfakbucchpimvz.supabase.co";
+    "https://xopunboicdymbwdmxvnu.supabase.co";
 
   const key =
     process.env.SUPABASE_SERVICE_ROLE_KEY ||
@@ -55,7 +55,7 @@ export function isStorageConfigured(): boolean {
       process.env.SUPABASE_ANON_KEY) &&
     (process.env.NEXT_PUBLIC_SUPABASE_URL ||
       process.env.SUPABASE_URL ||
-      "https://kprifflfakbucchpimvz.supabase.co")
+      "https://xopunboicdymbwdmxvnu.supabase.co")
   );
 }
 
@@ -159,7 +159,7 @@ export async function uploadToSupabase(
 
   const fileUrl =
     publicUrlData?.publicUrl ||
-    `https://kprifflfakbucchpimvz.supabase.co/storage/v1/object/public/${bucket}/${encodeURIComponent(data.path)}`;
+    `https://xopunboicdymbwdmxvnu.supabase.co/storage/v1/object/public/${bucket}/${encodeURIComponent(data.path)}`;
 
   logger.info(
     { bucket, path: data.path, fileName: finalName, fileUrl },

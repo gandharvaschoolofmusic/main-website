@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { db } from "@/lib/db";
+import { auth } from "@/lib/auth";
+import { uploadToSupabase, isStorageConfigured } from "@/lib/supabase-storage";
+import { logger } from "@/lib/logger";
 import fs from "fs";
 import path from "path";
 
@@ -113,6 +116,118 @@ export async function GET(req: NextRequest) {
     console.error("Error serving course structure PDF:", err);
     return NextResponse.json(
       { error: "Internal server error occurred while retrieving course PDF" },
+      { status: 500 }
+    );
+  }
+}
+
+/**
+ * POST /api/courses/structure-pdf
+ *
+ * Accepts multipart/form-data upload of a course structure PDF up to 25MB.
+ * Stores in Supabase 'resources' bucket (or local filesystem fallback if unconfigured),
+ * returning { success: true, data: { url: string, fileName: string } }.
+ */
+export async function POST(req: NextRequest) {
+  try {
+    // 1. Authenticate user
+    const session = await auth();
+    if (!session?.user?.id || session.user.role !== "ADMIN") {
+      return NextResponse.json(
+        { error: "Unauthorized. Admin access required." },
+        { status: 401 }
+      );
+    }
+
+    // 2. Parse form data
+    const formData = await req.formData();
+    const file = formData.get("file") as File | null;
+
+    if (!file || file.size === 0) {
+      return NextResponse.json(
+        { error: "Please select a PDF file to upload." },
+        { status: 400 }
+      );
+    }
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      return NextResponse.json(
+        { error: "Only PDF (.pdf) files are allowed for course structure." },
+        { status: 400 }
+      );
+    }
+
+    // 25MB max
+    if (file.size > 25 * 1024 * 1024) {
+      return NextResponse.json(
+        { error: "PDF size cannot exceed 25MB." },
+        { status: 400 }
+      );
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    let fileUrl: string | null = null;
+    let cloudUploadError: string | null = null;
+
+    // 3. Try Supabase Storage
+    try {
+      if (isStorageConfigured()) {
+        const result = await uploadToSupabase(buffer, file.name, "application/pdf", {
+          bucket: "resources",
+        });
+        if (result?.fileUrl) {
+          fileUrl = result.fileUrl;
+        }
+      }
+    } catch (storageErr) {
+      cloudUploadError = storageErr instanceof Error ? storageErr.message : String(storageErr);
+      logger.warn({ storageErr }, "Supabase storage upload failed in POST route, attempting disk fallback");
+    }
+
+    // 4. Fallback to public uploads directory if cloud upload was not successful
+    if (!fileUrl) {
+      try {
+        const sanitized = file.name.replace(/[^a-zA-Z0-9._-]/g, "_");
+        const finalName = `${Date.now()}_${sanitized}`;
+        const uploadDir = path.join(process.cwd(), "public", "uploads", "courses");
+
+        if (!fs.existsSync(uploadDir)) {
+          fs.mkdirSync(uploadDir, { recursive: true });
+        }
+
+        await fs.promises.writeFile(path.join(uploadDir, finalName), buffer);
+        fileUrl = `/uploads/courses/${finalName}`;
+      } catch (fsErr) {
+        logger.error({ fsErr, cloudUploadError }, "Local disk storage fallback also failed");
+        return NextResponse.json(
+          {
+            error:
+              cloudUploadError ||
+              "Failed to upload file to storage backend and local disk fallback failed.",
+          },
+          { status: 500 }
+        );
+      }
+    }
+
+    return NextResponse.json({
+      success: true,
+      data: {
+        url: fileUrl,
+        fileName: file.name,
+      },
+    });
+  } catch (error) {
+    logger.error({ error }, "Error handling course structure PDF upload in POST route");
+    return NextResponse.json(
+      {
+        error:
+          error instanceof Error
+            ? error.message
+            : "An unexpected error occurred while processing the PDF upload.",
+      },
       { status: 500 }
     );
   }

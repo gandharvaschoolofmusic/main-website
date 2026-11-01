@@ -28,6 +28,7 @@ const nextConfig: NextConfig = {
       "@prisma/client",
     ],
     serverActions: {
+      bodySizeLimit: "25mb",
       allowedOrigins: [
         "*.trycloudflare.com",
         "*.cloudflare.com",
