@@ -9,6 +9,7 @@ import type { ConfirmationResult } from "firebase/auth";
 import {
   isFirebaseConfigured,
   createRecaptchaVerifier,
+  clearRecaptchaVerifier,
   sendFirebaseOtp,
   confirmFirebaseOtp,
 } from "@/lib/firebase";
@@ -127,15 +128,11 @@ export default function SignupPage() {
     success: false,
   });
 
-  // Handle Send OTP
-  // Pre-warm the reCAPTCHA verifier in the background
+  // Clean up reCAPTCHA verifier on unmount
   useEffect(() => {
-    if (isFirebaseConfigured()) {
-      try {
-        const v = createRecaptchaVerifier("signup-recaptcha-container");
-        v?.render().catch(() => {});
-      } catch {}
-    }
+    return () => {
+      clearRecaptchaVerifier("signup-recaptcha-container");
+    };
   }, []);
 
   const handleSendOtp = () => {
@@ -240,6 +237,7 @@ export default function SignupPage() {
   };
 
   const handleChangePhone = () => {
+    clearRecaptchaVerifier("signup-recaptcha-container");
     setIsPhoneVerified(false);
     setOtpSent(false);
     setOtpCode("");
@@ -625,9 +623,6 @@ export default function SignupPage() {
                   </div>
                 </div>
               )}
-
-              {/* Invisible reCAPTCHA container for Firebase */}
-              <div id="signup-recaptcha-container" className="hidden" aria-hidden="true" />
 
               {/* Verified state vs Input state */}
               {isPhoneVerified ? (

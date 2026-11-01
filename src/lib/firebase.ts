@@ -46,60 +46,87 @@ export function getFirebaseAuth(): Auth | null {
   return firebaseAuth;
 }
 
+/**
+ * Ensures a dedicated DOM element exists on document.body for invisible reCAPTCHA.
+ * Creating and managing this element outside of React's component tree guarantees
+ * that React reconciliation will NEVER fail with "NotFoundError: Failed to execute 'removeChild'".
+ */
+export function getOrCreateRecaptchaContainer(containerId: string): HTMLElement {
+  let el = document.getElementById(containerId);
+  if (!el) {
+    el = document.createElement("div");
+    el.id = containerId;
+    el.className = "hidden";
+    el.style.display = "none";
+    el.setAttribute("aria-hidden", "true");
+    document.body.appendChild(el);
+  }
+  return el;
+}
+
+/**
+ * Safely clears an active reCAPTCHA verifier and cleans widget elements without
+ * mutating or detaching any React-managed parent nodes.
+ */
+export function clearRecaptchaVerifier(containerId?: string): void {
+  if (typeof window === "undefined") return;
+
+  const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
+  if (existing) {
+    try {
+      existing.clear();
+    } catch {
+      // ignore
+    }
+    (window as any).recaptchaVerifier = null;
+    (window as any).recaptchaContainerId = null;
+    (window as any).recaptchaWidgetId = undefined;
+  }
+
+  if (containerId) {
+    try {
+      const el = document.getElementById(containerId);
+      if (el) {
+        // Clear inner HTML (removes any iframes injected by Google grecaptcha)
+        // without detaching the container node from its parent
+        el.innerHTML = "";
+      }
+    } catch {}
+  }
+}
+
 export function createRecaptchaVerifier(
   containerId: string,
   onExpired?: () => void
 ): RecaptchaVerifier | null {
   const auth = getFirebaseAuth();
-  if (!auth) return null;
+  if (!auth || typeof window === "undefined") return null;
 
   try {
-    if (typeof window !== "undefined") {
-      let el = document.getElementById(containerId);
-
-      // 1. If an existing verifier is attached to this container and still healthy, reuse it safely
-      const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
-      if (
-        existing &&
-        el &&
-        (window as any).recaptchaContainerId === containerId &&
-        typeof (existing as any)._widgetId !== "undefined"
-      ) {
+    // 1. If an existing verifier is attached to this container, reuse it safely
+    const existing = (window as any).recaptchaVerifier as RecaptchaVerifier | undefined;
+    if (existing && (window as any).recaptchaContainerId === containerId) {
+      try {
+        const widgetId = (existing as any)._widgetId ?? (window as any).recaptchaWidgetId;
+        if (typeof widgetId === "number" && (window as any).grecaptcha?.reset) {
+          (window as any).grecaptcha.reset(widgetId);
+        }
         return existing;
-      }
-
-      // 2. Clear previous verifier instance if any
-      if (existing) {
+      } catch {
+        // Reset failed, clear and create fresh
         try {
           existing.clear();
-        } catch {
-          // ignore
-        }
+        } catch {}
         (window as any).recaptchaVerifier = null;
-      }
-
-      // 3. CRITICAL: Replace container element with a fresh, virgin DOM node
-      // This severs Google grecaptcha's internal widget node mapping and completely
-      // prevents "reCAPTCHA has already been rendered in this element"!
-      if (el && el.parentNode) {
-        const freshEl = document.createElement("div");
-        freshEl.id = containerId;
-        freshEl.className = el.className || "hidden";
-        freshEl.style.display = "none";
-        freshEl.setAttribute("aria-hidden", "true");
-        el.parentNode.replaceChild(freshEl, el);
-        el = freshEl;
-      } else if (!el && typeof document !== "undefined") {
-        el = document.createElement("div");
-        el.id = containerId;
-        el.className = "hidden";
-        el.style.display = "none";
-        el.setAttribute("aria-hidden", "true");
-        document.body.appendChild(el);
       }
     }
 
-    const verifier = new RecaptchaVerifier(auth, containerId, {
+    // 2. Clear any stale verifier and ensure clean container
+    clearRecaptchaVerifier(containerId);
+    const container = getOrCreateRecaptchaContainer(containerId);
+
+    // 3. Instantiate fresh RecaptchaVerifier
+    const verifier = new RecaptchaVerifier(auth, container, {
       size: "invisible",
       callback: () => {
         // Invisible reCAPTCHA successfully solved
@@ -109,53 +136,15 @@ export function createRecaptchaVerifier(
       },
     });
 
-    // Pre-warm the reCAPTCHA widget in background
-    verifier.render().then((widgetId) => {
-      if (typeof window !== "undefined") {
-        (window as any).recaptchaWidgetId = widgetId;
-      }
-    }).catch((err) => {
-      console.warn("[Firebase] reCAPTCHA render warning:", err);
-    });
-
-    if (typeof window !== "undefined") {
-      (window as any).recaptchaVerifier = verifier;
-      (window as any).recaptchaContainerId = containerId;
-    }
+    (window as any).recaptchaVerifier = verifier;
+    (window as any).recaptchaContainerId = containerId;
 
     return verifier;
   } catch (error: any) {
     console.error("[Firebase] Error initializing RecaptchaVerifier:", error);
-
-    // Fallback: If grecaptcha threw "already been rendered", hard-replace the DOM element and retry once
-    if (typeof window !== "undefined") {
-      try {
-        const staleEl = document.getElementById(containerId);
-        if (staleEl && staleEl.parentNode) {
-          const freshEl = document.createElement("div");
-          freshEl.id = containerId;
-          freshEl.className = "hidden";
-          freshEl.style.display = "none";
-          freshEl.setAttribute("aria-hidden", "true");
-          staleEl.parentNode.replaceChild(freshEl, staleEl);
-
-          const retryVerifier = new RecaptchaVerifier(auth, containerId, {
-            size: "invisible",
-            callback: () => {},
-            "expired-callback": () => {
-              if (onExpired) onExpired();
-            },
-          });
-          retryVerifier.render().catch(() => {});
-          (window as any).recaptchaVerifier = retryVerifier;
-          (window as any).recaptchaContainerId = containerId;
-          return retryVerifier;
-        }
-      } catch (retryErr) {
-        console.error("[Firebase] Fallback RecaptchaVerifier initialization failed:", retryErr);
-      }
-    }
-
+    try {
+      clearRecaptchaVerifier(containerId);
+    } catch {}
     return null;
   }
 }
@@ -173,6 +162,14 @@ export async function sendFirebaseOtp(
   }
 
   try {
+    // Reset the reCAPTCHA widget token so user gets a fresh challenge token
+    try {
+      const widgetId = (verifier as any)._widgetId ?? (window as any).recaptchaWidgetId;
+      if (typeof widgetId === "number" && (window as any).grecaptcha?.reset) {
+        (window as any).grecaptcha.reset(widgetId);
+      }
+    } catch {}
+
     const confirmationResult = await signInWithPhoneNumber(auth, phoneNumber, verifier);
     return {
       success: true,
@@ -193,13 +190,8 @@ export async function sendFirebaseOtp(
       error?.message?.includes("already been rendered") ||
       String(error).includes("already been rendered");
 
-    // Only clear verifier if DOM element needs complete recreation on next attempt
-    if (isAlreadyRendered && typeof window !== "undefined") {
-      try {
-        verifier.clear();
-      } catch {}
-      (window as any).recaptchaVerifier = null;
-      (window as any).recaptchaContainerId = null;
+    if (isAlreadyRendered) {
+      clearRecaptchaVerifier();
     }
 
     let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";

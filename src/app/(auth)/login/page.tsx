@@ -9,6 +9,7 @@ import type { ConfirmationResult } from "firebase/auth";
 import {
   isFirebaseConfigured,
   createRecaptchaVerifier,
+  clearRecaptchaVerifier,
   sendFirebaseOtp,
   confirmFirebaseOtp,
 } from "@/lib/firebase";
@@ -88,15 +89,12 @@ export default function LoginPage() {
     }
   }, [otpSent]);
 
-  // Pre-warm the reCAPTCHA verifier in the background as soon as OTP mode is selected
+  // Clean up reCAPTCHA verifier on unmount
   useEffect(() => {
-    if (loginMode === "OTP" && isFirebaseConfigured()) {
-      try {
-        const v = createRecaptchaVerifier("login-recaptcha-container");
-        v?.render().catch(() => {});
-      } catch {}
-    }
-  }, [loginMode]);
+    return () => {
+      clearRecaptchaVerifier("login-recaptcha-container");
+    };
+  }, []);
 
   // Calculate formatted full number for API & display
   const getFullPhoneNumber = () => {
@@ -503,9 +501,6 @@ export default function LoginPage() {
                 Includes country code: <strong className="font-mono text-heading">{selectedCountry.dialCode}</strong> ({selectedCountry.name})
               </p>
             </div>
-
-            {/* Invisible reCAPTCHA container for Firebase (Always mounted in DOM) */}
-            <div id="login-recaptcha-container" className="hidden" aria-hidden="true" />
 
             {/* State A: Before OTP is sent -> "Get OTP" Button */}
             {!otpSent && (

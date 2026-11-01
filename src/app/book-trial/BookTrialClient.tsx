@@ -29,6 +29,7 @@ import type { ConfirmationResult } from "firebase/auth";
 import {
   isFirebaseConfigured,
   createRecaptchaVerifier,
+  clearRecaptchaVerifier,
   sendFirebaseOtp,
   confirmFirebaseOtp,
 } from "@/lib/firebase";
@@ -429,14 +430,11 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
     return formatInternationalE164(selectedCountry.dialCode, studentPhone);
   };
 
-  // Pre-warm the reCAPTCHA verifier in the background
+  // Clean up reCAPTCHA verifier on unmount
   useEffect(() => {
-    if (isFirebaseConfigured()) {
-      try {
-        const v = createRecaptchaVerifier("trial-recaptcha-container");
-        v?.render().catch(() => {});
-      } catch {}
-    }
+    return () => {
+      clearRecaptchaVerifier("trial-recaptcha-container");
+    };
   }, []);
 
   const handleSendOtp = () => {
@@ -918,9 +916,6 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                     </div>
                   </div>
                 )}
-
-                {/* Invisible reCAPTCHA container for Firebase */}
-                <div id="trial-recaptcha-container" className="hidden" aria-hidden="true" />
 
                 {/* Verified State */}
                 {isPhoneVerified ? (
