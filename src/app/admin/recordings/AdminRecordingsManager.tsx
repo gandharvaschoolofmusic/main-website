@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition, useMemo, useEffect } from "react";
+import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
 import Link from "next/link";
 import {
   Music,
@@ -171,6 +171,35 @@ export function AdminRecordingsManager({
   driveStatus,
 }: AdminRecordingsManagerProps) {
   const [courses, setCourses] = useState<CourseGroupItem[]>(initialCourses);
+  const [isMounted, setIsMounted] = useState(false);
+
+  useEffect(() => {
+    setIsMounted(true);
+  }, []);
+
+  const formatPresence = useCallback(
+    (
+      isoString?: string | null,
+      fallbackFormatted?: string | null,
+      emptyLabel = "Not Recorded",
+    ): string => {
+      if (isMounted && isoString) {
+        try {
+          const d = new Date(isoString);
+          if (!isNaN(d.getTime())) {
+            return d.toLocaleTimeString([], {
+              hour: "numeric",
+              minute: "2-digit",
+              second: "2-digit",
+              hour12: true,
+            });
+          }
+        } catch {}
+      }
+      return fallbackFormatted || emptyLabel;
+    },
+    [isMounted],
+  );
 
   // ─── Hierarchical Navigation State ─────────────────────────────────────────
   // Step 1: Course (selectedCourseId)
@@ -953,9 +982,9 @@ export function AdminRecordingsManager({
                               <span>•</span>
                               <span className="inline-flex items-center gap-1 text-[11px] font-mono text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-200/50">
                                 <CheckCircle2 className="w-3 h-3 text-emerald-600" />
-                                {lesson.formattedTeacherJoined && `Teacher: ${lesson.formattedTeacherJoined}`}
+                                {lesson.formattedTeacherJoined && `Teacher: ${formatPresence(lesson.teacherJoinedAt, lesson.formattedTeacherJoined)}`}
                                 {lesson.formattedTeacherJoined && lesson.formattedStudentJoined && " • "}
-                                {lesson.formattedStudentJoined && `Student: ${lesson.formattedStudentJoined}`}
+                                {lesson.formattedStudentJoined && `Student: ${formatPresence(lesson.studentJoinedAt, lesson.formattedStudentJoined)}`}
                               </span>
                             </>
                           )}
@@ -1109,7 +1138,7 @@ export function AdminRecordingsManager({
                       Joined Room
                     </div>
                     <div className="font-mono text-xs font-bold text-emerald-700">
-                      {selectedSession.formattedTeacherJoined || "Not Recorded"}
+                      {formatPresence(selectedSession.teacherJoinedAt, selectedSession.formattedTeacherJoined)}
                     </div>
                   </div>
 
@@ -1119,7 +1148,7 @@ export function AdminRecordingsManager({
                       Left Room
                     </div>
                     <div className="font-mono text-xs font-bold text-rose-700">
-                      {selectedSession.formattedTeacherLeft || "Not Recorded"}
+                      {formatPresence(selectedSession.teacherLeftAt, selectedSession.formattedTeacherLeft)}
                     </div>
                   </div>
                 </div>
@@ -1160,7 +1189,7 @@ export function AdminRecordingsManager({
                       Joined Room
                     </div>
                     <div className="font-mono text-xs font-bold text-emerald-700">
-                      {selectedSession.formattedStudentJoined || "Not Recorded"}
+                      {formatPresence(selectedSession.studentJoinedAt, selectedSession.formattedStudentJoined)}
                     </div>
                   </div>
 
@@ -1170,7 +1199,7 @@ export function AdminRecordingsManager({
                       Left Room
                     </div>
                     <div className="font-mono text-xs font-bold text-rose-700">
-                      {selectedSession.formattedStudentLeft || "Not Recorded"}
+                      {formatPresence(selectedSession.studentLeftAt, selectedSession.formattedStudentLeft)}
                     </div>
                   </div>
                 </div>
@@ -1446,7 +1475,7 @@ export function AdminRecordingsManager({
                                 </span>
                                 <span className="font-mono font-bold text-emerald-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
                                   <LogIn className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  {recording.formattedTeacherJoined || selectedSession.formattedTeacherJoined || "—"}
+                                  {formatPresence(recording.teacherJoinedAt || selectedSession.teacherJoinedAt, recording.formattedTeacherJoined || selectedSession.formattedTeacherJoined, "—")}
                                 </span>
                               </div>
                               <div>
@@ -1455,7 +1484,7 @@ export function AdminRecordingsManager({
                                 </span>
                                 <span className="font-mono font-bold text-rose-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
                                   <LogOut className="w-3 h-3 text-rose-600 shrink-0" />
-                                  {recording.formattedTeacherLeft || selectedSession.formattedTeacherLeft || "—"}
+                                  {formatPresence(recording.teacherLeftAt || selectedSession.teacherLeftAt, recording.formattedTeacherLeft || selectedSession.formattedTeacherLeft, "—")}
                                 </span>
                               </div>
                             </div>
@@ -1491,7 +1520,7 @@ export function AdminRecordingsManager({
                                 </span>
                                 <span className="font-mono font-bold text-emerald-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
                                   <LogIn className="w-3 h-3 text-emerald-600 shrink-0" />
-                                  {recording.formattedStudentJoined || selectedSession.formattedStudentJoined || "—"}
+                                  {formatPresence(recording.studentJoinedAt || selectedSession.studentJoinedAt, recording.formattedStudentJoined || selectedSession.formattedStudentJoined, "—")}
                                 </span>
                               </div>
                               <div>
@@ -1500,7 +1529,7 @@ export function AdminRecordingsManager({
                                 </span>
                                 <span className="font-mono font-bold text-rose-700 inline-flex items-center gap-1 mt-0.5 text-[11px]">
                                   <LogOut className="w-3 h-3 text-rose-600 shrink-0" />
-                                  {recording.formattedStudentLeft || selectedSession.formattedStudentLeft || "—"}
+                                  {formatPresence(recording.studentLeftAt || selectedSession.studentLeftAt, recording.formattedStudentLeft || selectedSession.formattedStudentLeft, "—")}
                                 </span>
                               </div>
                             </div>
@@ -1617,12 +1646,12 @@ export function AdminRecordingsManager({
                 </span>
                 <span className="inline-flex items-center gap-1.5 text-stone-200">
                   <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  Teacher: {playingRecording.formattedTeacherJoined || selectedSession?.formattedTeacherJoined || "—"} → {playingRecording.formattedTeacherLeft || selectedSession?.formattedTeacherLeft || "—"}
+                  Teacher: {formatPresence(playingRecording.teacherJoinedAt || selectedSession?.teacherJoinedAt, playingRecording.formattedTeacherJoined || selectedSession?.formattedTeacherJoined, "—")} → {formatPresence(playingRecording.teacherLeftAt || selectedSession?.teacherLeftAt, playingRecording.formattedTeacherLeft || selectedSession?.formattedTeacherLeft, "—")}
                 </span>
                 <span>•</span>
                 <span className="inline-flex items-center gap-1.5 text-stone-200">
                   <span className="w-2 h-2 rounded-full bg-accent"></span>
-                  Student: {playingRecording.formattedStudentJoined || selectedSession?.formattedStudentJoined || "—"} → {playingRecording.formattedStudentLeft || selectedSession?.formattedStudentLeft || "—"}
+                  Student: {formatPresence(playingRecording.studentJoinedAt || selectedSession?.studentJoinedAt, playingRecording.formattedStudentJoined || selectedSession?.formattedStudentJoined, "—")} → {formatPresence(playingRecording.studentLeftAt || selectedSession?.studentLeftAt, playingRecording.formattedStudentLeft || selectedSession?.formattedStudentLeft, "—")}
                 </span>
               </div>
               {(playingRecording.overlapDurationSeconds || selectedSession?.overlapDurationSeconds) && (

@@ -13,7 +13,7 @@ export const metadata = {
 };
 
 const getCachedAdminLessonsData = unstable_cache(
-  async () => {
+  async (adminTimezone: string = "Asia/Kolkata") => {
     const dbLessons = await db.lesson.findMany({
       include: {
         teacher: { select: { name: true, email: true } },
@@ -39,12 +39,12 @@ const getCachedAdminLessonsData = unstable_cache(
       createdAt: l.createdAt.toISOString(),
       formattedTime: formatInViewerTimezone(
         l.startsAt,
-        "UTC",
+        adminTimezone,
         "MMM d, yyyy 'at' h:mm a zzz",
       ),
       formattedCreatedDate: formatInViewerTimezone(
         l.createdAt,
-        "UTC",
+        adminTimezone,
         "MMM d, yyyy",
       ),
       durationMinutes: l.durationMinutes,
@@ -59,16 +59,17 @@ const getCachedAdminLessonsData = unstable_cache(
 
     return formattedLessons;
   },
-  ["admin-lessons-data-v1"],
+  ["admin-lessons-data-v2"],
   { revalidate: 30, tags: ["admin-lessons", "lessons"] }
 );
 
 export default async function AdminLessonsPage() {
-  await requireRole(Role.ADMIN);
+  const admin = await requireRole(Role.ADMIN);
+  const adminTimezone = admin.timezone || "Asia/Kolkata";
 
   let formattedLessons: AdminLessonItem[] = [];
   try {
-    formattedLessons = await getCachedAdminLessonsData();
+    formattedLessons = await getCachedAdminLessonsData(adminTimezone);
   } catch (err) {
     console.error("[AdminLessonsPage] Failed to load cached lessons data, using fallback:", err);
   }

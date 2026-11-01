@@ -21,7 +21,7 @@ export const metadata = {
 };
 
 const getCachedCourseRecordingsData = unstable_cache(
-  async (): Promise<CourseGroupItem[]> => {
+  async (adminTimezone: string = "Asia/Kolkata"): Promise<CourseGroupItem[]> => {
     // 1. Fetch courses with enrollments, lessons, and recordings
     const dbCourses = await db.course.findMany({
       include: {
@@ -99,8 +99,8 @@ const getCachedCourseRecordingsData = unstable_cache(
             trackingCode: getLessonTrackingId(l),
             sessionNumber: lIdx + 1,
             startsAt: l.startsAt.toISOString(),
-            formattedDate: formatInViewerTimezone(l.startsAt, "UTC", "MMM d, yyyy"),
-            formattedTime: formatInViewerTimezone(l.startsAt, "UTC", "h:mm a zzz"),
+            formattedDate: formatInViewerTimezone(l.startsAt, adminTimezone, "MMM d, yyyy"),
+            formattedTime: formatInViewerTimezone(l.startsAt, adminTimezone, "h:mm a zzz"),
             status: l.status,
             durationMinutes: l.durationMinutes,
             instrument: l.instrument || c.instrument,
@@ -110,10 +110,10 @@ const getCachedCourseRecordingsData = unstable_cache(
             teacherLeftAt: tLeft ? tLeft.toISOString() : null,
             studentJoinedAt: sJoined ? sJoined.toISOString() : null,
             studentLeftAt: sLeft ? sLeft.toISOString() : null,
-            formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, "UTC", "h:mm:ss a") : null,
-            formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, "UTC", "h:mm:ss a") : null,
-            formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, "UTC", "h:mm:ss a") : null,
-            formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, "UTC", "h:mm:ss a") : null,
+            formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, adminTimezone, "h:mm:ss a") : null,
+            formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, adminTimezone, "h:mm:ss a") : null,
+            formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, adminTimezone, "h:mm:ss a") : null,
+            formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, adminTimezone, "h:mm:ss a") : null,
             teacherDurationSeconds,
             studentDurationSeconds,
             overlapDurationSeconds,
@@ -147,16 +147,16 @@ const getCachedCourseRecordingsData = unstable_cache(
                 durationSeconds: r.durationSeconds,
                 storageBackend: r.storageBackend,
                 createdAt: r.createdAt.toISOString(),
-                formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
+                formattedDate: formatInViewerTimezone(r.createdAt, adminTimezone, "MMM d, yyyy 'at' h:mm a zzz"),
                 partNumber: rIdx + 1,
                 teacherJoinedAt: rTJoined ? rTJoined.toISOString() : null,
                 teacherLeftAt: rTLeft ? rTLeft.toISOString() : null,
                 studentJoinedAt: rSJoined ? rSJoined.toISOString() : null,
                 studentLeftAt: rSLeft ? rSLeft.toISOString() : null,
-                formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, "UTC", "h:mm:ss a") : null,
-                formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, "UTC", "h:mm:ss a") : null,
-                formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, "UTC", "h:mm:ss a") : null,
-                formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, "UTC", "h:mm:ss a") : null,
+                formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, adminTimezone, "h:mm:ss a") : null,
+                formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, adminTimezone, "h:mm:ss a") : null,
+                formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, adminTimezone, "h:mm:ss a") : null,
+                formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, adminTimezone, "h:mm:ss a") : null,
                 teacherDurationSeconds: recTeacherDuration,
                 studentDurationSeconds: recStudentDuration,
                 overlapDurationSeconds: recOverlapDuration,
@@ -249,8 +249,8 @@ const getCachedCourseRecordingsData = unstable_cache(
           trackingCode: getLessonTrackingId(tl),
           sessionNumber: studentEntry.lessons.length + 1,
           startsAt: tl.startsAt.toISOString(),
-          formattedDate: formatInViewerTimezone(tl.startsAt, "UTC", "MMM d, yyyy"),
-          formattedTime: formatInViewerTimezone(tl.startsAt, "UTC", "h:mm a zzz"),
+          formattedDate: formatInViewerTimezone(tl.startsAt, adminTimezone, "MMM d, yyyy"),
+          formattedTime: formatInViewerTimezone(tl.startsAt, adminTimezone, "h:mm a zzz"),
           status: tl.status,
           durationMinutes: tl.durationMinutes,
           instrument: tl.instrument,
@@ -260,10 +260,10 @@ const getCachedCourseRecordingsData = unstable_cache(
           teacherLeftAt: tLeft ? tLeft.toISOString() : null,
           studentJoinedAt: sJoined ? sJoined.toISOString() : null,
           studentLeftAt: sLeft ? sLeft.toISOString() : null,
-          formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, "UTC", "h:mm:ss a") : null,
-          formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, "UTC", "h:mm:ss a") : null,
-          formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, "UTC", "h:mm:ss a") : null,
-          formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, "UTC", "h:mm:ss a") : null,
+          formattedTeacherJoined: tJoined ? formatInViewerTimezone(tJoined, adminTimezone, "h:mm:ss a") : null,
+          formattedTeacherLeft: tLeft ? formatInViewerTimezone(tLeft, adminTimezone, "h:mm:ss a") : null,
+          formattedStudentJoined: sJoined ? formatInViewerTimezone(sJoined, adminTimezone, "h:mm:ss a") : null,
+          formattedStudentLeft: sLeft ? formatInViewerTimezone(sLeft, adminTimezone, "h:mm:ss a") : null,
           teacherDurationSeconds,
           studentDurationSeconds,
           overlapDurationSeconds,
@@ -297,16 +297,16 @@ const getCachedCourseRecordingsData = unstable_cache(
               durationSeconds: r.durationSeconds,
               storageBackend: r.storageBackend,
               createdAt: r.createdAt.toISOString(),
-              formattedDate: formatInViewerTimezone(r.createdAt, "UTC", "MMM d, yyyy 'at' h:mm a zzz"),
+              formattedDate: formatInViewerTimezone(r.createdAt, adminTimezone, "MMM d, yyyy 'at' h:mm a zzz"),
               partNumber: rIdx + 1,
               teacherJoinedAt: rTJoined ? rTJoined.toISOString() : null,
               teacherLeftAt: rTLeft ? rTLeft.toISOString() : null,
               studentJoinedAt: rSJoined ? rSJoined.toISOString() : null,
               studentLeftAt: rSLeft ? rSLeft.toISOString() : null,
-              formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, "UTC", "h:mm:ss a") : null,
-              formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, "UTC", "h:mm:ss a") : null,
-              formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, "UTC", "h:mm:ss a") : null,
-              formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, "UTC", "h:mm:ss a") : null,
+              formattedTeacherJoined: rTJoined ? formatInViewerTimezone(rTJoined, adminTimezone, "h:mm:ss a") : null,
+              formattedTeacherLeft: rTLeft ? formatInViewerTimezone(rTLeft, adminTimezone, "h:mm:ss a") : null,
+              formattedStudentJoined: rSJoined ? formatInViewerTimezone(rSJoined, adminTimezone, "h:mm:ss a") : null,
+              formattedStudentLeft: rSLeft ? formatInViewerTimezone(rSLeft, adminTimezone, "h:mm:ss a") : null,
               teacherDurationSeconds: recTeacherDuration,
               studentDurationSeconds: recStudentDuration,
               overlapDurationSeconds: recOverlapDuration,
@@ -343,7 +343,7 @@ const getCachedCourseRecordingsData = unstable_cache(
 
     return coursesList;
   },
-  ["admin-course-recordings-hierarchy-v3"],
+  ["admin-course-recordings-hierarchy-v4"],
   { revalidate: 30, tags: ["admin-recordings"] },
 );
 
@@ -357,11 +357,12 @@ async function getDriveStatus(): Promise<DriveConfigStatus> {
 }
 
 export default async function AdminRecordingsPage() {
-  await requireRole(Role.ADMIN);
+  const admin = await requireRole(Role.ADMIN);
+  const adminTimezone = admin.timezone || "Asia/Kolkata";
 
   let courses: CourseGroupItem[] = [];
   try {
-    courses = await getCachedCourseRecordingsData();
+    courses = await getCachedCourseRecordingsData(adminTimezone);
   } catch (err) {
     console.error("[AdminRecordingsPage] Error fetching hierarchical course recordings:", err);
   }

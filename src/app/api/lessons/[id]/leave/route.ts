@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
@@ -59,6 +60,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         where: { id: lessonId },
         data: updateData,
       });
+
+      try {
+        revalidateTag("admin-recordings", "max");
+        revalidateTag("admin-lessons", "max");
+      } catch {}
 
       logger.info(
         { lessonId, userId, isTeacher, isStudent, timestamp: now },
