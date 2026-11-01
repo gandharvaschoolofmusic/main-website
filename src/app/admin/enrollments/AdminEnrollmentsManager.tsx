@@ -190,6 +190,10 @@ interface AdminEnrollmentsManagerProps {
   students: StudentOption[];
   trialLeads: TrialLeadOption[];
   initialCourseRequests?: AdminCourseEnrollmentRequestItem[];
+  initialStudentId?: string;
+  initialEnrollmentId?: string;
+  initialTrialId?: string;
+  initialDirect?: boolean;
 }
 
 export function AdminEnrollmentsManager({
@@ -199,12 +203,17 @@ export function AdminEnrollmentsManager({
   students,
   trialLeads,
   initialCourseRequests = [],
+  initialStudentId,
+  initialEnrollmentId,
+  initialTrialId,
+  initialDirect,
 }: AdminEnrollmentsManagerProps) {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const paramEnrollmentId = searchParams.get("enrollmentId");
-  const paramStudentId = searchParams.get("studentId");
-  const paramTrialId = searchParams.get("trialId");
+  const paramEnrollmentId = searchParams.get("enrollmentId") || searchParams.get("schedule") || initialEnrollmentId || "";
+  const paramStudentId = searchParams.get("studentId") || initialStudentId || "";
+  const paramTrialId = searchParams.get("trialId") || initialTrialId || "";
+  const isDirectParam = searchParams.get("direct") === "true" || Boolean(initialDirect);
 
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>(initialEnrollments);
   const [courseRequests, setCourseRequests] = useState<AdminCourseEnrollmentRequestItem[]>(initialCourseRequests);
@@ -221,6 +230,37 @@ export function AdminEnrollmentsManager({
     }
     return "";
   });
+
+  // Direct enrolment mode lock: when initiated from direct enrolment, locked strictly to this student
+  const [isDirectEnrolmentScoped, setIsDirectEnrolmentScoped] = useState<boolean>(() => {
+    return Boolean(paramStudentId || isDirectParam);
+  });
+
+  // Keep selected student in sync when navigating or URL changes
+  useEffect(() => {
+    const sId = paramStudentId || initialStudentId;
+    if (sId) {
+      setSelectedStudentId(sId);
+      setIsDirectEnrolmentScoped(true);
+      setIsManualAddOpen(true);
+    }
+  }, [paramStudentId, initialStudentId]);
+
+  useEffect(() => {
+    const eId = paramEnrollmentId || initialEnrollmentId;
+    if (eId) {
+      setSelectedEnrollmentId(eId);
+    }
+  }, [paramEnrollmentId, initialEnrollmentId]);
+
+  // Scoped students list: in direct enrolment mode, only the target student is presented
+  const visibleStudents = useMemo(() => {
+    if (isDirectEnrolmentScoped && selectedStudentId) {
+      const single = students.filter((s) => s.id === selectedStudentId);
+      if (single.length > 0) return single;
+    }
+    return students;
+  }, [students, isDirectEnrolmentScoped, selectedStudentId]);
 
   // Global pending course admission requests across converted students
   const allPendingCourseRequests = useMemo(() => {
@@ -240,6 +280,14 @@ export function AdminEnrollmentsManager({
   const pendingRequests = useMemo(() => {
     return studentCourseRequests.filter((r) => r.status === "PENDING");
   }, [studentCourseRequests]);
+
+  // Displayed pending requests: in direct mode, only show this student's requests
+  const displayPendingRequests = useMemo(() => {
+    if (isDirectEnrolmentScoped) {
+      return pendingRequests;
+    }
+    return allPendingCourseRequests;
+  }, [isDirectEnrolmentScoped, pendingRequests, allPendingCourseRequests]);
 
   // Selected Enrollment ID (scoped to the selected student)
   const [selectedEnrollmentId, setSelectedEnrollmentId] = useState<string>(() => {
@@ -330,7 +378,9 @@ export function AdminEnrollmentsManager({
     return courses[0]?.sessionCount || 24;
   });
   const [allotNotes, setAllotNotes] = useState<string>("");
-  const [isManualAddOpen, setIsManualAddOpen] = useState<boolean>(false);
+  const [isManualAddOpen, setIsManualAddOpen] = useState<boolean>(() => {
+    return Boolean(paramStudentId || isDirectParam);
+  });
   const [manualCourseId, setManualCourseId] = useState<string>(courses[0]?.id || "");
 
   // Sync allotment fields when pending request or manual course changes
@@ -353,7 +403,9 @@ export function AdminEnrollmentsManager({
     setSelectedStudentId(newStudentId);
     const matchingEnrs = enrollments.filter((e) => e.studentId === newStudentId);
     setSelectedEnrollmentId(matchingEnrs[0]?.id || "");
-    setIsManualAddOpen(false);
+    if (!newStudentId) {
+      setIsDirectEnrolmentScoped(false);
+    }
   };
 
   // Inline lesson scheduling & management
@@ -1372,23 +1424,25 @@ export function AdminEnrollmentsManager({
 
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-[#3C096C] border border-purple-200/70 self-start sm:self-auto font-numeric shrink-0">
                 <Users className="w-3.5 h-3.5" />
-                <span>{students.length} Converted Students</span>
+                <span>{isDirectEnrolmentScoped ? "1 Student (Direct Mode)" : `${students.length} Converted Students`}</span>
               </span>
             </div>
 
             {/* Prominent Searchable Selector */}
-            {students.length > 0 && (
+            {visibleStudents.length > 0 && (
               <div className="p-4 rounded-2xl bg-neutral-50/80 border border-neutral-200/80 space-y-2">
                 <label className="text-xs font-bold text-heading flex items-center gap-1.5">
                   <Search className="w-3.5 h-3.5 text-[#3C096C]" />
                   <span>Quick Student Search &amp; Filter</span>
                 </label>
                 <SearchableStudentSelector
-                  students={students}
+                  students={visibleStudents}
                   selectedStudentId={selectedStudentId}
                   onSelectStudent={handleStudentChange}
                   enrollments={enrollments}
                   courseRequests={courseRequests}
+                  isDirectMode={isDirectEnrolmentScoped}
+                  onUnlockDirectMode={() => setIsDirectEnrolmentScoped(false)}
                 />
               </div>
             )}
@@ -1504,14 +1558,54 @@ export function AdminEnrollmentsManager({
             <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto">
               <button
                 type="button"
-                onClick={() => handleStudentChange("")}
+                onClick={() => {
+                  setIsDirectEnrolmentScoped(false);
+                  handleStudentChange("");
+                }}
                 className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#3C096C] text-xs font-bold border border-purple-200/80 transition-all shadow-2xs active:scale-95 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5 text-[#3C096C]" />
-                <span>Change Student</span>
+                <span>{isDirectEnrolmentScoped ? "Exit Direct Mode" : "Change Student"}</span>
               </button>
             </div>
           </div>
+
+          {/* Direct Enrolment Banner */}
+          {isDirectEnrolmentScoped && currentStudent && (
+            <div className="p-4 rounded-2xl bg-gradient-to-r from-purple-50 via-purple-100/50 to-white border border-purple-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3 animate-fade-in">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#3C096C] text-white flex items-center justify-center font-bold text-xs shadow-2xs shrink-0">
+                  <GraduationCap className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="font-bold text-xs sm:text-sm text-heading truncate">
+                      Direct Enrolment Mode · {currentStudent.name}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-[#3C096C] text-white font-mono text-[10px] font-bold">
+                      {currentStudent.customId || `S${currentStudent.id.slice(-4).toUpperCase()}`}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-800 text-[10px] font-bold border border-emerald-200">
+                      Single Student Focus
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-body/70 mt-0.5">
+                    Only {currentStudent.name} is enrolled here. Fill in course details below to allot directly without trial.
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsDirectEnrolmentScoped(false)}
+                className="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white hover:bg-neutral-50 text-heading text-xs font-semibold border border-purple-200 shadow-2xs shrink-0 self-start sm:self-auto cursor-pointer"
+                title="Unlock full student roster"
+              >
+                <Users className="w-3.5 h-3.5 text-[#3C096C]" />
+                <span>Show All Students ({students.length})</span>
+              </button>
+            </div>
+          )}
 
           <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
           {/* ─── LEFT COLUMN: 4 NUMBERED SECTIONS (8 COLS / ~66%) ───────── */}
@@ -1525,10 +1619,10 @@ export function AdminEnrollmentsManager({
                     <h2 className="font-serif text-lg font-bold text-heading">
                       1 · Student & course enrollment
                     </h2>
-                    {allPendingCourseRequests.length > 0 && (
+                    {displayPendingRequests.length > 0 && (
                       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-100 text-[#3C096C] border border-purple-200/80 font-numeric shrink-0">
                         <Sparkles className="w-3 h-3 text-amber-500" />
-                        <span>{allPendingCourseRequests.length} {allPendingCourseRequests.length === 1 ? "Request" : "Requests"}</span>
+                        <span>{displayPendingRequests.length} {displayPendingRequests.length === 1 ? "Request" : "Requests"}</span>
                       </span>
                     )}
                   </div>
@@ -1536,7 +1630,7 @@ export function AdminEnrollmentsManager({
 
                 {/* Right Side: Compact Request Pill & Manual Allotment Toggle */}
                 <div className="flex flex-wrap items-center gap-2 self-start lg:self-auto shrink-0">
-                  {allPendingCourseRequests.map((req) => {
+                  {displayPendingRequests.map((req) => {
                     const isSelected = selectedStudentId === req.studentId;
                     const feeFormatted = `₹${Math.round(req.coursePriceMinorUnits / 100).toLocaleString("en-IN")}`;
                     const perClass = Math.round(
@@ -1589,7 +1683,7 @@ export function AdminEnrollmentsManager({
                     }`}
                   >
                     <Plus className="w-3.5 h-3.5 text-[#3C096C]" />
-                    <span>{isManualAddOpen ? "Hide" : "Allot Manually"}</span>
+                    <span>{isManualAddOpen ? "Hide Allotment Form" : "Allot Manually"}</span>
                   </button>
                 </div>
               </div>
@@ -1604,17 +1698,19 @@ export function AdminEnrollmentsManager({
                     </label>
                   </div>
                   <span className="text-[11px] font-semibold text-purple-900 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200/70 self-start sm:self-auto font-numeric">
-                    {students.length} Students
+                    {isDirectEnrolmentScoped ? "1 Student (Direct Mode)" : `${students.length} Students`}
                   </span>
                 </div>
 
-                {students.length > 0 ? (
+                {visibleStudents.length > 0 ? (
                   <SearchableStudentSelector
-                    students={students}
+                    students={visibleStudents}
                     selectedStudentId={selectedStudentId}
                     onSelectStudent={handleStudentChange}
                     enrollments={enrollments}
                     courseRequests={courseRequests}
+                    isDirectMode={isDirectEnrolmentScoped}
+                    onUnlockDirectMode={() => setIsDirectEnrolmentScoped(false)}
                   />
                 ) : (
                   <div className="p-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-xs text-purple-900 space-y-1.5">

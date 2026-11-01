@@ -351,8 +351,16 @@ const getCachedAdminEnrollmentsData = unstable_cache(
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 
-export default async function AdminEnrollmentsPage() {
+export default async function AdminEnrollmentsPage(props: {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}) {
   await requireRole(Role.ADMIN);
+
+  const rawParams = props.searchParams ? await props.searchParams : {};
+  const initialStudentId = typeof rawParams?.studentId === "string" ? rawParams.studentId : undefined;
+  const initialEnrollmentId = typeof rawParams?.enrollmentId === "string" ? rawParams.enrollmentId : (typeof rawParams?.schedule === "string" ? rawParams.schedule : undefined);
+  const initialTrialId = typeof rawParams?.trialId === "string" ? rawParams.trialId : undefined;
+  const initialDirect = rawParams?.direct === "true" || Boolean(initialStudentId);
 
   let data = {
     formattedEnrollments: [] as EnrollmentRecord[],
@@ -369,6 +377,42 @@ export default async function AdminEnrollmentsPage() {
     console.error("[AdminEnrollmentsPage] Failed to load cached enrollments data, using fallback:", err);
   }
 
+  // Ensure target student is present in students list even if cache was slightly stale
+  if (initialStudentId && !data.formattedStudents.some((s) => s.id === initialStudentId)) {
+    try {
+      const student = await db.user.findUnique({
+        where: { id: initialStudentId },
+        select: {
+          id: true,
+          customId: true,
+          name: true,
+          email: true,
+          phone: true,
+          timezone: true,
+          guardianName: true,
+          guardianPhone: true,
+          country: true,
+          age: true,
+        },
+      });
+      if (student) {
+        data.formattedStudents.unshift({
+          id: student.id,
+          customId: student.customId,
+          name: student.name || "Student",
+          email: student.email,
+          timezone: student.timezone || "Asia/Kolkata",
+          guardianName: student.guardianName,
+          age: student.age,
+          phone: student.phone,
+          country: student.country,
+        });
+      }
+    } catch (err) {
+      console.error("[AdminEnrollmentsPage] Failed to fetch direct target student:", err);
+    }
+  }
+
   return (
     <Suspense fallback={<div className="p-12 text-center text-xs text-body">Loading enrollment planner...</div>}>
       <AdminEnrollmentsManager
@@ -378,6 +422,10 @@ export default async function AdminEnrollmentsPage() {
         students={data.formattedStudents}
         trialLeads={data.formattedTrialLeads}
         initialCourseRequests={data.formattedCourseRequests}
+        initialStudentId={initialStudentId}
+        initialEnrollmentId={initialEnrollmentId}
+        initialTrialId={initialTrialId}
+        initialDirect={initialDirect}
       />
     </Suspense>
   );

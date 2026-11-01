@@ -34,6 +34,8 @@ interface SearchableStudentSelectorProps {
   onSelectStudent: (studentId: string) => void;
   enrollments: EnrollmentRecord[];
   courseRequests: AdminCourseEnrollmentRequestItem[];
+  isDirectMode?: boolean;
+  onUnlockDirectMode?: () => void;
 }
 
 export function SearchableStudentSelector({
@@ -42,6 +44,8 @@ export function SearchableStudentSelector({
   onSelectStudent,
   enrollments,
   courseRequests,
+  isDirectMode = false,
+  onUnlockDirectMode,
 }: SearchableStudentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -221,7 +225,12 @@ export function SearchableStudentSelector({
 
         {/* Right side: Status Tag & Trigger Action */}
         <div className="flex items-center gap-2.5 shrink-0 self-start sm:self-auto pt-1 sm:pt-0 border-t sm:border-t-0 border-slate-100 w-full sm:w-auto justify-between sm:justify-end">
-          {selectedMeta && selectedMeta.pendingCount > 0 ? (
+          {isDirectMode ? (
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-100 text-[#3C096C] border border-purple-300 shadow-2xs">
+              <Sparkles className="w-3 h-3 text-[#3C096C]" />
+              <span>Direct Enrolment Mode</span>
+            </span>
+          ) : selectedMeta && selectedMeta.pendingCount > 0 ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-50 text-amber-900 border border-amber-200 shadow-2xs">
               <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
               <span>{selectedMeta.pendingCount} Course Request(s) Awaiting</span>
@@ -435,11 +444,25 @@ export function SearchableStudentSelector({
           {/* Footer count summary */}
           <div className="p-2.5 bg-neutral-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-body-muted px-4">
             <span>
-              Showing {filteredStudents.length} of {students.length} students
+              Showing {filteredStudents.length} of {students.length} {students.length === 1 ? "student" : "students"}
             </span>
-            <span className="text-[10px] font-medium text-slate-500">
-              Press Esc to close
-            </span>
+            <div className="flex items-center gap-2">
+              {isDirectMode && onUnlockDirectMode && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onUnlockDirectMode();
+                    setIsOpen(false);
+                  }}
+                  className="font-bold text-[#3C096C] hover:underline cursor-pointer"
+                >
+                  Show All Students
+                </button>
+              )}
+              <span className="text-[10px] font-medium text-slate-500">
+                Press Esc to close
+              </span>
+            </div>
           </div>
         </div>
       )}
