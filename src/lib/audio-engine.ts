@@ -17,20 +17,19 @@ export const TALKING_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: true,
   noiseSuppression: true,
   autoGainControl: true,
-  channelCount: 1,
+  channelCount: { ideal: 1 },
 };
 
 /**
- * WebRTC constraints for uncompressed musical instrument performance.
- * All dynamic compression, speech gates, and echo suppression are disabled
- * to preserve harmonic overtone series, note sustain/decay, and natural dynamics.
+ * WebRTC constraints for musical instrument performance.
+ * Dynamically disables compression and echo suppression while supporting mono or stereo hardware.
  */
 export const PLAYING_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
   echoCancellation: false,
   noiseSuppression: false,
   autoGainControl: false,
-  channelCount: 2, // Stereo
-  sampleRate: 48000, // 48 kHz studio sample rate
+  channelCount: { ideal: 2 },
+  sampleRate: { ideal: 48000 },
 };
 
 /**
@@ -40,13 +39,12 @@ export function getAudioPublishOptions(mode: AudioMode): TrackPublishOptions {
   if (mode === "TALKING") {
     return {
       audioPreset: AudioPresets.speech,
-      dtx: true, // Discontinuous Transmission saves bandwidth during pauses
+      dtx: false, // Keep continuous transmission so quiet voices / soft notes aren't cut off
     };
   }
 
   return {
     audioPreset: AudioPresets.musicHighQualityStereo,
-    forceStereo: true,
     dtx: false, // Do NOT gate decaying notes or reverb tails
     red: true, // Redundant Audio Data for packet loss recovery
   };
@@ -93,8 +91,17 @@ export async function switchLocalAudioMode(
       deviceId: deviceId ? { ideal: deviceId } : undefined,
     });
   } catch (err) {
-    logger.warn({ err, deviceId }, "Failed to create audio track with ideal deviceId, falling back to default mic");
-    newTrack = await createLocalAudioTrack(constraints);
+    logger.warn({ err, deviceId }, "Failed to create audio track with ideal deviceId, falling back to mode constraints");
+    try {
+      newTrack = await createLocalAudioTrack(constraints);
+    } catch (fallbackErr) {
+      logger.warn({ fallbackErr }, "Failed with mode constraints, falling back to permissive default mic");
+      newTrack = await createLocalAudioTrack({
+        echoCancellation: true,
+        noiseSuppression: true,
+        autoGainControl: true,
+      });
+    }
   }
 
   // 3. Publish with high-fidelity or speech preset

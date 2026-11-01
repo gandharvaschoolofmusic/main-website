@@ -6,6 +6,7 @@ import Image from "next/image";
 import {
   LiveKitRoom,
   RoomAudioRenderer,
+  StartAudio,
   useRoomContext,
 } from "@livekit/components-react";
 import {
@@ -13,6 +14,7 @@ import {
   DisconnectReason,
   LocalAudioTrack,
   LocalTrackPublication,
+  RemoteTrack,
   RoomEvent,
   Track,
 } from "livekit-client";
@@ -104,6 +106,7 @@ export function LessonRoom(props: LessonRoomProps) {
         }}
       >
         <RoomAudioRenderer />
+        <StartAudio label="Click to allow audio playback" />
         <LessonRoomContent
           lesson={lesson}
           initialConfig={initialConfig}
@@ -273,13 +276,13 @@ function LessonRoomContent({
     return () => clearInterval(interval);
   }, [lesson.endsAt]);
 
-  // 3. Initialize Audio Track with specified constraints
+  // 3. Initialize Audio Track with specified constraints and hardware backoff retry
   const initializedAudioRef = useRef(false);
   useEffect(() => {
     if (!room || initializedAudioRef.current) return;
     initializedAudioRef.current = true;
 
-    async function initAudio() {
+    async function initAudio(attempt = 0): Promise<void> {
       try {
         setIsSwitchingAudioMode(true);
         const track = await switchLocalAudioMode(
@@ -288,19 +291,75 @@ function LessonRoomContent({
           initialConfig.audioDeviceId,
         );
         currentAudioTrackRef.current = track;
+        console.log("[Audio] Local audio track initialized & published successfully");
       } catch (err) {
-        console.error("Failed to initialize custom audio track", err);
+        console.warn(`[Audio] Failed to initialize audio track (attempt ${attempt + 1}):`, err);
+        // When transitioning from PreJoinScreen, OS drivers take ~300ms to release hardware
+        if (attempt < 3) {
+          await new Promise((resolve) => setTimeout(resolve, 350));
+          return initAudio(attempt + 1);
+        }
+        // Fallback: use LiveKit's native setMicrophoneEnabled to ensure mic is active
+        try {
+          console.log("[Audio] Fallback: calling room.localParticipant.setMicrophoneEnabled(true)");
+          await room.localParticipant.setMicrophoneEnabled(true);
+        } catch (fallbackErr) {
+          console.error("[Audio] All audio initialization attempts failed:", fallbackErr);
+        }
       } finally {
         setIsSwitchingAudioMode(false);
       }
     }
 
     if (room.state === "connected") {
-      initAudio();
+      void initAudio();
     } else {
-      room.once(RoomEvent.Connected, initAudio);
+      room.once(RoomEvent.Connected, () => void initAudio(0));
     }
   }, [room, initialConfig.audioMode, initialConfig.audioDeviceId]);
+
+  // 3b. Unmute and start audio playback automatically on any user gesture or remote track arrival
+  useEffect(() => {
+    if (!room) return;
+
+    const unlockAudio = async () => {
+      if (!room.canPlaybackAudio) {
+        try {
+          await room.startAudio();
+          console.log("[Audio] Audio playback successfully started via user gesture");
+        } catch (e) {
+          console.warn("[Audio] Could not start audio playback:", e);
+        }
+      }
+    };
+
+    // Attempt immediately (gesture token from PreJoin 'Join now' click may still be valid)
+    void unlockAudio();
+
+    const handleTrackSubscribed = (track: RemoteTrack) => {
+      if (track.kind === Track.Kind.Audio) {
+        void unlockAudio();
+      }
+    };
+
+    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, (canPlay) => {
+      if (!canPlay) {
+        console.warn("[Audio] Autoplay blocked incoming audio. Click anywhere to unblock.");
+      }
+    });
+
+    window.addEventListener("click", unlockAudio, { passive: true });
+    window.addEventListener("touchstart", unlockAudio, { passive: true });
+    window.addEventListener("keydown", unlockAudio, { passive: true });
+
+    return () => {
+      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      window.removeEventListener("click", unlockAudio);
+      window.removeEventListener("touchstart", unlockAudio);
+      window.removeEventListener("keydown", unlockAudio);
+    };
+  }, [room]);
 
   // 3b. Initialize Video Track safely after engine connects with transition backoff
   const initializedVideoRef = useRef(false);
@@ -438,12 +497,16 @@ function LessonRoomContent({
   const handleToggleMic = async () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
-    for (const pub of room.localParticipant.audioTrackPublications.values()) {
-      if (pub.track) {
-        if (nextMuted) {
-          pub.track.mute();
-        } else {
-          pub.track.unmute();
+    try {
+      await room.localParticipant.setMicrophoneEnabled(!nextMuted);
+    } catch {
+      for (const pub of room.localParticipant.audioTrackPublications.values()) {
+        if (pub.track) {
+          if (nextMuted) {
+            pub.track.mute();
+          } else {
+            pub.track.unmute();
+          }
         }
       }
     }

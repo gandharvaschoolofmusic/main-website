@@ -1,9 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
-import { useChat, useParticipants, useRoomContext } from "@livekit/components-react";
+import { useChat, useParticipants, useRoomContext, useAudioPlayback } from "@livekit/components-react";
 import { ConnectionQuality, RoomEvent } from "livekit-client";
-import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp } from "lucide-react";
+import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp, VolumeX } from "lucide-react";
 import type { AudioMode } from "@/lib/audio-engine";
 import type { MultiCameraState } from "@/hooks/useMultiCamera";
 import { MeetStage, type MeetLayout } from "./MeetStage";
@@ -32,6 +32,7 @@ const layouts = [{ id: "auto", title: "Auto", description: "Focus on your partne
 
 export function MeetRoomUI(props: Props) {
   const room = useRoomContext();
+  const { canPlayAudio, startAudio } = useAudioPlayback(room);
   const participants = useParticipants({ updateOnlyOn: [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected, RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.ParticipantNameChanged] });
   const { send } = useChat();
   const [panel, setPanel] = useState<Panel>(null);
@@ -94,6 +95,19 @@ export function MeetRoomUI(props: Props) {
     <header className="meet-topbar"><div className="meet-room-heading"><time suppressHydrationWarning>{clock || "--:--"}</time><span className="meet-divider"/><h1>{props.lesson.instrument} lesson</h1><RoomIconButton label="Meeting details" active={panel === "details"} onClick={() => togglePanel("details")}><Info size={17}/></RoomIconButton></div>
       <div className="meet-top-actions"><button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} title="Audio mode"><Mic size={14}/>{props.audioMode === "TALKING" ? "Talking mode" : "Instrument mode"}</button><button type="button" className="meet-people-pill" aria-label={`People (${participants.length})`} aria-expanded={panel === "people"} onClick={() => togglePanel("people")}><span className="meet-mini-avatar">{(room.localParticipant.name || "Y")[0]}</span><Users size={16}/><span>{participants.length}</span></button></div>
     </header>
+    {!canPlayAudio && (
+      <div className="meet-call-banner bg-amber-600/90 text-white font-medium flex items-center justify-center gap-2.5 py-2 px-4 shadow-lg" role="alert">
+        <VolumeX size={18} />
+        <span>Incoming sound is blocked by your browser.</span>
+        <button
+          type="button"
+          onClick={() => void startAudio()}
+          className="ml-2 px-3 py-1 bg-white text-stone-900 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors shadow-sm cursor-pointer"
+        >
+          Enable Audio
+        </button>
+      </div>
+    )}
     {(props.isReconnecting || props.isScreenSharing) && <div className="meet-call-banner" role="status">{props.isReconnecting ? "Reconnecting… Your call will resume automatically." : <><MonitorUp size={18}/>You’re presenting to everyone<button type="button" onClick={() => void run(props.onToggleScreenShare)}>Stop presenting</button></>}</div>}
     <main className="meet-workspace">
       <div className="meet-stage-wrap">
