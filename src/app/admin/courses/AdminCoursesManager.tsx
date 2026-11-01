@@ -212,7 +212,7 @@ export function AdminCoursesManager({
   const [title, setTitle] = useState("");
   const [slug, setSlug] = useState("");
   const [discipline, setDiscipline] = useState<Discipline>(Discipline.INSTRUMENT);
-  const [instrument, setInstrument] = useState("Piano");
+  const [instrument, setInstrument] = useState("");
   const [level, setLevel] = useState<CourseLevel>(CourseLevel.BEGINNER);
   const [accreditation, setAccreditation] = useState("");
   const [priceRupees, setPriceRupees] = useState<number>(14999);
@@ -227,11 +227,11 @@ export function AdminCoursesManager({
   const [sessionRateGBP, setSessionRateGBP] = useState<number>(12);
   const [sessionRateEUR, setSessionRateEUR] = useState<number>(15);
   const [sessionRateSGD, setSessionRateSGD] = useState<number>(21);
-  const [discountPercent, setDiscountPercent] = useState<number>(0);
+  const [discountPercent, setDiscountPercent] = useState<number | "">("");
 
   const calculateTierTotal = (perSessionRate: number) => {
     const base = Math.max(0, perSessionRate * (sessionCount || 1));
-    const discounted = Math.max(0, Math.round(base * (1 - discountPercent / 100)));
+    const discounted = Math.max(0, Math.round(base * (1 - (Number(discountPercent) || 0) / 100)));
     return { base, discounted };
   };
 
@@ -408,7 +408,7 @@ export function AdminCoursesManager({
         : ""
     );
     setDiscipline(defaultDiscipline || Discipline.INSTRUMENT);
-    setInstrument(defaultInstrument || "Piano");
+    setInstrument(defaultInstrument || "");
     setLevel(CourseLevel.BEGINNER);
     setAccreditation("");
     setSessionCount(24);
@@ -419,7 +419,7 @@ export function AdminCoursesManager({
     setSessionRateGBP(12);
     setSessionRateEUR(15);
     setSessionRateSGD(21);
-    setDiscountPercent(0);
+    setDiscountPercent("");
     setPriceRupees(19200);
     setPerSessionCost(800);
     setDurationWeeks(12);
@@ -472,7 +472,7 @@ export function AdminCoursesManager({
     setSessionRateGBP(pricing.rates.GBP);
     setSessionRateEUR(pricing.rates.EUR);
     setSessionRateSGD(pricing.rates.SGD);
-    setDiscountPercent(pricing.discountPercent);
+    setDiscountPercent(pricing.discountPercent > 0 ? pricing.discountPercent : "");
 
     const baseINRTotal = pricing.rates.INR * (c.sessionCount || 1);
     const finalINRTotal = Math.round(baseINRTotal * (1 - pricing.discountPercent / 100));
@@ -520,11 +520,11 @@ export function AdminCoursesManager({
     
 
     const totalINRBeforeDiscount = sessionRateINR * (sessionCount || 1);
-    const finalTotalINR = Math.max(0, Math.round(totalINRBeforeDiscount * (1 - discountPercent / 100)));
+    const finalTotalINR = Math.max(0, Math.round(totalINRBeforeDiscount * (1 - (Number(discountPercent) || 0) / 100)));
     const calculatedPriceMinorUnits = finalTotalINR * 100;
 
     const pricingPayload: CoursePricingMetadata = {
-      discountPercent,
+      discountPercent: Number(discountPercent) || 0,
       rates: {
         INR: sessionRateINR,
         SA_UAE: sessionRateSaudiUAE,
@@ -1565,7 +1565,7 @@ export function AdminCoursesManager({
                         setSessionRateGBP(rGBP);
                         setSessionRateEUR(rEUR);
                         setSessionRateSGD(rSGD);
-                        const total = Math.round(rINR * count * (1 - discountPercent / 100));
+                        const total = Math.round(rINR * count * (1 - (Number(discountPercent) || 0) / 100));
                         setPriceRupees(total);
                         setPerSessionCost(rINR);
                       }
@@ -1588,8 +1588,8 @@ export function AdminCoursesManager({
                     min={1}
                     max={100}
                     required
-                    value={sessionCount}
-                    onChange={(e) => setSessionCount(Number(e.target.value))}
+                    value={sessionCount || ""}
+                    onChange={(e) => setSessionCount(e.target.value === "" ? 0 : Number(e.target.value))}
                     className="w-full rounded-xl bg-white border border-border-default px-3.5 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs font-numeric"
                   />
                 </div>
@@ -1601,8 +1601,8 @@ export function AdminCoursesManager({
                     min={1}
                     max={52}
                     required
-                    value={durationWeeks}
-                    onChange={(e) => setDurationWeeks(Number(e.target.value))}
+                    value={durationWeeks || ""}
+                    onChange={(e) => setDurationWeeks(e.target.value === "" ? 0 : Number(e.target.value))}
                     className="w-full rounded-xl bg-white border border-border-default px-3.5 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs font-numeric"
                   />
                 </div>
@@ -1621,7 +1621,7 @@ export function AdminCoursesManager({
                         Countrywise Session Pricing
                       </h4>
                       <p className="text-[10px] text-body-muted">
-                        Per-session fee × {sessionCount} sessions {discountPercent > 0 ? `(-${discountPercent}% OFF)` : ""}
+                        Per-session fee × {sessionCount} sessions {(Number(discountPercent) || 0) > 0 ? `(-${discountPercent}% OFF)` : ""}
                       </p>
                     </div>
                   </div>
@@ -1639,9 +1639,9 @@ export function AdminCoursesManager({
                         max={90}
                         value={discountPercent}
                         onChange={(e) => {
-                          const val = Math.min(90, Math.max(0, Number(e.target.value) || 0));
+                          const raw = e.target.value; const val = raw === "" ? "" : Math.min(90, Math.max(0, Number(raw)));
                           setDiscountPercent(val);
-                          const total = Math.round(sessionRateINR * sessionCount * (1 - val / 100));
+                          const total = Math.round(sessionRateINR * sessionCount * (1 - (Number(val) || 0) / 100));
                           setPriceRupees(total);
                         }}
                         className="w-full pl-1.5 pr-4 py-0.5 text-xs font-bold text-purple-950 bg-white border border-purple-300 rounded-md text-right focus:outline-none focus:border-purple-600 font-numeric"
@@ -1654,12 +1654,12 @@ export function AdminCoursesManager({
                           key={pct}
                           type="button"
                           onClick={() => {
-                            setDiscountPercent(pct);
+                            setDiscountPercent(pct === 0 ? "" : pct);
                             const total = Math.round(sessionRateINR * sessionCount * (1 - pct / 100));
                             setPriceRupees(total);
                           }}
                           className={`px-1.5 py-0.5 rounded text-[10px] font-bold transition-all ${
-                            discountPercent === pct
+                            (discountPercent === pct || (pct === 0 && (discountPercent === "" || discountPercent === 0)))
                               ? "bg-purple-700 text-white"
                               : "bg-white text-purple-900 border border-purple-200 hover:bg-purple-100"
                           }`}
@@ -1682,7 +1682,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-purple-700 bg-purple-100/70 px-1.5 py-0.2 rounded border border-purple-200">₹ INR</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateINR).base.toLocaleString("en-IN")}</span>
                             <strong className="text-emerald-700 font-bold">₹{calculateTierTotal(sessionRateINR).discounted.toLocaleString("en-IN")}</strong>
@@ -1698,12 +1698,12 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateINR}
+                          value={sessionRateINR || ""}
                           onChange={(e) => {
-                            const val = Number(e.target.value);
+                            const val = e.target.value === "" ? 0 : Number(e.target.value);
                             setSessionRateINR(val);
                             setPerSessionCost(val);
-                            const total = Math.round(val * sessionCount * (1 - discountPercent / 100));
+                            const total = Math.round(val * sessionCount * (1 - (Number(discountPercent) || 0) / 100));
                             setPriceRupees(total);
                           }}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
@@ -1722,7 +1722,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-blue-700 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">$ USD</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong>
@@ -1738,8 +1738,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateUSD}
-                          onChange={(e) => setSessionRateUSD(Number(e.target.value))}
+                          value={sessionRateUSD || ""}
+                          onChange={(e) => setSessionRateUSD(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1756,7 +1756,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-red-700 bg-red-50 px-1.5 py-0.2 rounded border border-red-200">CA$ CAD</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">CA${calculateTierTotal(sessionRateCAD).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">CA${calculateTierTotal(sessionRateCAD).discounted.toLocaleString()}</strong>
@@ -1772,8 +1772,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateCAD}
-                          onChange={(e) => setSessionRateCAD(Number(e.target.value))}
+                          value={sessionRateCAD || ""}
+                          onChange={(e) => setSessionRateCAD(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-22 pl-7 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1790,7 +1790,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.2 rounded border border-amber-200">£ GBP</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">£{calculateTierTotal(sessionRateGBP).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</strong>
@@ -1806,8 +1806,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateGBP}
-                          onChange={(e) => setSessionRateGBP(Number(e.target.value))}
+                          value={sessionRateGBP || ""}
+                          onChange={(e) => setSessionRateGBP(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1824,7 +1824,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-blue-800 bg-blue-50 px-1.5 py-0.2 rounded border border-blue-200">€ EUR</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">€{calculateTierTotal(sessionRateEUR).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</strong>
@@ -1840,8 +1840,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateEUR}
-                          onChange={(e) => setSessionRateEUR(Number(e.target.value))}
+                          value={sessionRateEUR || ""}
+                          onChange={(e) => setSessionRateEUR(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1858,7 +1858,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">S$ SGD</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</strong>
@@ -1874,8 +1874,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateSGD}
-                          onChange={(e) => setSessionRateSGD(Number(e.target.value))}
+                          value={sessionRateSGD || ""}
+                          onChange={(e) => setSessionRateSGD(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-20 pl-6 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1892,7 +1892,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-bold text-emerald-800 bg-emerald-100/70 px-1.5 py-0.2 rounded border border-emerald-200">₹ INR</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">₹{calculateTierTotal(sessionRateSaudiUAE).base.toLocaleString("en-IN")}</span>
                             <strong className="text-emerald-700 font-bold">₹{calculateTierTotal(sessionRateSaudiUAE).discounted.toLocaleString("en-IN")}</strong>
@@ -1908,8 +1908,8 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           min={0}
-                          value={sessionRateSaudiUAE}
-                          onChange={(e) => setSessionRateSaudiUAE(Number(e.target.value))}
+                          value={sessionRateSaudiUAE || ""}
+                          onChange={(e) => setSessionRateSaudiUAE(e.target.value === "" ? 0 : Number(e.target.value))}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
@@ -1927,7 +1927,7 @@ export function AdminCoursesManager({
                         <span className="text-[9px] font-medium text-indigo-600 bg-indigo-50 px-1 py-0.2 rounded">Auto</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
-                        Total: {discountPercent > 0 ? (
+                        Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
                             <span className="line-through text-slate-400">${calculateTierTotal(sessionRateUSD).base.toLocaleString()}</span>
                             <strong className="text-emerald-700 font-bold">${calculateTierTotal(sessionRateUSD).discounted.toLocaleString()}</strong>
@@ -1943,7 +1943,7 @@ export function AdminCoursesManager({
                         <input
                           type="number"
                           disabled
-                          value={sessionRateUSD}
+                          value={sessionRateUSD || ""}
                           className="w-20 pl-5 pr-2 py-1 text-xs font-bold font-numeric text-heading/70 bg-slate-100/80 border border-slate-200/80 rounded-lg text-right cursor-not-allowed"
                         />
                       </div>
