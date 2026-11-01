@@ -28,6 +28,7 @@ import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
 import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
+import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 
 export type AdminActionResponse<T = unknown> = {
   success: boolean;
@@ -395,6 +396,7 @@ export async function scheduleEnrollmentLessonAction(input: {
     }
 
     const trackingCode = await generateUniqueLessonTrackingCode(enrollment.studentId, db);
+    const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacher.teacherProfile);
 
     const lesson = await db.lesson.create({
       data: {
@@ -409,6 +411,7 @@ export async function scheduleEnrollmentLessonAction(input: {
         enrollmentId: enrollment.id,
         groupRoomId: null, // Strictly 1-to-1 private lesson!
         trackingCode,
+        payoutAmountMinor,
       },
     });
 
@@ -490,6 +493,7 @@ export async function bulkScheduleEnrollmentLessonsAction(input: {
       if (isNaN(startsAtDate.getTime())) continue;
 
       const trackingCode = await generateUniqueLessonTrackingCode(enrollment.studentId, db);
+      const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacher.teacherProfile);
 
       await db.lesson.create({
         data: {
@@ -504,6 +508,7 @@ export async function bulkScheduleEnrollmentLessonsAction(input: {
           enrollmentId: enrollment.id,
           groupRoomId: null, // Strictly 1-to-1 private lesson!
           trackingCode,
+          payoutAmountMinor,
         },
       });
       createdCount++;
@@ -546,6 +551,7 @@ export async function rescheduleEnrollmentLessonAction(input: {
       include: {
         student: { select: { id: true, name: true, email: true, timezone: true } },
         teacher: { select: { id: true, name: true, email: true, timezone: true } },
+        teacherProfile: { select: { id: true, payoutDayRate: true, payoutNightRate: true, payoutPerSession: true } },
         enrollment: {
           include: {
             course: { select: { id: true, title: true, instrument: true } },
@@ -563,6 +569,12 @@ export async function rescheduleEnrollmentLessonAction(input: {
       return { success: false, error: "Invalid date and time." };
     }
 
+    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid
+    const updatedPayoutMinor =
+      lesson.payoutStatus !== TeacherPayoutStatus.PAID
+        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
+        : lesson.payoutAmountMinor;
+
     // Automatically set status to RESCHEDULED
     await db.lesson.update({
       where: { id: input.lessonId },
@@ -570,6 +582,7 @@ export async function rescheduleEnrollmentLessonAction(input: {
         startsAt: startsAtDate,
         durationMinutes: input.durationMinutes || lesson.durationMinutes,
         status: LessonStatus.RESCHEDULED,
+        ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
       },
     });
 
@@ -795,6 +808,7 @@ export async function saveFullEnrollmentPlanAction(input: {
         const slotDate = new Date(slot.startsAt);
         if (!isNaN(slotDate.getTime())) {
           const trackingCode = await generateUniqueLessonTrackingCode(student.id, db);
+          const payoutAmountMinor = calculateLessonPayoutMinor(slotDate, teacher.teacherProfile);
           await db.lesson.create({
             data: {
               teacherId: teacher.id,
@@ -807,6 +821,7 @@ export async function saveFullEnrollmentPlanAction(input: {
               lessonSource: LessonSource.ENROLLMENT,
               enrollmentId: targetEnrollmentId,
               trackingCode,
+              payoutAmountMinor,
             },
           });
         }
@@ -843,6 +858,8 @@ export async function updateUserAdminAction(input: {
   newPassword?: string;
   trialCount?: number;
   payoutPerSession?: number;
+  payoutDayRate?: number;
+  payoutNightRate?: number;
   teacherApprovalStatus?: TeacherApprovalStatus;
   rejectionReason?: string;
 }): Promise<AdminActionResponse> {
@@ -912,11 +929,22 @@ export async function updateUserAdminAction(input: {
         });
       }
 
-      // If adjusting payoutPerSession or approvalStatus for a teacher
-      if (input.payoutPerSession !== undefined || input.teacherApprovalStatus !== undefined) {
+      // If adjusting payoutPerSession, day/night rates or approvalStatus for a teacher
+      if (
+        input.payoutPerSession !== undefined ||
+        input.payoutDayRate !== undefined ||
+        input.payoutNightRate !== undefined ||
+        input.teacherApprovalStatus !== undefined
+      ) {
         const teacherProfileData: Record<string, unknown> = {};
         if (input.payoutPerSession !== undefined) {
           teacherProfileData.payoutPerSession = input.payoutPerSession;
+        }
+        if (input.payoutDayRate !== undefined) {
+          teacherProfileData.payoutDayRate = input.payoutDayRate;
+        }
+        if (input.payoutNightRate !== undefined) {
+          teacherProfileData.payoutNightRate = input.payoutNightRate;
         }
         if (input.teacherApprovalStatus !== undefined) {
           teacherProfileData.approvalStatus = input.teacherApprovalStatus;
@@ -941,7 +969,9 @@ export async function updateUserAdminAction(input: {
           where: { userId: input.userId },
           create: {
             userId: input.userId,
-            payoutPerSession: input.payoutPerSession ?? 50000,
+            payoutPerSession: input.payoutPerSession ?? (input.payoutDayRate ?? 30000),
+            payoutDayRate: input.payoutDayRate ?? 30000,
+            payoutNightRate: input.payoutNightRate ?? 50000,
             instruments: ["Piano"],
             approvalStatus: input.teacherApprovalStatus ?? TeacherApprovalStatus.PENDING,
             approvedAt: input.teacherApprovalStatus === TeacherApprovalStatus.APPROVED ? new Date() : null,
@@ -1835,6 +1865,7 @@ export async function allotTrialTeacherAction(input: {
       } else {
         // Create scheduled Lesson with unique trackingCode
         const trackingCode = await generateUniqueLessonTrackingCode(trialRequest.studentId, tx);
+        const payoutAmountMinor = calculateLessonPayoutMinor(finalStartsAt, teacher.teacherProfile);
         activeLesson = await tx.lesson.create({
           data: {
             teacherProfileId: teacher.teacherProfile!.id,
@@ -1846,6 +1877,7 @@ export async function allotTrialTeacherAction(input: {
             status: LessonStatus.SCHEDULED,
             lessonSource: LessonSource.TRIAL,
             trackingCode,
+            payoutAmountMinor,
           },
         });
       }
@@ -2253,6 +2285,7 @@ export async function adminApproveAndAllotCourseAction(input: {
           if (isNaN(startsAtDate.getTime())) continue;
 
           const trackingCode = await generateUniqueLessonTrackingCode(student.id, db);
+          const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacher.teacherProfile);
           const lesson = await db.lesson.create({
             data: {
               teacherId: teacher.id,
@@ -2266,6 +2299,7 @@ export async function adminApproveAndAllotCourseAction(input: {
               enrollmentId: enrollment.id,
               groupRoomId: null,
               trackingCode,
+              payoutAmountMinor,
             },
           });
           scheduledCount++;
@@ -2444,7 +2478,7 @@ export async function markLessonPayoutAction(input: {
       where: { id: input.lessonId },
       include: {
         teacherProfile: {
-          select: { payoutPerSession: true },
+          select: { payoutPerSession: true, payoutDayRate: true, payoutNightRate: true },
         },
       },
     });
@@ -2457,8 +2491,7 @@ export async function markLessonPayoutAction(input: {
       const payoutAmount =
         input.amountMinor ??
         lesson.payoutAmountMinor ??
-        lesson.teacherProfile?.payoutPerSession ??
-        50000;
+        calculateLessonPayoutMinor(lesson.startsAt, lesson.teacherProfile);
 
       await db.lesson.update({
         where: { id: input.lessonId },
@@ -2516,6 +2549,8 @@ export async function updateTeacherApprovalAction(input: {
   rejectionReason?: string | null;
   adminNotes?: string | null;
   payoutPerSession?: number | null;
+  payoutDayRate?: number | null;
+  payoutNightRate?: number | null;
   isPublished?: boolean | null;
 }): Promise<AdminActionResponse> {
   try {
@@ -2549,6 +2584,8 @@ export async function updateTeacherApprovalAction(input: {
       rejectionReason?: string | null;
       adminNotes?: string | null;
       payoutPerSession?: number;
+      payoutDayRate?: number;
+      payoutNightRate?: number;
       isPublished?: boolean;
     } = {
       approvalStatus: input.status,
@@ -2574,8 +2611,18 @@ export async function updateTeacherApprovalAction(input: {
       updateData.adminNotes = input.adminNotes ? input.adminNotes.trim() : null;
     }
 
+    if (input.payoutDayRate !== undefined && input.payoutDayRate !== null) {
+      updateData.payoutDayRate = Math.max(0, Math.floor(input.payoutDayRate));
+    }
+
+    if (input.payoutNightRate !== undefined && input.payoutNightRate !== null) {
+      updateData.payoutNightRate = Math.max(0, Math.floor(input.payoutNightRate));
+    }
+
     if (input.payoutPerSession !== undefined && input.payoutPerSession !== null) {
       updateData.payoutPerSession = Math.max(0, Math.floor(input.payoutPerSession));
+    } else if (input.payoutDayRate !== undefined && input.payoutDayRate !== null) {
+      updateData.payoutPerSession = Math.max(0, Math.floor(input.payoutDayRate));
     }
 
     if (input.isPublished !== undefined && input.isPublished !== null) {
@@ -2747,6 +2794,7 @@ export async function adminRecordEnrollmentPaymentAction(input: {
           if (isNaN(startsAtDate.getTime())) continue;
 
           const trackingCode = await generateUniqueLessonTrackingCode(enrollment.student.id, db);
+          const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacher.teacherProfile);
           const lesson = await db.lesson.create({
             data: {
               teacherId: teacher.id,
@@ -2760,6 +2808,7 @@ export async function adminRecordEnrollmentPaymentAction(input: {
               enrollmentId: enrollment.id,
               groupRoomId: null,
               trackingCode,
+              payoutAmountMinor,
             },
           });
           scheduledCount++;

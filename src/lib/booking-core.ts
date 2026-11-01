@@ -22,6 +22,7 @@ import { getLocalDateString } from "@/lib/timezone";
 import { formatInTimeZone } from "date-fns-tz";
 import type { Lesson } from "@prisma/client";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
+import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 
 export type BookingActionResponse = {
   success: boolean;
@@ -321,6 +322,7 @@ export async function bookLessonCore(
             }
 
             const trackingCode = await generateUniqueLessonTrackingCode(student.id, tx);
+            const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacherProfile);
 
             return await tx.lesson.create({
               data: {
@@ -334,6 +336,7 @@ export async function bookLessonCore(
                 lessonSource,
                 enrollmentId,
                 trackingCode,
+                payoutAmountMinor,
               },
             });
           },

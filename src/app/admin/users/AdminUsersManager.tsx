@@ -40,6 +40,8 @@ export interface AdminUserData {
   } | null;
   teacherProfile?: {
     payoutPerSession: number; // paise
+    payoutDayRate?: number;
+    payoutNightRate?: number;
     instruments: string[];
     isPublished: boolean;
     upiId?: string | null;
@@ -65,7 +67,9 @@ export function AdminUsersManager({
   const [editPhone, setEditPhone] = useState("");
   const [editPassword, setEditPassword] = useState("");
   const [editTrialCount, setEditTrialCount] = useState<number>(2);
-  const [editPayoutRupees, setEditPayoutRupees] = useState<number>(500);
+  const [editPayoutRupees, setEditPayoutRupees] = useState<number>(300);
+  const [editPayoutDayRupees, setEditPayoutDayRupees] = useState<number>(300);
+  const [editPayoutNightRupees, setEditPayoutNightRupees] = useState<number>(500);
   const [editApprovalStatus, setEditApprovalStatus] = useState<TeacherApprovalStatus>(
     TeacherApprovalStatus.PENDING,
   );
@@ -82,10 +86,22 @@ export function AdminUsersManager({
     setEditPhone(u.phone || "");
     setEditPassword("");
     setEditTrialCount(u.trialStatus?.lessonsGranted ?? 2);
-    setEditPayoutRupees(
-      u.teacherProfile?.payoutPerSession
-        ? u.teacherProfile.payoutPerSession / 100
+    setEditPayoutDayRupees(
+      u.teacherProfile?.payoutDayRate
+        ? u.teacherProfile.payoutDayRate / 100
+        : 300,
+    );
+    setEditPayoutNightRupees(
+      u.teacherProfile?.payoutNightRate
+        ? u.teacherProfile.payoutNightRate / 100
         : 500,
+    );
+    setEditPayoutRupees(
+      u.teacherProfile?.payoutDayRate
+        ? u.teacherProfile.payoutDayRate / 100
+        : u.teacherProfile?.payoutPerSession
+        ? u.teacherProfile.payoutPerSession / 100
+        : 300,
     );
     setEditApprovalStatus(
       u.teacherProfile?.approvalStatus || TeacherApprovalStatus.PENDING,
@@ -111,8 +127,12 @@ export function AdminUsersManager({
         isActive: editIsActive,
         newPassword: editPassword.trim() ? editPassword.trim() : undefined,
         trialCount: editRole === Role.STUDENT ? editTrialCount : undefined,
+        payoutDayRate:
+          editRole === Role.TEACHER ? editPayoutDayRupees * 100 : undefined,
+        payoutNightRate:
+          editRole === Role.TEACHER ? editPayoutNightRupees * 100 : undefined,
         payoutPerSession:
-          editRole === Role.TEACHER ? editPayoutRupees * 100 : undefined,
+          editRole === Role.TEACHER ? editPayoutDayRupees * 100 : undefined,
         teacherApprovalStatus:
           editRole === Role.TEACHER ? editApprovalStatus : undefined,
         rejectionReason:
@@ -370,11 +390,15 @@ export function AdminUsersManager({
                             {u.teacherProfile?.isPublished ? "• Live" : "• Draft"}
                           </span>
                         </div>
-                        <span className="text-[11px] block">
+                        <span className="text-[11px] block text-body">
                           Payout:{" "}
-                          <strong className="text-emerald-700 font-bold font-numeric">
-                            ₹{(((u.teacherProfile?.payoutPerSession ?? 50000) / 100)).toFixed(0)}
-                          </strong>
+                          <span className="text-amber-800 font-bold font-numeric">
+                            ☀️ ₹{(((u.teacherProfile?.payoutDayRate ?? 30000) / 100)).toFixed(0)}
+                          </span>
+                          {" · "}
+                          <span className="text-indigo-800 font-bold font-numeric">
+                            🌙 ₹{(((u.teacherProfile?.payoutNightRate ?? 50000) / 100)).toFixed(0)}
+                          </span>
                         </span>
                       </div>
                     ) : (
@@ -599,23 +623,45 @@ export function AdminUsersManager({
                       </div>
                     )}
                   </div>
-                  <div className="p-3.5 rounded-xl bg-bg-alt/30 border border-border-default/60 space-y-1.5">
-                    <label className="text-xs font-semibold text-emerald-700 flex items-center gap-1.5">
-                      <Coins className="w-3.5 h-3.5" />
-                      <span>Fixed Session Payout Rate (₹)</span>
+                  <div className="p-3.5 rounded-xl bg-purple-50/50 border border-purple-200/80 space-y-2.5">
+                    <label className="text-xs font-bold text-heading flex items-center gap-1.5 uppercase tracking-wider">
+                      <Coins className="w-3.5 h-3.5 text-purple-700" />
+                      <span>Shift Payout Rates (₹ / Class)</span>
                     </label>
-                    <input
-                      type="number"
-                      min={100}
-                      max={10000}
-                      step={50}
-                      value={editPayoutRupees}
-                      onChange={(e) => setEditPayoutRupees(Number(e.target.value))}
-                      className="w-full rounded-xl bg-white border border-border-default px-3 py-1.5 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs font-numeric"
-                    />
-                    <p className="text-[11px] text-body">
-                      Flat rate credited per 60m delivered session (stored in paise).
-                    </p>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div className="p-2.5 rounded-lg bg-white border border-amber-200 space-y-1 shadow-2xs">
+                        <span className="text-[11px] font-bold text-amber-900 block">
+                          ☀️ Day (9 AM – 9 PM)
+                        </span>
+                        <input
+                          type="number"
+                          min={50}
+                          max={10000}
+                          step={50}
+                          value={editPayoutDayRupees}
+                          onChange={(e) => setEditPayoutDayRupees(Number(e.target.value))}
+                          className="w-full rounded-md bg-white border border-amber-300 px-2.5 py-1 text-xs text-heading font-bold font-numeric focus:outline-none focus:border-amber-600"
+                        />
+                        <span className="text-[10px] text-body/60 block">Default: ₹300</span>
+                      </div>
+
+                      <div className="p-2.5 rounded-lg bg-white border border-indigo-200 space-y-1 shadow-2xs">
+                        <span className="text-[11px] font-bold text-indigo-900 block">
+                          🌙 Night (9 PM – 9 AM)
+                        </span>
+                        <input
+                          type="number"
+                          min={50}
+                          max={10000}
+                          step={50}
+                          value={editPayoutNightRupees}
+                          onChange={(e) => setEditPayoutNightRupees(Number(e.target.value))}
+                          className="w-full rounded-md bg-white border border-indigo-300 px-2.5 py-1 text-xs text-heading font-bold font-numeric focus:outline-none focus:border-indigo-600"
+                        />
+                        <span className="text-[10px] text-body/60 block">Default: ₹500</span>
+                      </div>
+                    </div>
                   </div>
 
                   {/* Teacher's Payout Coordinates (UPI ID) */}

@@ -8,6 +8,7 @@ import { revalidatePath } from "next/cache";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
 import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
+import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 
 export type StudentActionResponse<T = unknown> = {
   success: boolean;
@@ -207,6 +208,8 @@ export async function scheduleStudentLessonAction(input: {
       return { success: false, error: "Invalid date or time." };
     }
 
+    const payoutAmountMinor = calculateLessonPayoutMinor(startsAt, teacher.teacherProfile);
+
     const lesson = await db.lesson.create({
       data: {
         studentId: input.studentId,
@@ -218,6 +221,7 @@ export async function scheduleStudentLessonAction(input: {
         status: LessonStatus.SCHEDULED,
         lessonSource: LessonSource.ENROLLMENT,
         trackingCode,
+        payoutAmountMinor,
       },
     });
 

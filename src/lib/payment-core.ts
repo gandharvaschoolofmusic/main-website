@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { isAppError } from "@/lib/errors";
 import { sendCourseEnrollmentEmail } from "@/lib/email";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
+import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 
 export type PaymentOrderStudent = {
   id: string;
@@ -500,6 +501,7 @@ export async function scheduleEnrollmentLessonsCore(
   const defaultTeacherUser = fullCourse.teachers[0]?.teacher;
   let fallbackTeacherId = defaultTeacherUser?.id;
   let fallbackProfileId = defaultTeacherUser?.teacherProfile?.id;
+  let fallbackTeacherProfile = defaultTeacherUser?.teacherProfile || null;
 
   // If course doesn't have allotted teachers yet, pick any published teacher for that instrument or any active teacher
   if (!fallbackTeacherId || !fallbackProfileId) {
@@ -525,6 +527,7 @@ export async function scheduleEnrollmentLessonsCore(
     if (matchingTeacher) {
       fallbackTeacherId = matchingTeacher.userId;
       fallbackProfileId = matchingTeacher.id;
+      fallbackTeacherProfile = matchingTeacher;
     }
   }
 
@@ -549,13 +552,13 @@ export async function scheduleEnrollmentLessonsCore(
       if (!teacherId) continue;
 
       // Get teacher's profile
-      let profileId = fallbackProfileId;
+      let teacherProfileObj = fallbackTeacherProfile;
       if (teacherId !== fallbackTeacherId) {
-        const tp = await tx.teacherProfile.findUnique({
+        teacherProfileObj = await tx.teacherProfile.findUnique({
           where: { userId: teacherId },
         });
-        profileId = tp?.id || fallbackProfileId;
       }
+      const profileId = teacherProfileObj?.id || fallbackProfileId;
 
       if (!profileId) continue;
 
@@ -568,6 +571,7 @@ export async function scheduleEnrollmentLessonsCore(
 
       // Generate unique tracking code for payment & payout auditing
       const trackingCode = await generateUniqueLessonTrackingCode(studentId, tx);
+      const payoutAmountMinor = calculateLessonPayoutMinor(startsAt, teacherProfileObj);
 
       const lesson = await tx.lesson.create({
         data: {
@@ -582,6 +586,7 @@ export async function scheduleEnrollmentLessonsCore(
           enrollmentId,
           groupRoomId: null, // Strictly 1-on-1 private lesson
           trackingCode,
+          payoutAmountMinor,
         },
       });
 
@@ -593,6 +598,7 @@ export async function scheduleEnrollmentLessonsCore(
     for (let i = 1; i <= totalSessions; i++) {
       const startsAt = new Date(baseStartDate.getTime() + (i - 1) * 7 * 86400000);
       const trackingCode = await generateUniqueLessonTrackingCode(studentId, tx);
+      const payoutAmountMinor = calculateLessonPayoutMinor(startsAt, fallbackTeacherProfile);
 
       const lesson = await tx.lesson.create({
         data: {
@@ -607,6 +613,7 @@ export async function scheduleEnrollmentLessonsCore(
           enrollmentId,
           groupRoomId: null, // Strictly 1-on-1 private lesson
           trackingCode,
+          payoutAmountMinor,
         },
       });
       createdLessons.push(lesson);

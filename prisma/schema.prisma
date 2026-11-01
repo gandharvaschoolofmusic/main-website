@@ -137,6 +137,8 @@ model TeacherProfile {
   yearsTeaching          Int                     @default(0)
   hourlyRate             Int                     @default(0)
   payoutPerSession       Int                     @default(0)
+  payoutDayRate          Int                     @default(30000)
+  payoutNightRate        Int                     @default(50000)
   upiId                  String?
   paymentQrCodeUrl       String?
   currency               String                  @default("INR")

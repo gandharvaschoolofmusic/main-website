@@ -18,6 +18,8 @@ const getCachedAdminUsersData = unstable_cache(
         teacherProfile: {
           select: {
             payoutPerSession: true,
+            payoutDayRate: true,
+            payoutNightRate: true,
             instruments: true,
             isPublished: true,
             upiId: true,
@@ -49,6 +51,8 @@ const getCachedAdminUsersData = unstable_cache(
       teacherProfile: u.teacherProfile
         ? {
             payoutPerSession: u.teacherProfile.payoutPerSession,
+            payoutDayRate: u.teacherProfile.payoutDayRate,
+            payoutNightRate: u.teacherProfile.payoutNightRate,
             instruments: u.teacherProfile.instruments,
             isPublished: u.teacherProfile.isPublished,
             upiId: u.teacherProfile.upiId,

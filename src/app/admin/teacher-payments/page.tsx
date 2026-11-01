@@ -5,6 +5,7 @@ import { Role, LessonStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { formatInViewerTimezone } from "@/lib/timezone";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
+import { calculateLessonPayoutMinor, getPayoutTierInfo } from "@/lib/teacher-payout";
 import {
   AdminTeacherPaymentsManager,
   AdminSessionPayoutItem,
@@ -33,6 +34,8 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
         teacherProfile: {
           select: {
             payoutPerSession: true,
+            payoutDayRate: true,
+            payoutNightRate: true,
             upiId: true,
           },
         },
@@ -54,10 +57,9 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
 
     const formattedSessions: AdminSessionPayoutItem[] = lessons.map((l) => {
       const isPaid = l.payoutStatus === "PAID";
-      const payoutPerSessionMinor =
-        l.teacherProfile?.payoutPerSession || 50000;
-      const rateRupees = payoutPerSessionMinor / 100;
-      const amountRupees = (l.payoutAmountMinor || payoutPerSessionMinor) / 100;
+      const computedMinor = calculateLessonPayoutMinor(l.startsAt, l.teacherProfile);
+      const rateRupees = computedMinor / 100;
+      const amountRupees = (l.payoutAmountMinor || computedMinor) / 100;
 
       return {
         id: l.id,

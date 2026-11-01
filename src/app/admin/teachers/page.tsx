@@ -213,6 +213,8 @@ const getCachedAdminTeachersData = unstable_cache(
       yearsTeaching: profile?.yearsTeaching || 0,
       hourlyRate: profile?.hourlyRate || 0,
       payoutPerSession: profile?.payoutPerSession || 50000,
+      payoutDayRate: profile?.payoutDayRate ?? 30000,
+      payoutNightRate: profile?.payoutNightRate ?? 50000,
       upiId: profile?.upiId || null,
       isPublished: !!profile?.isPublished,
       approvalStatus: profile?.approvalStatus || "PENDING",

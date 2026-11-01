@@ -45,7 +45,10 @@ import {
   FolderArchive,
   RefreshCw,
   Video,
+  Sun,
+  Moon,
 } from "lucide-react";
+import { isDayTimeSlot, getPayoutTierInfo } from "@/lib/teacher-payout";
 
 export interface TeacherRecord {
   id: string; // TeacherProfile id (or user id fallback)
@@ -68,6 +71,8 @@ export interface TeacherRecord {
   yearsTeaching: number;
   hourlyRate: number; // paise
   payoutPerSession: number; // paise (e.g. 50000 = ₹500)
+  payoutDayRate?: number; // paise (e.g. 30000 = ₹300)
+  payoutNightRate?: number; // paise (e.g. 50000 = ₹500)
   upiId: string | null;
   isPublished: boolean;
   approvalStatus: TeacherApprovalStatus; // PENDING, APPROVED, REJECTED
@@ -192,7 +197,8 @@ export function AdminTeachersManager({ initialTeachers }: AdminTeachersManagerPr
   const [isReviewApplicationOpen, setIsReviewApplicationOpen] = useState(false);
   const [isRejectModalOpen, setIsRejectModalOpen] = useState(false);
   const [rejectionReasonInput, setRejectionReasonInput] = useState("");
-  const [inlinePayoutInput, setInlinePayoutInput] = useState<number>(800);
+  const [dayPayoutInput, setDayPayoutInput] = useState<number>(300);
+  const [nightPayoutInput, setNightPayoutInput] = useState<number>(500);
   const [adminNotesInput, setAdminNotesInput] = useState<string>("");
 
   // Feedback notifications
@@ -242,7 +248,8 @@ export function AdminTeachersManager({ initialTeachers }: AdminTeachersManagerPr
 
   useEffect(() => {
     if (selectedTeacher) {
-      setInlinePayoutInput(Math.round(selectedTeacher.payoutPerSession / 100));
+      setDayPayoutInput(Math.round((selectedTeacher.payoutDayRate ?? 30000) / 100));
+      setNightPayoutInput(Math.round((selectedTeacher.payoutNightRate ?? 50000) / 100));
       setAdminNotesInput(selectedTeacher.adminNotes || "");
       setSelectedPreviewConvId(null);
     }
@@ -427,9 +434,13 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
   const scheduledLessons = selectedTeacher
     ? selectedTeacher.lessons.filter((l) => l.status === "SCHEDULED").length
     : 0;
-  const payoutRupees = selectedTeacher
-    ? Math.round(selectedTeacher.payoutPerSession / 100)
+  const dayRateRupees = selectedTeacher
+    ? Math.round((selectedTeacher.payoutDayRate ?? 30000) / 100)
+    : 300;
+  const nightRateRupees = selectedTeacher
+    ? Math.round((selectedTeacher.payoutNightRate ?? 50000) / 100)
     : 500;
+  const payoutRupees = dayRateRupees;
 
   // Initials generator
   const getInitials = (name: string) => {
@@ -495,14 +506,17 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
     });
   };
 
-  // Payout rate save handler
-  const handleSavePayoutRate = (teacherId: string) => {
-    const ratePaise = Math.round(inlinePayoutInput * 100);
+  // Payout rates save handler
+  const handleSavePayoutRates = (teacherId: string) => {
+    const dayPaise = Math.round(dayPayoutInput * 100);
+    const nightPaise = Math.round(nightPayoutInput * 100);
     startTransition(async () => {
       const res = await updateTeacherApprovalAction({
         teacherProfileId: teacherId,
         status: selectedTeacher.approvalStatus,
-        payoutPerSession: ratePaise,
+        payoutDayRate: dayPaise,
+        payoutNightRate: nightPaise,
+        payoutPerSession: dayPaise,
         adminNotes: adminNotesInput.trim() ? adminNotesInput.trim() : undefined,
       });
 
@@ -512,15 +526,20 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
             t.id === teacherId
               ? {
                   ...t,
-                  payoutPerSession: ratePaise,
+                  payoutDayRate: dayPaise,
+                  payoutNightRate: nightPaise,
+                  payoutPerSession: dayPaise,
                   adminNotes: adminNotesInput.trim() || t.adminNotes,
                 }
               : t
           )
         );
-        showToast(`Session payout updated to ₹${inlinePayoutInput}.`, "success");
+        showToast(
+          `Payout rates saved: Day (9AM-9PM) ₹${dayPayoutInput} · Night (9PM-9AM) ₹${nightPayoutInput}.`,
+          "success"
+        );
       } else {
-        showToast(res.error || "Could not update remuneration rate.", "error");
+        showToast(res.error || "Could not update remuneration rates.", "error");
       }
     });
   };
@@ -753,7 +772,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     type="button"
                     onClick={() => {
                       setSelectedTeacherId(teacher.id);
-                      setInlinePayoutInput(Math.round(teacher.payoutPerSession / 100));
+                      setDayPayoutInput(Math.round((teacher.payoutDayRate ?? 30000) / 100));
+                      setNightPayoutInput(Math.round((teacher.payoutNightRate ?? 50000) / 100));
                       setAdminNotesInput(teacher.adminNotes || "");
                     }}
                     className={`w-full text-left p-3 rounded-xl transition-all flex items-center justify-between gap-3 cursor-pointer active:scale-[0.99] ${
@@ -872,7 +892,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   <button
                     type="button"
                     onClick={() => {
-                      setInlinePayoutInput(Math.round(selectedTeacher.payoutPerSession / 100));
+                      setDayPayoutInput(Math.round((selectedTeacher.payoutDayRate ?? 30000) / 100));
+                      setNightPayoutInput(Math.round((selectedTeacher.payoutNightRate ?? 50000) / 100));
                       setAdminNotesInput(selectedTeacher.adminNotes || "");
                       setIsReviewApplicationOpen(true);
                     }}
@@ -968,9 +989,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   </div>
                 </div>
                 <div>
-                  <div className="text-[11px] text-body/60 font-medium">Remuneration Rate</div>
-                  <div className="font-bold text-heading mt-0.5 font-numeric text-[#3C096C]">
-                    ₹{payoutRupees.toLocaleString("en-IN")} / session
+                  <div className="text-[11px] text-body/60 font-medium">Session Payout Rates</div>
+                  <div className="font-bold text-heading mt-0.5 font-numeric text-[#3C096C] text-xs flex items-center gap-1.5 flex-wrap">
+                    <span className="text-amber-800 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">☀️ ₹{dayRateRupees}</span>
+                    <span className="text-indigo-800 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">🌙 ₹{nightRateRupees}</span>
                   </div>
                 </div>
                 <div>
@@ -1068,11 +1090,13 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         <IndianRupee className="w-3.5 h-3.5" />
                       </div>
                     </div>
-                    <div className="font-serif text-2xl font-bold text-heading mt-2 font-numeric">
-                      ₹{payoutRupees.toLocaleString("en-IN")}
+                    <div className="font-serif text-2xl font-bold text-heading mt-2 font-numeric flex items-baseline gap-1.5 flex-wrap">
+                      <span className="text-amber-800">₹{dayRateRupees}</span>
+                      <span className="text-xs font-sans text-body/40 font-medium">/</span>
+                      <span className="text-indigo-800">₹{nightRateRupees}</span>
                     </div>
                     <div className="text-[11px] text-body/60 font-medium mt-0.5">
-                      Per 60-min completed lesson
+                      Day (9AM-9PM) / Night (9PM-9AM)
                     </div>
                   </div>
 
@@ -1261,33 +1285,76 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         </div>
                       </div>
 
-                      <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-100/80 space-y-3">
-                        <label className="text-[11px] font-semibold text-heading block">
-                          Payout Per 60-Minute Class (INR ₹)
-                        </label>
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-body">
-                              ₹
-                            </span>
-                            <input
-                              type="number"
-                              value={inlinePayoutInput}
-                              onChange={(e) => setInlinePayoutInput(Number(e.target.value))}
-                              step="50"
-                              min="0"
-                              className="w-full pl-7 pr-3 py-1.5 rounded-lg border border-purple-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-[#3C096C]"
-                            />
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleSavePayoutRate(selectedTeacher.id)}
-                            disabled={isPending}
-                            className="px-3 py-1.5 rounded-lg bg-[#3C096C] hover:bg-[#2F0755] text-white text-xs font-bold transition-all shadow-2xs active:scale-95 disabled:opacity-50"
-                          >
-                            {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save Rate"}
-                          </button>
+                      <div className="p-4 rounded-xl bg-purple-50/50 border border-purple-100/80 space-y-3.5">
+                        <div className="flex items-center justify-between">
+                          <label className="text-[11px] font-bold text-heading uppercase tracking-wider block">
+                            Session Payout Rates (INR ₹)
+                          </label>
+                          <span className="text-[10px] text-purple-700 bg-purple-100/80 font-semibold px-2 py-0.5 rounded-full font-numeric">
+                            IST Schedule
+                          </span>
                         </div>
+
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+                          {/* Day Shift: 9 AM to 9 PM */}
+                          <div className="p-3 rounded-xl bg-white border border-amber-200/90 shadow-2xs space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-amber-900 flex items-center gap-1">
+                                ☀️ Day Shift
+                              </span>
+                              <span className="text-[10px] text-amber-700 font-mono font-medium">9 AM – 9 PM</span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-body">
+                                ₹
+                              </span>
+                              <input
+                                type="number"
+                                value={dayPayoutInput}
+                                onChange={(e) => setDayPayoutInput(Number(e.target.value))}
+                                step="50"
+                                min="0"
+                                className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-amber-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-amber-600 focus:ring-1 focus:ring-amber-500 font-numeric"
+                                title="Day Session Rate (Default: ₹300)"
+                              />
+                            </div>
+                            <div className="text-[10px] text-body/60">Default: ₹300 / class</div>
+                          </div>
+
+                          {/* Night Shift: 9 PM to 9 AM */}
+                          <div className="p-3 rounded-xl bg-white border border-indigo-200/90 shadow-2xs space-y-1.5">
+                            <div className="flex items-center justify-between text-[11px]">
+                              <span className="font-bold text-indigo-900 flex items-center gap-1">
+                                🌙 Night Shift
+                              </span>
+                              <span className="text-[10px] text-indigo-700 font-mono font-medium">9 PM – 9 AM</span>
+                            </div>
+                            <div className="relative">
+                              <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-body">
+                                ₹
+                              </span>
+                              <input
+                                type="number"
+                                value={nightPayoutInput}
+                                onChange={(e) => setNightPayoutInput(Number(e.target.value))}
+                                step="50"
+                                min="0"
+                                className="w-full pl-6 pr-2 py-1.5 rounded-lg border border-indigo-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-indigo-600 focus:ring-1 focus:ring-indigo-500 font-numeric"
+                                title="Night Session Rate (Default: ₹500)"
+                              />
+                            </div>
+                            <div className="text-[10px] text-body/60">Default: ₹500 / class</div>
+                          </div>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSavePayoutRates(selectedTeacher.id)}
+                          disabled={isPending}
+                          className="w-full py-2 rounded-xl bg-[#3C096C] hover:bg-[#2F0755] text-white text-xs font-bold transition-all shadow-2xs active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 cursor-pointer"
+                        >
+                          {isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : "Save Shift Rates"}
+                        </button>
 
                         <div className="text-[11px] text-body/70 pt-2 border-t border-purple-100 flex items-center justify-between">
                           <span>Linked UPI ID:</span>
@@ -1341,7 +1408,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           />
                           <button
                             type="button"
-                            onClick={() => handleSavePayoutRate(selectedTeacher.id)}
+                            onClick={() => handleSavePayoutRates(selectedTeacher.id)}
                             disabled={isPending}
                             className="text-[11px] text-[#3C096C] font-bold hover:underline"
                           >
@@ -1966,56 +2033,83 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               <div className="space-y-6 animate-in fade-in duration-200">
                 {/* Financial Summary Strip */}
                 {(() => {
-                  const rateMinor = selectedTeacher.payoutPerSession || 50000;
-                  const rateRupees = Math.round(rateMinor / 100);
+                  const dayRateRupees = Math.round((selectedTeacher.payoutDayRate ?? 30000) / 100);
+                  const nightRateRupees = Math.round((selectedTeacher.payoutNightRate ?? 50000) / 100);
                   const completedLessonsOnly = selectedTeacher.lessons.filter(
                     (l) => l.status === "COMPLETED"
                   );
                   const paidLessons = completedLessonsOnly.filter((l) => l.payoutStatus === "PAID");
                   const unpaidLessons = completedLessonsOnly.filter((l) => l.payoutStatus === "UNPAID");
                   const settledAmountRupees = paidLessons.reduce((acc, l) => {
-                    const amt = l.payoutAmountMinor ? Math.round(l.payoutAmountMinor / 100) : rateRupees;
+                    const lDate = new Date(l.startsAt);
+                    const defaultRate = isDayTimeSlot(lDate) ? dayRateRupees : nightRateRupees;
+                    const amt = l.payoutAmountMinor ? Math.round(l.payoutAmountMinor / 100) : defaultRate;
                     return acc + amt;
                   }, 0);
                   const pendingAmountRupees = unpaidLessons.reduce((acc, l) => {
-                    const amt = l.payoutAmountMinor ? Math.round(l.payoutAmountMinor / 100) : rateRupees;
+                    const lDate = new Date(l.startsAt);
+                    const defaultRate = isDayTimeSlot(lDate) ? dayRateRupees : nightRateRupees;
+                    const amt = l.payoutAmountMinor ? Math.round(l.payoutAmountMinor / 100) : defaultRate;
                     return acc + amt;
                   }, 0);
 
                   return (
                     <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-                      {/* Card 1: Session Rate with Inline Edit */}
+                      {/* Card 1: Shift Rates with Inline Edit */}
                       <div className="p-4 rounded-2xl bg-white border border-neutral-200/80 shadow-2xs space-y-2">
                         <div className="flex items-center justify-between">
-                          <span className="text-xs text-body font-medium">Per-Session Rate</span>
+                          <span className="text-xs text-body font-bold">Shift Payout Rates</span>
                           <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-700 flex items-center justify-center">
                             <IndianRupee className="w-3.5 h-3.5" />
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <div className="relative flex-1">
-                            <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-xs font-bold text-body">
-                              ₹
+
+                        <div className="space-y-1.5 pt-0.5">
+                          {/* Day Rate */}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-semibold text-amber-900 shrink-0">
+                              ☀️ Day (9A-9P)
                             </span>
-                            <input
-                              type="number"
-                              value={inlinePayoutInput}
-                              onChange={(e) => setInlinePayoutInput(Number(e.target.value))}
-                              step="50"
-                              min="0"
-                              className="w-full pl-6 pr-2 py-1 rounded-lg border border-purple-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-[#3C096C]"
-                            />
+                            <div className="relative w-24">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-body">₹</span>
+                              <input
+                                type="number"
+                                value={dayPayoutInput}
+                                onChange={(e) => setDayPayoutInput(Number(e.target.value))}
+                                step="50"
+                                min="0"
+                                className="w-full pl-5 pr-1 py-1 rounded-md border border-amber-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-amber-600 font-numeric"
+                              />
+                            </div>
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleSavePayoutRate(selectedTeacher.id)}
-                            disabled={isPending}
-                            className="px-2.5 py-1 rounded-lg bg-[#3C096C] text-white text-[11px] font-bold hover:bg-[#2F0755] transition-all disabled:opacity-50 active:scale-95"
-                          >
-                            Save
-                          </button>
+
+                          {/* Night Rate */}
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="text-[11px] font-semibold text-indigo-900 shrink-0">
+                              🌙 Night (9P-9A)
+                            </span>
+                            <div className="relative w-24">
+                              <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs font-bold text-body">₹</span>
+                              <input
+                                type="number"
+                                value={nightPayoutInput}
+                                onChange={(e) => setNightPayoutInput(Number(e.target.value))}
+                                step="50"
+                                min="0"
+                                className="w-full pl-5 pr-1 py-1 rounded-md border border-indigo-200 bg-white text-xs font-bold text-heading focus:outline-none focus:border-indigo-600 font-numeric"
+                              />
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-[10px] text-body/50">Rate per 60-min conducted session</div>
+
+                        <button
+                          type="button"
+                          onClick={() => handleSavePayoutRates(selectedTeacher.id)}
+                          disabled={isPending}
+                          className="w-full mt-1 py-1 rounded-lg bg-[#3C096C] text-white text-[11px] font-bold hover:bg-[#2F0755] transition-all disabled:opacity-50 active:scale-95"
+                        >
+                          {isPending ? "Saving..." : "Save Shift Rates"}
+                        </button>
                       </div>
 
                       {/* Card 2: Total Paid */}
@@ -2132,9 +2226,13 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           <div className="divide-y divide-neutral-100 border border-neutral-200/80 rounded-xl overflow-hidden bg-neutral-50/20">
                         {filtered.map((l) => {
                           const lDate = new Date(l.startsAt);
+                          const isDay = isDayTimeSlot(lDate);
+                          const tierInfo = getPayoutTierInfo(lDate);
                           const sessionFee = l.payoutAmountMinor
                             ? Math.round(l.payoutAmountMinor / 100)
-                            : payoutRupees;
+                            : isDay
+                            ? dayRateRupees
+                            : nightRateRupees;
                           const isPaid = l.payoutStatus === "PAID";
 
                           return (
@@ -2146,6 +2244,17 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                 <div className="flex items-center gap-2 flex-wrap">
                                   <span className="font-bold text-heading text-xs">
                                     {l.instrument} · {l.durationMinutes} min
+                                  </span>
+                                  <span
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-bold ${
+                                      isDay
+                                        ? "bg-amber-50 text-amber-800 border border-amber-200"
+                                        : "bg-indigo-50 text-indigo-800 border border-indigo-200"
+                                    }`}
+                                    title={tierInfo.window}
+                                  >
+                                    <span>{isDay ? "☀️ Day" : "🌙 Night"}</span>
+                                    <span>({isDay ? "9AM-9PM" : "9PM-9AM"})</span>
                                   </span>
                                   <span
                                     className={`px-2 py-0.5 rounded text-[10px] font-bold ${
@@ -2382,7 +2491,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   />
                   <button
                     type="button"
-                    onClick={() => handleSavePayoutRate(selectedTeacher.id)}
+                    onClick={() => handleSavePayoutRates(selectedTeacher.id)}
                     disabled={isPending}
                     className="px-4 py-2 rounded-xl bg-[#3C096C] hover:bg-[#2F0755] text-white text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50"
                   >
