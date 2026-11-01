@@ -9,6 +9,7 @@ import {
   X,
   Sparkles,
   ChevronRight,
+  ChevronDown,
   Info,
   CalendarDays,
   ArrowRight,
@@ -72,6 +73,67 @@ export function getNextWeekdayDate(dayIndex: number, timeStr: string, fromDate =
 }
 
 /**
+ * Finds the earliest upcoming occurrence among multiple days of the week
+ */
+export function getNextMultiWeekdayDate(
+  selectedDays: number[],
+  timeStr: string,
+  fromDate = new Date()
+): Date {
+  if (!selectedDays || selectedDays.length === 0) {
+    return getNextWeekdayDate(1, timeStr, fromDate);
+  }
+  const dates = selectedDays.map((d) => getNextWeekdayDate(d, timeStr, fromDate));
+  dates.sort((a, b) => a.getTime() - b.getTime());
+  return dates[0];
+}
+
+/**
+ * Sorts day indices in standard weekly sequence: Mon (1) .. Sat (6), then Sun (0)
+ */
+export function sortWeekdays(days: number[]): number[] {
+  return [...days].sort((a, b) => {
+    const orderA = a === 0 ? 7 : a;
+    const orderB = b === 0 ? 7 : b;
+    return orderA - orderB;
+  });
+}
+
+/**
+ * Generates natural complementary days when expanding cadence
+ */
+export function getBalancedComplementaryDays(baseDay: number, targetCount: number): number[] {
+  if (targetCount <= 1) return [baseDay];
+
+  if (targetCount === 2) {
+    // Balanced pairs (spaced 3 or 4 days apart)
+    const pairs: Record<number, number> = {
+      1: 4, // Mon -> Mon, Thu
+      2: 5, // Tue -> Tue, Fri
+      3: 6, // Wed -> Wed, Sat
+      4: 1, // Thu -> Mon, Thu
+      5: 2, // Fri -> Tue, Fri
+      6: 3, // Sat -> Wed, Sat
+      0: 3, // Sun -> Wed, Sun
+    };
+    const second = pairs[baseDay] ?? ((baseDay + 3) % 7);
+    return sortWeekdays([baseDay, second]);
+  }
+
+  // targetCount === 3: Balanced triplets (e.g. Mon, Wed, Fri or Tue, Thu, Sat)
+  const triplets: Record<number, number[]> = {
+    1: [1, 3, 5], // Mon, Wed, Fri
+    2: [2, 4, 6], // Tue, Thu, Sat
+    3: [1, 3, 5], // Mon, Wed, Fri
+    4: [2, 4, 6], // Tue, Thu, Sat
+    5: [1, 3, 5], // Mon, Wed, Fri
+    6: [2, 4, 6], // Tue, Thu, Sat
+    0: [2, 5, 0], // Tue, Fri, Sun
+  };
+  return sortWeekdays(triplets[baseDay] ?? [1, 3, 5]);
+}
+
+/**
  * Generates N weekly slots spaced exactly 7 days apart (1 session per week)
  */
 export function generateWeeklySlotsList(
@@ -111,9 +173,83 @@ export function generateWeeklySlotsList(
   return slots;
 }
 
-interface WeeklySchedulePickerProps {
-  selectedDay: number;
-  onChangeDay: (day: number) => void;
+/**
+ * Generates N weekly slots distributed across the chosen days of the week.
+ * Cycles sequentially through selectedDays (e.g. Tue, Thu, Tue, Thu...)
+ */
+export function generateMultiDayWeeklySlots(
+  startDateStr: string,
+  selectedDays: number[],
+  selectedTime: string,
+  count: number,
+  durationMinutes = 60
+): GeneratedSessionSlot[] {
+  if (count <= 0 || !selectedDays || selectedDays.length === 0) return [];
+  const [hours, minutes] = (selectedTime || "17:00").split(":").map(Number);
+  const slots: GeneratedSessionSlot[] = [];
+  const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+  const MONTH_NAMES = [
+    "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
+  ];
+
+  let current: Date;
+  if (startDateStr) {
+    const [y, m, d] = startDateStr.split("-").map(Number);
+    current = new Date(y, m - 1, d, hours || 17, minutes || 0, 0, 0);
+    if (isNaN(current.getTime())) {
+      current = getNextMultiWeekdayDate(selectedDays, selectedTime);
+    }
+  } else {
+    current = getNextMultiWeekdayDate(selectedDays, selectedTime);
+  }
+
+  // Ensure current date is on one of the selectedDays
+  let safety = 0;
+  while (!selectedDays.includes(current.getDay()) && safety < 14) {
+    current.setDate(current.getDate() + 1);
+    safety++;
+  }
+
+  while (slots.length < count) {
+    const slotDate = new Date(current);
+    const dayName = DAY_NAMES[slotDate.getDay()];
+    const dateNum = String(slotDate.getDate()).padStart(2, "0");
+    const monthName = MONTH_NAMES[slotDate.getMonth()];
+    const year = slotDate.getFullYear();
+    let h = slotDate.getHours();
+    const ampm = h >= 12 ? "PM" : "AM";
+    h = h % 12 || 12;
+    const m = String(slotDate.getMinutes()).padStart(2, "0");
+    const timeFormatted = `${String(h).padStart(2, "0")}:${m} ${ampm}`;
+    const dateFormatted = `${dateNum} ${monthName} ${year}`;
+
+    slots.push({
+      startsAt: slotDate.toISOString(),
+      durationMinutes,
+      previewLabel: `${dayName}, ${dateFormatted} · ${timeFormatted}`,
+      dayName,
+      dateFormatted,
+      timeFormatted,
+    });
+
+    // Advance to the next matching day in selectedDays
+    let dayCount = 0;
+    do {
+      current.setDate(current.getDate() + 1);
+      dayCount++;
+    } while (!selectedDays.includes(current.getDay()) && dayCount < 14);
+  }
+
+  return slots;
+}
+
+export interface WeeklySchedulePickerProps {
+  selectedDay?: number;
+  onChangeDay?: (day: number) => void;
+  selectedDays?: number[];
+  onChangeDays?: (days: number[]) => void;
+  sessionsPerWeek?: number;
+  onChangeSessionsPerWeek?: (count: number) => void;
   selectedTime: string;
   onChangeTime: (time: string) => void;
   startDate: string; // YYYY-MM-DD
@@ -129,11 +265,15 @@ interface WeeklySchedulePickerProps {
 
 /**
  * Tactile Apple-style weekly session scheduler component.
- * Allows choosing day of the week, class timing with presets, and shows live timetable preview.
+ * Allows choosing sessions per week cadence (1, 2, 3), days of the week, class timing, and shows live timetable preview.
  */
 export function WeeklySchedulePicker({
-  selectedDay,
+  selectedDay = 3,
   onChangeDay,
+  selectedDays,
+  onChangeDays,
+  sessionsPerWeek = 1,
+  onChangeSessionsPerWeek,
   selectedTime,
   onChangeTime,
   startDate,
@@ -146,23 +286,132 @@ export function WeeklySchedulePicker({
   sessionCount,
   compact = false,
 }: WeeklySchedulePickerProps) {
-  // Compute starting Date object
-  const computedFirstDate = useMemo(() => {
-    const [hours, minutes] = selectedTime.split(":").map(Number);
-    if (startDate) {
-      const [y, m, d] = startDate.split("-").map(Number);
-      const parsed = new Date(y, m - 1, d, hours || 17, minutes || 0, 0, 0);
-      if (!isNaN(parsed.getTime())) return parsed;
+  // Cadence: 1, 2, or 3 sessions per week
+  const [internalSessionsPerWeek, setInternalSessionsPerWeek] = useState<number>(sessionsPerWeek || 1);
+  const effectiveSessionsPerWeek = sessionsPerWeek ?? internalSessionsPerWeek;
+
+  // Selected days array: 1 to 3 days of the week
+  const initialDays = useMemo(() => {
+    if (selectedDays && selectedDays.length > 0) return selectedDays;
+    if (typeof selectedDay === "number") {
+      return getBalancedComplementaryDays(selectedDay, effectiveSessionsPerWeek);
     }
-    return getNextWeekdayDate(selectedDay, selectedTime);
-  }, [startDate, selectedDay, selectedTime]);
+    return getBalancedComplementaryDays(3, effectiveSessionsPerWeek);
+  }, [selectedDays, selectedDay, effectiveSessionsPerWeek]);
 
-  // Live generated weekly slots
+  const [internalDays, setInternalDays] = useState<number[]>(initialDays);
+  const effectiveDays = selectedDays && selectedDays.length > 0 ? selectedDays : internalDays;
+
+  // Sync internal state when external props change
+  useEffect(() => {
+    if (typeof sessionsPerWeek === "number") {
+      setInternalSessionsPerWeek(sessionsPerWeek);
+    }
+  }, [sessionsPerWeek]);
+
+  useEffect(() => {
+    if (selectedDays && selectedDays.length > 0) {
+      setInternalDays(selectedDays);
+    }
+  }, [selectedDays]);
+
+  // Handler for changing sessions per week (1, 2, 3)
+  const handleSessionsPerWeekChange = (newCount: number) => {
+    const validCount = Math.max(1, Math.min(3, newCount));
+    setInternalSessionsPerWeek(validCount);
+    onChangeSessionsPerWeek?.(validCount);
+
+    // Adjust selected days to match the new cadence count
+    let updatedDays = [...effectiveDays];
+    if (validCount === 1) {
+      updatedDays = [effectiveDays[0] ?? 3];
+    } else if (validCount === 2) {
+      if (effectiveDays.length < 2) {
+        updatedDays = getBalancedComplementaryDays(effectiveDays[0] ?? 3, 2);
+      } else if (effectiveDays.length > 2) {
+        updatedDays = effectiveDays.slice(0, 2);
+      }
+    } else if (validCount === 3) {
+      if (effectiveDays.length < 3) {
+        updatedDays = getBalancedComplementaryDays(effectiveDays[0] ?? 3, 3);
+      } else if (effectiveDays.length > 3) {
+        updatedDays = effectiveDays.slice(0, 3);
+      }
+    }
+
+    updatedDays = sortWeekdays(updatedDays);
+    setInternalDays(updatedDays);
+    onChangeDays?.(updatedDays);
+    if (updatedDays.length > 0) {
+      onChangeDay?.(updatedDays[0]);
+    }
+
+    // Auto-align startDate to earliest matching weekday
+    const nextD = getNextMultiWeekdayDate(updatedDays, selectedTime);
+    const y = nextD.getFullYear();
+    const m = String(nextD.getMonth() + 1).padStart(2, "0");
+    const d = String(nextD.getDate()).padStart(2, "0");
+    onChangeStartDate(`${y}-${m}-${d}`);
+  };
+
+  // Handler for clicking a day button in the 7-day grid
+  const handleToggleDay = (dayIndex: number) => {
+    let updated: number[];
+    if (effectiveSessionsPerWeek === 1) {
+      updated = [dayIndex];
+    } else {
+      if (effectiveDays.includes(dayIndex)) {
+        // Toggle off if more than 1 day remains
+        if (effectiveDays.length > 1) {
+          updated = effectiveDays.filter((d) => d !== dayIndex);
+        } else {
+          updated = effectiveDays;
+        }
+      } else {
+        if (effectiveDays.length < effectiveSessionsPerWeek) {
+          updated = sortWeekdays([...effectiveDays, dayIndex]);
+        } else {
+          // Replace the oldest selected day with the newly chosen day
+          updated = sortWeekdays([...effectiveDays.slice(1), dayIndex]);
+        }
+      }
+    }
+
+    setInternalDays(updated);
+    onChangeDays?.(updated);
+    if (updated.length > 0) {
+      onChangeDay?.(updated[0]);
+    }
+
+    // Auto-align startDate to earliest matching weekday
+    const nextD = getNextMultiWeekdayDate(updated, selectedTime);
+    const y = nextD.getFullYear();
+    const m = String(nextD.getMonth() + 1).padStart(2, "0");
+    const d = String(nextD.getDate()).padStart(2, "0");
+    onChangeStartDate(`${y}-${m}-${d}`);
+  };
+
+  // Live generated weekly slots across multiple days
   const previewSlots = useMemo(() => {
-    return generateWeeklySlotsList(computedFirstDate, sessionCount, durationMinutes);
-  }, [computedFirstDate, sessionCount, durationMinutes]);
+    return generateMultiDayWeeklySlots(
+      startDate,
+      effectiveDays,
+      selectedTime,
+      sessionCount,
+      durationMinutes
+    );
+  }, [startDate, effectiveDays, selectedTime, sessionCount, durationMinutes]);
 
-  const selectedWeekdayObj = WEEKDAY_OPTIONS.find((w) => w.dayIndex === selectedDay) || WEEKDAY_OPTIONS[0];
+  // Formatted repetition text (e.g. "every Tuesday & Thursday")
+  const selectedDayObjs = WEEKDAY_OPTIONS.filter((w) => effectiveDays.includes(w.dayIndex));
+  const formattedDaysText = useMemo(() => {
+    if (selectedDayObjs.length === 0) return "No days selected";
+    if (selectedDayObjs.length === 1) return `every ${selectedDayObjs[0].full}`;
+    if (selectedDayObjs.length === 2) {
+      return `every ${selectedDayObjs[0].full} & ${selectedDayObjs[1].full}`;
+    }
+    return `every ${selectedDayObjs.slice(0, -1).map((d) => d.full).join(", ")} & ${selectedDayObjs[selectedDayObjs.length - 1].full}`;
+  }, [selectedDayObjs]);
 
   const [rateText, setRateText] = useState<string>(String(perSessionRate || 800));
 
@@ -226,47 +475,62 @@ export function WeeklySchedulePicker({
                 )}
               </div>
               <p className="text-[11px] text-body/70 mt-1">
-                Automatically unlocking <span className="font-bold text-[#3C096C]">{sessionCount} weekly sessions</span> (1 session per week)
+                Automatically unlocking <span className="font-bold text-[#3C096C]">{sessionCount} sessions</span> ({effectiveSessionsPerWeek} {effectiveSessionsPerWeek === 1 ? "session" : "sessions"} per week)
               </p>
             </div>
           </div>
 
-          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-100/80 border border-purple-200/90 text-[#3C096C] text-xs font-bold shrink-0 self-start sm:self-auto">
-            <CalendarClock className="w-3.5 h-3.5" />
-            <span>1 Session / Week</span>
+          {/* Interactive Customizable Cadence Selector Button */}
+          <div className="relative inline-flex items-center shrink-0 self-start sm:self-auto group">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-purple-50/90 hover:bg-purple-100 border border-purple-200/90 hover:border-purple-300 text-[#3C096C] text-xs font-bold transition-all shadow-2xs">
+              <CalendarClock className="w-3.5 h-3.5 text-[#3C096C] shrink-0" />
+              <select
+                value={effectiveSessionsPerWeek}
+                onChange={(e) => handleSessionsPerWeekChange(Number(e.target.value))}
+                className="appearance-none bg-transparent text-[#3C096C] text-xs font-bold cursor-pointer focus:outline-none pr-4 pl-0.5 py-0"
+                title="Change sessions per week"
+              >
+                <option value={1} className="text-neutral-900 font-semibold">1 Session / Week</option>
+                <option value={2} className="text-neutral-900 font-semibold">2 Sessions / Week</option>
+                <option value={3} className="text-neutral-900 font-semibold">3 Sessions / Week</option>
+              </select>
+              <ChevronDown className="w-3.5 h-3.5 text-[#3C096C] -ml-3 pointer-events-none group-hover:translate-y-0.5 transition-transform" />
+            </div>
           </div>
         </div>
       </div>
 
       {/* 2. Day of Week Selection (Pill Buttons) */}
       <div>
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-2 flex-wrap gap-1">
           <label className="text-xs font-semibold text-heading flex items-center gap-1.5">
             <CalendarDays className="w-3.5 h-3.5 text-[#3C096C]" />
-            <span>What day of the week do you want to schedule?</span>
+            <span>
+              {effectiveSessionsPerWeek > 1
+                ? `What ${effectiveSessionsPerWeek} days of the week do you want to schedule?`
+                : "What day of the week do you want to schedule?"}
+            </span>
+            {effectiveSessionsPerWeek > 1 && (
+              <span className="text-[10px] font-bold text-[#3C096C] bg-purple-100/90 px-2 py-0.5 rounded-full ml-1 border border-purple-200">
+                {effectiveDays.length} of {effectiveSessionsPerWeek} days
+              </span>
+            )}
           </label>
-          <span className="text-[11px] text-body/60 font-medium">
-            Repeats every {selectedWeekdayObj.full}
+          <span className="text-[11px] text-body/60 font-medium truncate ml-auto">
+            Repeats {formattedDaysText}
           </span>
         </div>
 
         <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
           {WEEKDAY_OPTIONS.map((day) => {
-            const isSelected = selectedDay === day.dayIndex;
+            const isSelected = effectiveDays.includes(day.dayIndex);
+            const selectionOrder = effectiveDays.indexOf(day.dayIndex);
             return (
               <button
                 key={day.dayIndex}
                 type="button"
-                onClick={() => {
-                  onChangeDay(day.dayIndex);
-                  // Snap start date to next occurrence of that weekday
-                  const nextD = getNextWeekdayDate(day.dayIndex, selectedTime);
-                  const y = nextD.getFullYear();
-                  const m = String(nextD.getMonth() + 1).padStart(2, "0");
-                  const d = String(nextD.getDate()).padStart(2, "0");
-                  onChangeStartDate(`${y}-${m}-${d}`);
-                }}
-                className={`py-2 px-1 rounded-xl text-center text-xs font-bold transition-all duration-150 active:scale-95 cursor-pointer ${
+                onClick={() => handleToggleDay(day.dayIndex)}
+                className={`py-2 px-1 rounded-xl text-center text-xs font-bold transition-all duration-150 active:scale-95 cursor-pointer relative ${
                   isSelected
                     ? "bg-[#3C096C] text-white shadow-xs scale-[1.02]"
                     : "bg-white hover:bg-neutral-50 text-neutral-700 border border-neutral-200 hover:border-neutral-300"
@@ -274,6 +538,11 @@ export function WeeklySchedulePicker({
                 title={day.full}
               >
                 <div className="text-[11px] font-bold">{day.label}</div>
+                {effectiveSessionsPerWeek > 1 && isSelected && (
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 rounded-full bg-emerald-500 text-white text-[9px] flex items-center justify-center font-bold shadow-xs">
+                    {selectionOrder + 1}
+                  </span>
+                )}
               </button>
             );
           })}
@@ -340,8 +609,8 @@ export function WeeklySchedulePicker({
             onChange={(e) => onChangeStartDate(e.target.value)}
             className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-semibold text-heading focus:outline-none focus:border-[#3C096C]"
           />
-          <p className="text-[10px] text-body/60 mt-0.5">
-            Defaults to next upcoming {selectedWeekdayObj.full}
+          <p className="text-[10px] text-body/60 mt-0.5 truncate">
+            Defaults to next upcoming {selectedDayObjs[0]?.full || "session day"}
           </p>
         </div>
 
@@ -374,10 +643,10 @@ export function WeeklySchedulePicker({
         <div className="flex items-center justify-between mb-2">
           <label className="text-xs font-semibold text-heading flex items-center gap-1.5">
             <Calendar className="w-3.5 h-3.5 text-[#3C096C]" />
-            <span>Generated Timetable ({sessionCount} Weekly Sessions)</span>
+            <span>Generated Timetable ({sessionCount} Sessions)</span>
           </label>
           <span className="text-[10px] text-emerald-700 font-bold bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200">
-            1 session / week
+            {effectiveSessionsPerWeek} {effectiveSessionsPerWeek === 1 ? "session" : "sessions"} / week
           </span>
         </div>
 
@@ -461,9 +730,11 @@ export function AutoScheduleAllotModal({
 
   // Scheduler configuration state
   const [selectedDay, setSelectedDay] = useState<number>(3); // Default Wednesday
+  const [selectedDays, setSelectedDays] = useState<number[]>([3]);
+  const [sessionsPerWeek, setSessionsPerWeek] = useState<number>(1);
   const [selectedTime, setSelectedTime] = useState<string>("17:00"); // Default 5:00 PM
   const [startDate, setStartDate] = useState<string>(() => {
-    const nextD = getNextWeekdayDate(3, "17:00");
+    const nextD = getNextMultiWeekdayDate([3], "17:00");
     const y = nextD.getFullYear();
     const m = String(nextD.getMonth() + 1).padStart(2, "0");
     const d = String(nextD.getDate()).padStart(2, "0");
@@ -471,30 +742,28 @@ export function AutoScheduleAllotModal({
   });
   const [durationMinutes, setDurationMinutes] = useState<number>(60);
 
-  // Sync start date whenever modal opens or day/time changes if not manually set
+  // Sync start date whenever modal opens or days/time change if not manually set
   useEffect(() => {
     if (isOpen) {
-      const nextD = getNextWeekdayDate(selectedDay, selectedTime);
+      const nextD = getNextMultiWeekdayDate(selectedDays, selectedTime);
       const y = nextD.getFullYear();
       const m = String(nextD.getMonth() + 1).padStart(2, "0");
       const d = String(nextD.getDate()).padStart(2, "0");
       setStartDate(`${y}-${m}-${d}`);
     }
-  }, [isOpen, selectedDay, selectedTime]);
+  }, [isOpen, selectedDays, selectedTime]);
 
   if (!isOpen) return null;
 
   const handleScheduleSubmit = () => {
-    const [hours, minutes] = selectedTime.split(":").map(Number);
-    let firstDate: Date;
-    if (startDate) {
-      const [y, m, d] = startDate.split("-").map(Number);
-      firstDate = new Date(y, m - 1, d, hours || 17, minutes || 0, 0, 0);
-    } else {
-      firstDate = getNextWeekdayDate(selectedDay, selectedTime);
-    }
-
-    const slots = generateWeeklySlotsList(firstDate, sessionCount, durationMinutes).map((s) => ({
+    const days = selectedDays.length > 0 ? selectedDays : [selectedDay];
+    const slots = generateMultiDayWeeklySlots(
+      startDate,
+      days,
+      selectedTime,
+      sessionCount,
+      durationMinutes
+    ).map((s) => ({
       startsAt: s.startsAt,
       durationMinutes: s.durationMinutes,
     }));
@@ -536,6 +805,10 @@ export function AutoScheduleAllotModal({
           <WeeklySchedulePicker
             selectedDay={selectedDay}
             onChangeDay={setSelectedDay}
+            selectedDays={selectedDays}
+            onChangeDays={setSelectedDays}
+            sessionsPerWeek={sessionsPerWeek}
+            onChangeSessionsPerWeek={setSessionsPerWeek}
             selectedTime={selectedTime}
             onChangeTime={setSelectedTime}
             startDate={startDate}

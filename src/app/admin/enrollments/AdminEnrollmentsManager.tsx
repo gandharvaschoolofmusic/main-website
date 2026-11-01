@@ -57,7 +57,9 @@ import {
   WeeklySchedulePicker,
   AutoScheduleAllotModal,
   getNextWeekdayDate,
+  getNextMultiWeekdayDate,
   generateWeeklySlotsList,
+  generateMultiDayWeeklySlots,
   WEEKDAY_OPTIONS,
 } from "./AutoScheduleModal";
 
@@ -468,9 +470,11 @@ export function AdminEnrollmentsManager({
 
   // Installment automatic weekly scheduling state
   const [installmentDay, setInstallmentDay] = useState<number>(3); // Default Wednesday
+  const [installmentDays, setInstallmentDays] = useState<number[]>([3]);
+  const [installmentSessionsPerWeek, setInstallmentSessionsPerWeek] = useState<number>(1);
   const [installmentTime, setInstallmentTime] = useState<string>("17:00"); // Default 5:00 PM
   const [installmentStartDate, setInstallmentStartDate] = useState<string>(() => {
-    const nextD = getNextWeekdayDate(3, "17:00");
+    const nextD = getNextMultiWeekdayDate([3], "17:00");
     const y = nextD.getFullYear();
     const m = String(nextD.getMonth() + 1).padStart(2, "0");
     const d = String(nextD.getDate()).padStart(2, "0");
@@ -595,15 +599,14 @@ export function AdminEnrollmentsManager({
 
     let slotsToSchedule: Array<{ startsAt: string; durationMinutes: number }> | undefined = undefined;
     if (isAutoScheduleInstallment && sessionCount > 0) {
-      const [hours, minutes] = installmentTime.split(":").map(Number);
-      let firstDate: Date;
-      if (installmentStartDate) {
-        const [y, m, d] = installmentStartDate.split("-").map(Number);
-        firstDate = new Date(y, m - 1, d, hours || 17, minutes || 0, 0, 0);
-      } else {
-        firstDate = getNextWeekdayDate(installmentDay, installmentTime);
-      }
-      slotsToSchedule = generateWeeklySlotsList(firstDate, sessionCount, installmentDuration).map((s) => ({
+      const days = installmentDays.length > 0 ? installmentDays : [installmentDay];
+      slotsToSchedule = generateMultiDayWeeklySlots(
+        installmentStartDate,
+        days,
+        installmentTime,
+        sessionCount,
+        installmentDuration
+      ).map((s) => ({
         startsAt: s.startsAt,
         durationMinutes: s.durationMinutes,
       }));
@@ -836,24 +839,25 @@ export function AdminEnrollmentsManager({
       datesLabel = `${formatDate(firstDate)} – ${formatDate(lastDate)}`;
     } else {
       // If no lessons yet recorded in DB, display configured weekly installment schedule preview
-      const dayObj = WEEKDAY_OPTIONS.find((w) => w.dayIndex === installmentDay);
+      const effectiveDays = installmentDays.length > 0 ? installmentDays : [installmentDay];
+      const dayLabels = WEEKDAY_OPTIONS.filter((w) => effectiveDays.includes(w.dayIndex)).map((w) => w.label);
       const [h, m] = installmentTime.split(":").map(Number);
       const ampm = (h ?? 17) >= 12 ? "PM" : "AM";
       const h12 = (h ?? 17) % 12 || 12;
       const timeStr = `${String(h12).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")} ${ampm}`;
-      scheduleLabel = `${dayObj?.label || "Wed"} · ${timeStr} IST`;
+      scheduleLabel = `${dayLabels.join(", ") || "Wed"} · ${timeStr} IST`;
 
       if (installmentStartDate) {
-        const [y, mo, da] = installmentStartDate.split("-").map(Number);
-        const startD = new Date(y, mo - 1, da);
-        const endD = new Date(startD.getTime() + Math.max(0, installmentSessionCount - 1) * 7 * 86400000);
-        const formatDate = (d: Date) =>
-          d.toLocaleDateString("en-GB", {
-            day: "2-digit",
-            month: "short",
-            year: "numeric",
-          });
-        datesLabel = `${formatDate(startD)} – ${formatDate(endD)}`;
+        const previewSlots = generateMultiDayWeeklySlots(
+          installmentStartDate,
+          effectiveDays,
+          installmentTime,
+          installmentSessionCount,
+          installmentDuration
+        );
+        if (previewSlots.length > 0) {
+          datesLabel = `${previewSlots[0].dateFormatted} – ${previewSlots[previewSlots.length - 1].dateFormatted}`;
+        }
       }
     }
 
@@ -873,6 +877,8 @@ export function AdminEnrollmentsManager({
   }, [
     activeEnrollment?.lessons,
     installmentDay,
+    installmentDays,
+    installmentSessionsPerWeek,
     installmentTime,
     installmentStartDate,
     installmentSessionCount,
@@ -3027,7 +3033,7 @@ export function AdminEnrollmentsManager({
                         <div className="flex items-center gap-2">
                           <CalendarClock className="w-4 h-4 text-[#3C096C]" />
                           <h5 className="font-semibold text-xs text-heading">
-                            Automated Weekly Session Scheduling (1 Session / Week)
+                            Automated Weekly Session Scheduling ({installmentSessionsPerWeek} Session{installmentSessionsPerWeek > 1 ? "s" : ""} / Week)
                           </h5>
                         </div>
                         <label className="flex items-center gap-2 text-xs font-semibold text-[#3C096C] cursor-pointer">
@@ -3046,6 +3052,10 @@ export function AdminEnrollmentsManager({
                           <WeeklySchedulePicker
                             selectedDay={installmentDay}
                             onChangeDay={setInstallmentDay}
+                            selectedDays={installmentDays}
+                            onChangeDays={setInstallmentDays}
+                            sessionsPerWeek={installmentSessionsPerWeek}
+                            onChangeSessionsPerWeek={setInstallmentSessionsPerWeek}
                             selectedTime={installmentTime}
                             onChangeTime={setInstallmentTime}
                             startDate={installmentStartDate}
