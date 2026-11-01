@@ -22,6 +22,8 @@ interface PreJoinScreenProps {
     audioDeviceId: string;
     videoDeviceId: string;
     audioMode: AudioMode;
+    isAudioMuted: boolean;
+    isVideoMuted: boolean;
   }) => void;
   onCancel?: () => void;
 }
@@ -44,13 +46,19 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
 
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
-  // Load saved audio mode preference from localStorage
+  // Load saved audio mode and mute preferences from localStorage
   useEffect(() => {
     try {
       const savedMode = localStorage.getItem("toneroom_audio_mode") as AudioMode;
       // Restore the existing saved audio preference after hydration; never change it during a UI redesign.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedMode === "TALKING" || savedMode === "PLAYING") setAudioMode(savedMode);
+
+      const savedMicMute = localStorage.getItem("toneroom_mic_muted");
+      if (savedMicMute !== null) setIsAudioMuted(savedMicMute === "true");
+
+      const savedCamMute = localStorage.getItem("toneroom_cam_muted");
+      if (savedCamMute !== null) setIsVideoMuted(savedCamMute === "true");
     } catch {
       // Ignore localStorage errors
     }
@@ -92,6 +100,19 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
 
         streamRef.current = initialStream;
         setStream(initialStream);
+
+        // Synchronize initial track enabled state with saved mute state
+        try {
+          if (localStorage.getItem("toneroom_mic_muted") === "true") {
+            initialStream.getAudioTracks().forEach((t) => (t.enabled = false));
+          }
+          if (localStorage.getItem("toneroom_cam_muted") === "true") {
+            initialStream.getVideoTracks().forEach((t) => (t.enabled = false));
+          }
+        } catch {
+          // Ignore
+        }
+
         if (videoRef.current) {
           videoRef.current.srcObject = initialStream;
         }
@@ -196,17 +217,19 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   };
 
   const toggleVideo = () => {
-    if (!stream) return;
     const nextState = !isVideoMuted;
     setIsVideoMuted(nextState);
-    stream.getVideoTracks().forEach((t) => (t.enabled = !nextState));
+    if (stream) {
+      stream.getVideoTracks().forEach((t) => (t.enabled = !nextState));
+    }
   };
 
   const toggleAudio = () => {
-    if (!stream) return;
     const nextState = !isAudioMuted;
     setIsAudioMuted(nextState);
-    stream.getAudioTracks().forEach((t) => (t.enabled = !nextState));
+    if (stream) {
+      stream.getAudioTracks().forEach((t) => (t.enabled = !nextState));
+    }
   };
 
   const handleJoin = () => {
@@ -215,6 +238,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       localStorage.setItem("toneroom_mic_id", selectedAudioDevice);
       localStorage.setItem("toneroom_cam_id", selectedVideoDevice);
       localStorage.setItem("toneroom_audio_mode", audioMode);
+      localStorage.setItem("toneroom_mic_muted", String(isAudioMuted));
+      localStorage.setItem("toneroom_cam_muted", String(isVideoMuted));
     } catch {
       // Ignore
     }
@@ -233,6 +258,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       audioDeviceId: selectedAudioDevice,
       videoDeviceId: selectedVideoDevice,
       audioMode,
+      isAudioMuted,
+      isVideoMuted,
     });
   };
 

@@ -47,6 +47,8 @@ interface LessonRoomProps {
     audioDeviceId: string;
     videoDeviceId: string;
     audioMode: AudioMode;
+    isAudioMuted?: boolean;
+    isVideoMuted?: boolean;
   };
   onLeave: () => void;
 }
@@ -209,8 +211,8 @@ function LessonRoomContent({
   // Audio Mode & Track state
   const [audioMode, setAudioMode] = useState<AudioMode>(initialConfig.audioMode);
   const [isSwitchingAudioMode, setIsSwitchingAudioMode] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
-  const [isVideoOff, setIsVideoOff] = useState(false);
+  const [isMuted, setIsMuted] = useState(Boolean(initialConfig.isAudioMuted));
+  const [isVideoOff, setIsVideoOff] = useState(Boolean(initialConfig.isVideoMuted));
   const [isScreenSharing, setIsScreenSharing] = useState(false);
 
   // Turn-taking state
@@ -292,6 +294,12 @@ function LessonRoomContent({
         );
         currentAudioTrackRef.current = track;
         console.log("[Audio] Local audio track initialized & published successfully");
+
+        if (initialConfig.isAudioMuted) {
+          console.log("[Audio] Muting audio track per user Pre-Join selection");
+          track.mute();
+          await room.localParticipant.setMicrophoneEnabled(false);
+        }
       } catch (err) {
         console.warn(`[Audio] Failed to initialize audio track (attempt ${attempt + 1}):`, err);
         // When transitioning from PreJoinScreen, OS drivers take ~300ms to release hardware
@@ -299,10 +307,15 @@ function LessonRoomContent({
           await new Promise((resolve) => setTimeout(resolve, 350));
           return initAudio(attempt + 1);
         }
-        // Fallback: use LiveKit's native setMicrophoneEnabled to ensure mic is active
+        // Fallback: use LiveKit's native setMicrophoneEnabled to ensure mic is active if unmuted
         try {
-          console.log("[Audio] Fallback: calling room.localParticipant.setMicrophoneEnabled(true)");
-          await room.localParticipant.setMicrophoneEnabled(true);
+          if (!initialConfig.isAudioMuted) {
+            console.log("[Audio] Fallback: calling room.localParticipant.setMicrophoneEnabled(true)");
+            await room.localParticipant.setMicrophoneEnabled(true);
+          } else {
+            console.log("[Audio] Fallback: mic kept disabled per initialConfig.isAudioMuted");
+            await room.localParticipant.setMicrophoneEnabled(false);
+          }
         } catch (fallbackErr) {
           console.error("[Audio] All audio initialization attempts failed:", fallbackErr);
         }
@@ -368,7 +381,10 @@ function LessonRoomContent({
     initializedVideoRef.current = true;
 
     async function initVideo() {
-      if (isVideoOff) return;
+      if (isVideoOff || initialConfig.isVideoMuted) {
+        console.log("[Video] Camera kept OFF per user Pre-Join selection");
+        return;
+      }
 
       const tryEnableCamera = async (attempt = 0): Promise<void> => {
         try {
@@ -499,6 +515,13 @@ function LessonRoomContent({
     setIsMuted(nextMuted);
     try {
       await room.localParticipant.setMicrophoneEnabled(!nextMuted);
+      if (currentAudioTrackRef.current) {
+        if (nextMuted) {
+          currentAudioTrackRef.current.mute();
+        } else {
+          currentAudioTrackRef.current.unmute();
+        }
+      }
     } catch {
       for (const pub of room.localParticipant.audioTrackPublications.values()) {
         if (pub.track) {
@@ -516,7 +539,22 @@ function LessonRoomContent({
   const handleToggleVideo = async () => {
     const nextOff = !isVideoOff;
     setIsVideoOff(nextOff);
-    await room.localParticipant.setCameraEnabled(!nextOff);
+    try {
+      await room.localParticipant.setCameraEnabled(!nextOff, {
+        deviceId:
+          selectedCameraId ||
+          (initialConfig.videoDeviceId
+            ? { ideal: initialConfig.videoDeviceId }
+            : undefined),
+      });
+    } catch (e) {
+      console.warn("Could not toggle camera with preferred device, trying default:", e);
+      try {
+        await room.localParticipant.setCameraEnabled(!nextOff);
+      } catch (err2) {
+        console.error("Camera toggle failed completely:", err2);
+      }
+    }
   };
 
   // Toggle Screen Share

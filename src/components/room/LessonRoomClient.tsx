@@ -37,10 +37,14 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     audioDeviceId: string;
     videoDeviceId: string;
     audioMode: AudioMode;
+    isAudioMuted: boolean;
+    isVideoMuted: boolean;
   }>({
     audioDeviceId: "",
     videoDeviceId: "",
     audioMode: "TALKING",
+    isAudioMuted: false,
+    isVideoMuted: false,
   });
 
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -49,6 +53,8 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     audioDeviceId: string;
     videoDeviceId: string;
     audioMode: AudioMode;
+    isAudioMuted: boolean;
+    isVideoMuted: boolean;
   }) => {
     setJoinedConfig(config);
     setStep("CONNECTING");
