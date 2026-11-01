@@ -471,6 +471,32 @@ export function AdminEnrollmentsManager({
   });
   const [installmentDuration, setInstallmentDuration] = useState<number>(60);
   const [isAutoScheduleInstallment, setIsAutoScheduleInstallment] = useState<boolean>(true);
+  const [installmentPerSessionRate, setInstallmentPerSessionRate] = useState<number>(800);
+
+  const defaultInstallmentPerSessionRate = useMemo(() => {
+    if (!activeEnrollment) return 800;
+    return activeEnrollment.sessionsTotal > 0
+      ? Math.round(
+          (activeEnrollment.coursePriceMinorUnits / 100) / activeEnrollment.sessionsTotal
+        )
+      : 800;
+  }, [activeEnrollment]);
+
+  // Sync installment per-session rate when activeEnrollment changes
+  useEffect(() => {
+    if (activeEnrollment) {
+      setInstallmentPerSessionRate(defaultInstallmentPerSessionRate);
+    }
+  }, [activeEnrollment?.id, defaultInstallmentPerSessionRate]);
+
+  const effectiveInstallmentPerSessionRate =
+    installmentPerSessionRate > 0 ? installmentPerSessionRate : defaultInstallmentPerSessionRate;
+
+  const installmentSessionCount = useMemo(() => {
+    if (effectiveInstallmentPerSessionRate <= 0) return 1;
+    const calc = Math.floor(installmentAmount / effectiveInstallmentPerSessionRate);
+    return calc > 0 ? calc : 1;
+  }, [installmentAmount, effectiveInstallmentPerSessionRate]);
 
   // Allotment automatic weekly schedule modal state
   interface PendingAllotScheduleContext {
@@ -557,12 +583,7 @@ export function AdminEnrollmentsManager({
     }
 
     // Calculate per-session charge and session count to schedule
-    const perSessionRate =
-      activeEnrollment.sessionsTotal > 0
-        ? Math.round(
-            (activeEnrollment.coursePriceMinorUnits / 100) / activeEnrollment.sessionsTotal
-          )
-        : 500;
+    const perSessionRate = effectiveInstallmentPerSessionRate;
     const sessionCount = perSessionRate > 0 ? Math.floor(installmentAmount / perSessionRate) : 0;
 
     let slotsToSchedule: Array<{ startsAt: string; durationMinutes: number }> | undefined = undefined;
@@ -2720,6 +2741,7 @@ export function AdminEnrollmentsManager({
                   type="button"
                   onClick={() => {
                     setInstallmentAmount(amountDueRupees > 0 ? amountDueRupees : 5000);
+                    setInstallmentPerSessionRate(defaultInstallmentPerSessionRate);
                     setIsRecordingPayment(!isRecordingPayment);
                   }}
                   className={`inline-flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all shadow-xs active:scale-[0.98] cursor-pointer ${
@@ -2899,28 +2921,9 @@ export function AdminEnrollmentsManager({
                             durationMinutes={installmentDuration}
                             onChangeDuration={setInstallmentDuration}
                             amountPaid={installmentAmount}
-                            perSessionRate={
-                              activeEnrollment.sessionsTotal > 0
-                                ? Math.round(
-                                    (activeEnrollment.coursePriceMinorUnits / 100) /
-                                      activeEnrollment.sessionsTotal
-                                  )
-                                : 500
-                            }
-                            sessionCount={
-                              activeEnrollment.sessionsTotal > 0
-                                ? Math.max(
-                                    1,
-                                    Math.floor(
-                                      installmentAmount /
-                                        Math.round(
-                                          (activeEnrollment.coursePriceMinorUnits / 100) /
-                                            activeEnrollment.sessionsTotal
-                                        )
-                                    )
-                                  )
-                                : Math.max(1, Math.floor(installmentAmount / 500))
-                            }
+                            perSessionRate={effectiveInstallmentPerSessionRate}
+                            onChangePerSessionRate={setInstallmentPerSessionRate}
+                            sessionCount={installmentSessionCount}
                           />
                         </div>
                       )}
@@ -2952,27 +2955,8 @@ export function AdminEnrollmentsManager({
                         Confirm &amp; Record Tranche (₹{installmentAmount.toLocaleString("en-IN")})
                         {isAutoScheduleInstallment &&
                         installmentAmount > 0 &&
-                        activeEnrollment &&
-                        (activeEnrollment.sessionsTotal > 0
-                          ? Math.floor(
-                              installmentAmount /
-                                Math.round(
-                                  (activeEnrollment.coursePriceMinorUnits / 100) /
-                                    activeEnrollment.sessionsTotal
-                                )
-                            )
-                          : Math.floor(installmentAmount / 500)) > 0
-                          ? ` + Schedule ${
-                              activeEnrollment.sessionsTotal > 0
-                                ? Math.floor(
-                                    installmentAmount /
-                                      Math.round(
-                                        (activeEnrollment.coursePriceMinorUnits / 100) /
-                                          activeEnrollment.sessionsTotal
-                                      )
-                                  )
-                                : Math.floor(installmentAmount / 500)
-                            } Sessions`
+                        installmentSessionCount > 0
+                          ? ` + Schedule ${installmentSessionCount} Sessions`
                           : ""}
                       </span>
                     </button>
@@ -3341,6 +3325,7 @@ export function AdminEnrollmentsManager({
                     type="button"
                     onClick={() => {
                       setInstallmentAmount(amountDueRupees);
+                      setInstallmentPerSessionRate(defaultInstallmentPerSessionRate);
                       setIsRecordingPayment(true);
                       const s3 = document.getElementById("section-3-fees");
                       if (s3) s3.scrollIntoView({ behavior: "smooth" });

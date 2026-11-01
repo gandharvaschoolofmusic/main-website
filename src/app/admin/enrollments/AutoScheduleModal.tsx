@@ -122,6 +122,7 @@ interface WeeklySchedulePickerProps {
   onChangeDuration: (dur: number) => void;
   amountPaid: number;
   perSessionRate: number;
+  onChangePerSessionRate?: (rate: number) => void;
   sessionCount: number;
   compact?: boolean;
 }
@@ -141,6 +142,7 @@ export function WeeklySchedulePicker({
   onChangeDuration,
   amountPaid,
   perSessionRate,
+  onChangePerSessionRate,
   sessionCount,
   compact = false,
 }: WeeklySchedulePickerProps) {
@@ -162,6 +164,12 @@ export function WeeklySchedulePicker({
 
   const selectedWeekdayObj = WEEKDAY_OPTIONS.find((w) => w.dayIndex === selectedDay) || WEEKDAY_OPTIONS[0];
 
+  const [rateText, setRateText] = useState<string>(String(perSessionRate || 800));
+
+  useEffect(() => {
+    setRateText(String(perSessionRate || 800));
+  }, [perSessionRate]);
+
   return (
     <div className="space-y-4 font-sans">
       {/* 1. Dynamic Financial & Session Calculation Banner */}
@@ -172,16 +180,52 @@ export function WeeklySchedulePicker({
               <Sparkles className="w-4 h-4 text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <span className="text-xs font-bold text-heading">
                   ₹{amountPaid.toLocaleString("en-IN")} Amount Paid
                 </span>
                 <span className="text-[10px] text-body/50">÷</span>
-                <span className="text-xs font-medium text-body">
-                  ₹{perSessionRate.toLocaleString("en-IN")}/session
-                </span>
+                {onChangePerSessionRate ? (
+                  <div
+                    className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-white border border-purple-300 shadow-2xs hover:border-[#3C096C] focus-within:border-[#3C096C] focus-within:ring-2 focus-within:ring-[#3C096C]/20 transition-all cursor-text"
+                    title="Click to customize per-session rate (e.g. ₹800/session)"
+                  >
+                    <span className="text-xs font-bold text-[#3C096C]">₹</span>
+                    <input
+                      type="number"
+                      min="50"
+                      step="50"
+                      value={rateText}
+                      onChange={(e) => {
+                        const str = e.target.value;
+                        setRateText(str);
+                        const val = Number(str);
+                        if (val > 0) {
+                          onChangePerSessionRate(val);
+                        }
+                      }}
+                      onBlur={() => {
+                        const val = Number(rateText);
+                        if (!val || val <= 0) {
+                          setRateText(String(perSessionRate || 800));
+                          onChangePerSessionRate(perSessionRate || 800);
+                        }
+                      }}
+                      className="w-16 text-xs font-bold text-heading bg-transparent focus:outline-none font-numeric text-center"
+                      aria-label="Per session rate"
+                    />
+                    <span className="text-[11px] text-body/70 font-semibold">/session</span>
+                    <span className="text-[9px] font-bold text-[#3C096C] bg-purple-100/90 px-1.5 py-0.5 rounded uppercase tracking-wider ml-0.5">
+                      Custom
+                    </span>
+                  </div>
+                ) : (
+                  <span className="text-xs font-medium text-body">
+                    ₹{perSessionRate.toLocaleString("en-IN")}/session
+                  </span>
+                )}
               </div>
-              <p className="text-[11px] text-body/70 mt-0.5">
+              <p className="text-[11px] text-body/70 mt-1">
                 Automatically unlocking <span className="font-bold text-[#3C096C]">{sessionCount} weekly sessions</span> (1 session per week)
               </p>
             </div>
@@ -398,12 +442,22 @@ export function AutoScheduleAllotModal({
   onConfirmWithoutSchedule,
   isPending,
 }: AutoScheduleAllotModalProps) {
+  const [customRate, setCustomRate] = useState<number>(perSessionRate || 800);
+
+  useEffect(() => {
+    if (perSessionRate > 0) {
+      setCustomRate(perSessionRate);
+    }
+  }, [perSessionRate, isOpen]);
+
+  const effectiveRate = customRate > 0 ? customRate : (perSessionRate || 800);
+
   // Session count calculated as amount paid / per session charge (minimum 1 if paid > 0)
   const sessionCount = useMemo(() => {
-    if (perSessionRate <= 0) return 1;
-    const calc = Math.floor(amountPaid / perSessionRate);
+    if (effectiveRate <= 0) return 1;
+    const calc = Math.floor(amountPaid / effectiveRate);
     return calc > 0 ? calc : 1;
-  }, [amountPaid, perSessionRate]);
+  }, [amountPaid, effectiveRate]);
 
   // Scheduler configuration state
   const [selectedDay, setSelectedDay] = useState<number>(3); // Default Wednesday
@@ -489,7 +543,8 @@ export function AutoScheduleAllotModal({
             durationMinutes={durationMinutes}
             onChangeDuration={setDurationMinutes}
             amountPaid={amountPaid}
-            perSessionRate={perSessionRate}
+            perSessionRate={effectiveRate}
+            onChangePerSessionRate={setCustomRate}
             sessionCount={sessionCount}
           />
         </div>
