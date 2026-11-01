@@ -2,7 +2,7 @@
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 
-import { useState, useTransition } from "react";
+import { useState, useTransition, useMemo } from "react";
 import Link from "next/link";
 import {
   Globe,
@@ -119,6 +119,7 @@ export interface StudentRecord {
     status: string;
     createdAt: string;
     isConverted: boolean;
+    allottedLessonStatus?: string | null;
   }[];
   notifications: {
     id: string;
@@ -162,6 +163,59 @@ interface TeacherOption {
   id: string;
   name: string;
   instruments: string[];
+}
+
+/**
+ * Determines whether a student is currently in their trial period
+ * (i.e. has active/pending trial requests, has not completed their trial lesson,
+ * and has not enrolled or converted into a paid student).
+ *
+ * Students who are currently in their trial period are managed under the Trials section
+ * and do not appear in the Students Directory until their trial completes or they enroll.
+ */
+export function isStudentInActiveTrialPeriod(student: {
+  enrollments?: Array<any>;
+  trials?: Array<{ isConverted: boolean; status?: string; allottedLessonStatus?: string | null }>;
+  lessons?: Array<{ status: string }>;
+  trialStatus?: { status: string; lessonsUsed?: number; lessonsGranted?: number } | null;
+  trialRequestsAsStudent?: Array<{
+    isConverted: boolean;
+    status: string;
+    allottedLesson?: { status: string } | null;
+  }>;
+  lessonsAsStudent?: Array<{ status: string }>;
+}): boolean {
+  // 1. If student has any active or past course enrollment, they are an enrolled student (NOT in trial period)
+  if (student.enrollments && student.enrollments.length > 0) return false;
+
+  const trialRequests = student.trialRequestsAsStudent ?? student.trials ?? [];
+  // If student has no trial requests at all (e.g. manually created student), they are not in a trial
+  if (trialRequests.length === 0) return false;
+
+  // 2. If any trial was converted, they are converted to an enrolled student
+  const isConverted = trialRequests.some((t: any) => t.isConverted);
+  if (isConverted) return false;
+
+  // 3. Check if trial period is completed (conducted at least 1 lesson, e.g. trial lesson completed)
+  const allLessons = student.lessonsAsStudent ?? student.lessons ?? [];
+  const hasCompletedLesson = allLessons.some(
+    (l) => l.status === "COMPLETED"
+  );
+  if (hasCompletedLesson) return false;
+
+  // Check if allotted trial lesson is completed
+  const hasCompletedTrialLesson = trialRequests.some(
+    (t: any) =>
+      t.allottedLesson?.status === "COMPLETED" ||
+      t.allottedLessonStatus === "COMPLETED"
+  );
+  if (hasCompletedTrialLesson) return false;
+
+  // 4. Check if trial status is exhausted
+  if (student.trialStatus?.status === "EXHAUSTED") return false;
+
+  // Otherwise, the student is currently in their trial period (pending, scheduled, or awaiting trial session)
+  return true;
 }
 
 interface AdminStudentsManagerProps {
@@ -294,11 +348,16 @@ export function AdminStudentsManager({
     }
   };
 
+  // Students who have either completed their trial period or enrolled/converted
+  const eligibleStudents: StudentRecord[] = useMemo(() => {
+    return students.filter((s: StudentRecord) => !isStudentInActiveTrialPeriod(s));
+  }, [students]);
+
   const selectedStudent =
-    students.find((s) => s.id === selectedStudentId) || students[0];
+    eligibleStudents.find((s) => s.id === selectedStudentId) || eligibleStudents[0] || students[0];
 
   // Filter students for left directory
-  const filteredStudents = students.filter((s) => {
+  const filteredStudents = eligibleStudents.filter((s) => {
     const q = searchQuery.toLowerCase().trim();
     const matchesSearch =
       !q ||
@@ -318,7 +377,7 @@ export function AdminStudentsManager({
     return true;
   });
 
-  const dueStudentsCount = students.filter((s) =>
+  const dueStudentsCount = eligibleStudents.filter((s) =>
     s.payments.some((p) => p.status === "CREATED")
   ).length;
 
@@ -729,7 +788,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
           <div>
             <h2 className="font-serif text-lg font-bold text-heading">Directory</h2>
             <p className="text-xs text-body/70 mt-0.5 font-numeric">
-              {students.length} active students
+              {eligibleStudents.length} active {eligibleStudents.length === 1 ? "student" : "students"}
             </p>
           </div>
 
@@ -755,7 +814,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   : "bg-neutral-100 text-body/70 hover:bg-neutral-200/60"
                 }`}
             >
-              All {students.length}
+              All {eligibleStudents.length}
             </button>
             <button
               type="button"
@@ -765,7 +824,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   : "bg-neutral-100 text-body/70 hover:bg-neutral-200/60"
                 }`}
             >
-              Active {students.filter((s) => s.isActive).length}
+              Active {eligibleStudents.filter((s) => s.isActive).length}
             </button>
             <button
               type="button"

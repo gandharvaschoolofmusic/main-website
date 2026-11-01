@@ -2,7 +2,11 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, LessonStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
-import { AdminStudentsManager, StudentRecord } from "./AdminStudentsManager";
+import {
+  AdminStudentsManager,
+  StudentRecord,
+  isStudentInActiveTrialPeriod,
+} from "./AdminStudentsManager";
 
 export const metadata = {
   title: "Students | Admin Portal | Gandharva School of Music",
@@ -89,9 +93,19 @@ const getCachedAdminStudentsData = unstable_cache(
             orderBy: { sharedAt: "desc" },
             take: 15, // Reduced from 50
           },
+          trialStatus: true,
           trialRequestsAsStudent: {
+            include: {
+              allottedLesson: {
+                select: {
+                  id: true,
+                  status: true,
+                  startsAt: true,
+                },
+              },
+            },
             orderBy: { createdAt: "desc" },
-            take: 10, // Reduced from 20
+            take: 10,
           },
           notifications: {
             orderBy: { createdAt: "desc" },
@@ -213,6 +227,7 @@ const getCachedAdminStudentsData = unstable_cache(
         status: t.status,
         createdAt: t.createdAt.toISOString(),
         isConverted: t.isConverted,
+        allottedLessonStatus: t.allottedLesson?.status || null,
       })),
       notifications: s.notifications.map((n) => ({
         id: n.id,
@@ -248,13 +263,18 @@ const getCachedAdminStudentsData = unstable_cache(
       instruments: t.teacherProfile?.instruments || [],
     }));
 
+    // Exclude students who are currently in their trial period until trial is completed or enrolled
+    const eligibleStudents = formattedStudents.filter(
+      (s) => !isStudentInActiveTrialPeriod(s)
+    );
+
     return {
-      formattedStudents,
+      formattedStudents: eligibleStudents,
       courseOptions,
       teacherOptions,
     };
   },
-  ["admin-students-data-v1"],
+  ["admin-students-data-v2"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
