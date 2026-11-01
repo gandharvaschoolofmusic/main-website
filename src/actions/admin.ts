@@ -1024,6 +1024,7 @@ export async function saveCourseAdminAction(input: {
   allowEmi?: boolean;
   sessionCount: number;
   durationWeeks: number;
+  structurePdfUrl?: string | null;
   startDate?: string | null;
   endDate?: string | null;
   teacherIds?: string[];
@@ -1053,6 +1054,8 @@ export async function saveCourseAdminAction(input: {
       allowEmi: input.allowEmi !== undefined ? input.allowEmi : true,
       sessionCount: Math.max(1, input.sessionCount),
       durationWeeks: Math.max(1, input.durationWeeks),
+      structurePdfUrl:
+        input.structurePdfUrl !== undefined ? (input.structurePdfUrl?.trim() || null) : null,
       startDate: input.startDate ? new Date(input.startDate) : null,
       endDate: input.endDate ? new Date(input.endDate) : null,
       isPublished: input.isPublished,
@@ -1100,6 +1103,54 @@ export async function saveCourseAdminAction(input: {
   } catch (error) {
     logger.error({ error }, "Error saving course");
     return { success: false, error: "Failed to save course. Check slug uniqueness." };
+  }
+}
+
+export async function uploadCourseStructurePdfAction(
+  formData: FormData
+): Promise<AdminActionResponse<{ url: string; fileName: string }>> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const file = formData.get("file") as File | null;
+    if (!file || file.size === 0) {
+      return { success: false, error: "Please select a PDF file to upload." };
+    }
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      return { success: false, error: "Only PDF (.pdf) files are allowed for course structure." };
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      return { success: false, error: "PDF size cannot exceed 25MB." };
+    }
+
+    const { uploadToSupabase, isStorageConfigured } = await import("@/lib/supabase-storage");
+
+    if (!isStorageConfigured()) {
+      return { success: false, error: "Storage backend is not configured." };
+    }
+
+    const arrayBuffer = await file.arrayBuffer();
+    const buffer = Buffer.from(arrayBuffer);
+
+    const result = await uploadToSupabase(buffer, file.name, "application/pdf", {
+      bucket: "resources",
+    });
+
+    return {
+      success: true,
+      data: {
+        url: result.fileUrl,
+        fileName: file.name,
+      },
+    };
+  } catch (error) {
+    logger.error({ error }, "Error uploading course structure PDF");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to upload course structure PDF.",
+    };
   }
 }
 

@@ -86,6 +86,7 @@ const getCachedAdminCoursesData = unstable_cache(
       allowEmi: c.allowEmi,
       sessionCount: c.sessionCount,
       durationWeeks: c.durationWeeks,
+      structurePdfUrl: c.structurePdfUrl || null,
       startDate: c.startDate ? c.startDate.toISOString() : null,
       endDate: c.endDate ? c.endDate.toISOString() : null,
       isPublished: c.isPublished,

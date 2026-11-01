@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Clock, BookOpen, Award, ArrowRight } from "lucide-react";
+import { Clock, BookOpen, Award, ArrowRight, FileText, Download } from "lucide-react";
 import { Discipline, CourseLevel } from "@/types";
 import { PriceDisplay } from "@/components/currency/PriceDisplay";
 import { cleanDescriptionText } from "@/lib/pricing-tiers";
@@ -22,6 +22,7 @@ export type CourseCardProps = {
     sessionCount: number;
     durationWeeks: number;
     thumbnailUrl?: string | null;
+    structurePdfUrl?: string | null;
   };
   basePath?: string;
 };
@@ -94,6 +95,30 @@ export function CourseCard({ course, basePath = "/student/dashboard/courses" }: 
             <span>{course.durationWeeks} Weeks</span>
           </div>
         </div>
+
+        {/* Course Structure PDF Download Link */}
+        {course.structurePdfUrl && (
+          <div className="pt-1">
+            <a
+              href={course.structurePdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="w-full inline-flex items-center justify-between px-3 py-2 rounded-xl bg-purple-50/80 hover:bg-purple-100 text-[#3C096C] text-xs font-bold border border-purple-200/80 transition-all shadow-2xs group/pdf cursor-pointer active:scale-[0.99]"
+              title="Download Course Structure PDF"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <span className="flex items-center gap-1.5 min-w-0">
+                <FileText className="w-3.5 h-3.5 text-[#3C096C] shrink-0" />
+                <span className="truncate">Course Structure (PDF)</span>
+              </span>
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#3C096C]/80 group-hover/pdf:text-[#3C096C] shrink-0">
+                <span>Download</span>
+                <Download className="w-3 h-3" />
+              </span>
+            </a>
+          </div>
+        )}
       </div>
 
       {/* Pricing & CTA */}

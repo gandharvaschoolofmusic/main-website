@@ -2,7 +2,7 @@
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useRef } from "react";
 import { Discipline, CourseLevel } from "@prisma/client";
 import {
   saveCourseAdminAction,
@@ -11,6 +11,7 @@ import {
   saveCourseLessonAdminAction,
   deleteCourseLessonAdminAction,
   bulkGenerateCourseLessonsAdminAction,
+  uploadCourseStructurePdfAction,
 } from "@/actions/admin";
 import {
   BookOpen,
@@ -40,6 +41,10 @@ import {
   EyeOff,
   Percent,
   Tag,
+  FileText,
+  Upload,
+  Download,
+  ExternalLink,
 } from "lucide-react";
 
 export interface AdminCourseLessonItem {
@@ -69,6 +74,7 @@ export interface AdminCourseItem {
   allowEmi?: boolean;
   sessionCount: number;
   durationWeeks: number;
+  structurePdfUrl?: string | null;
   startDate: string | null;
   endDate: string | null;
   isPublished: boolean;
@@ -238,6 +244,63 @@ export function AdminCoursesManager({
   const [syllabusSummary, setSyllabusSummary] = useState("");
   const [isPublished, setIsPublished] = useState(true);
 
+  // Course Structure PDF State
+  const [structurePdfUrl, setStructurePdfUrl] = useState<string>("");
+  const [structurePdfName, setStructurePdfName] = useState<string>("");
+  const [isUploadingPdf, setIsUploadingPdf] = useState<boolean>(false);
+  const [pdfUploadError, setPdfUploadError] = useState<string | null>(null);
+  const [pdfSuccessMsg, setPdfSuccessMsg] = useState<string | null>(null);
+  const pdfInputRef = useRef<HTMLInputElement>(null);
+
+  const handlePdfUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfUploadError("Only PDF files (.pdf) are allowed.");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+      return;
+    }
+
+    if (file.size > 25 * 1024 * 1024) {
+      setPdfUploadError("PDF file size cannot exceed 25MB.");
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+      return;
+    }
+
+    setPdfUploadError(null);
+    setPdfSuccessMsg(null);
+    setIsUploadingPdf(true);
+
+    try {
+      const formData = new FormData();
+      formData.append("file", file);
+
+      const res = await uploadCourseStructurePdfAction(formData);
+      if (res.success && res.data) {
+        setStructurePdfUrl(res.data.url);
+        setStructurePdfName(res.data.fileName || file.name);
+        setPdfSuccessMsg("Course structure PDF uploaded successfully!");
+        setTimeout(() => setPdfSuccessMsg(null), 3000);
+      } else {
+        setPdfUploadError(res.error || "Failed to upload PDF.");
+      }
+    } catch {
+      setPdfUploadError("An unexpected error occurred while uploading the PDF.");
+    } finally {
+      setIsUploadingPdf(false);
+      if (pdfInputRef.current) pdfInputRef.current.value = "";
+    }
+  };
+
+  const handleRemovePdf = () => {
+    setStructurePdfUrl("");
+    setStructurePdfName("");
+    setPdfUploadError(null);
+    setPdfSuccessMsg(null);
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
+  };
+
   // Lesson Edit State inside Curriculum Drawer
   const [editingLessonId, setEditingLessonId] = useState<string | "NEW" | null>(null);
   const [lessonNumber, setLessonNumber] = useState<number>(1);
@@ -335,6 +398,10 @@ export function AdminCoursesManager({
         : ""
     );
     setIsPublished(true);
+    setStructurePdfUrl("");
+    setStructurePdfName("");
+    setPdfUploadError(null);
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
     setFormError(null);
     setFormSuccess(false);
   };
@@ -348,6 +415,14 @@ export function AdminCoursesManager({
     setInstrument(c.instrument);
     setLevel(c.level);
     setAccreditation(c.accreditation || "");
+    setStructurePdfUrl(c.structurePdfUrl || "");
+    setStructurePdfName(
+      c.structurePdfUrl
+        ? decodeURIComponent(c.structurePdfUrl.split("/").pop() || "").replace(/^\d+_/, "") || "course-structure.pdf"
+        : ""
+    );
+    setPdfUploadError(null);
+    if (pdfInputRef.current) pdfInputRef.current.value = "";
     const pricing = parseCoursePricing(c.description, c.priceMinorUnits, c.sessionCount, c.level);
     setSessionRateINR(pricing.rates.INR);
     setSessionRateSaudiUAE(pricing.rates.SA_UAE);
@@ -440,6 +515,7 @@ export function AdminCoursesManager({
         allowEmi: false,
         sessionCount,
         durationWeeks,
+        structurePdfUrl: structurePdfUrl.trim() || null,
         startDate: startDate ? new Date(startDate).toISOString() : null,
         endDate: endDate ? new Date(endDate).toISOString() : null,
         teacherIds: selectedTeacherIds,
@@ -470,6 +546,7 @@ export function AdminCoursesManager({
             allowEmi: false,
             sessionCount,
             durationWeeks,
+            structurePdfUrl: structurePdfUrl.trim() || null,
             startDate: startDate ? new Date(startDate).toISOString() : null,
             endDate: endDate ? new Date(endDate).toISOString() : null,
             isPublished,
@@ -499,6 +576,7 @@ export function AdminCoursesManager({
                     allowEmi: false,
                     sessionCount,
                     durationWeeks,
+                    structurePdfUrl: structurePdfUrl.trim() || null,
                     startDate: startDate ? new Date(startDate).toISOString() : null,
                     endDate: endDate ? new Date(endDate).toISOString() : null,
                     isPublished,
@@ -1277,6 +1355,20 @@ export function AdminCoursesManager({
                       <span>Curriculum ({c.lessonsCount})</span>
                     </button>
 
+                    {c.structurePdfUrl && (
+                      <a
+                        href={c.structurePdfUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#3C096C] text-xs font-semibold flex items-center gap-1.5 transition-all border border-purple-200/80 shadow-2xs cursor-pointer"
+                        title="Download / View Course Structure PDF"
+                      >
+                        <FileText className="w-3.5 h-3.5 text-[#3C096C]" />
+                        <span>Structure PDF</span>
+                        <Download className="w-3 h-3 text-[#3C096C]/70" />
+                      </a>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => openEditModal(c)}
@@ -1873,6 +1965,111 @@ export function AdminCoursesManager({
                   placeholder="Lesson 1-4: Posture & Scales • Lesson 5-10: Repertoire • Lesson 11-20: Performance..."
                   className="w-full rounded-xl bg-white border border-border-default p-3 text-xs text-heading placeholder-body/50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 leading-relaxed shadow-xs"
                 />
+              </div>
+
+              {/* Course Structure PDF Upload Section */}
+              <div className="space-y-2 p-3.5 rounded-2xl bg-neutral-50/80 border border-neutral-200/80">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-bold text-heading flex items-center gap-1.5">
+                    <FileText className="w-3.5 h-3.5 text-[#3C096C]" />
+                    <span>Course Structure PDF (Optional)</span>
+                  </label>
+                  <span className="text-[10px] font-semibold text-body/60 font-numeric">
+                    PDF up to 25MB
+                  </span>
+                </div>
+
+                <input
+                  ref={pdfInputRef}
+                  type="file"
+                  accept=".pdf,application/pdf"
+                  onChange={handlePdfUpload}
+                  className="hidden"
+                />
+
+                {pdfUploadError && (
+                  <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-center gap-2">
+                    <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                    <span>{pdfUploadError}</span>
+                  </div>
+                )}
+
+                {pdfSuccessMsg && (
+                  <div className="p-2.5 rounded-xl bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs flex items-center gap-2 animate-fade-in">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                    <span>{pdfSuccessMsg}</span>
+                  </div>
+                )}
+
+                {structurePdfUrl ? (
+                  <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-purple-200 shadow-2xs gap-3">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-lg bg-rose-100 text-rose-700 flex items-center justify-center shrink-0 font-bold text-[10px] border border-rose-200">
+                        PDF
+                      </div>
+                      <div className="min-w-0">
+                        <p className="text-xs font-bold text-heading truncate">
+                          {structurePdfName || "Course Structure PDF"}
+                        </p>
+                        <a
+                          href={structurePdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="text-[11px] text-[#3C096C] hover:underline flex items-center gap-1 font-medium"
+                        >
+                          <span>Preview / View File</span>
+                          <ExternalLink className="w-2.5 h-2.5" />
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => pdfInputRef.current?.click()}
+                        disabled={isUploadingPdf}
+                        className="px-2.5 py-1.5 rounded-lg border border-neutral-200 hover:bg-neutral-50 text-[11px] font-semibold text-heading transition-colors cursor-pointer"
+                        title="Upload a new PDF to replace this one"
+                      >
+                        {isUploadingPdf ? (
+                          <Loader2 className="w-3 h-3 animate-spin" />
+                        ) : (
+                          "Replace"
+                        )}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleRemovePdf}
+                        className="p-1.5 rounded-lg text-body/50 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="Remove attached PDF"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div
+                    onClick={() => !isUploadingPdf && pdfInputRef.current?.click()}
+                    className={`border-2 border-dashed rounded-xl p-4 text-center transition-all cursor-pointer ${
+                      isUploadingPdf
+                        ? "border-purple-300 bg-purple-50/50"
+                        : "border-neutral-300 hover:border-[#3C096C] bg-white hover:bg-purple-50/20"
+                    }`}
+                  >
+                    {isUploadingPdf ? (
+                      <div className="flex items-center justify-center gap-2 text-xs font-semibold text-[#3C096C]">
+                        <Loader2 className="w-4 h-4 animate-spin" />
+                        <span>Uploading Course Structure PDF to Cloud Storage...</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2 text-xs text-body/80">
+                        <Upload className="w-4 h-4 text-[#3C096C]" />
+                        <span className="font-semibold text-heading">Click to upload Course Structure PDF</span>
+                        <span className="text-[11px] text-body/50">(Students can download this from catalog)</span>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="flex items-center gap-3 pt-1">

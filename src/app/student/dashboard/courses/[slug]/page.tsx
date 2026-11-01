@@ -15,6 +15,8 @@ import {
   Users,
   UserCheck,
   Sparkles,
+  FileText,
+  Download,
 } from "lucide-react";
 import { CourseEnrollmentRequestModal } from "@/components/courses/CourseEnrollmentRequestModal";
 import { CourseEmiBreakdown } from "@/components/courses/CourseEmiBreakdown";
@@ -222,6 +224,41 @@ export default async function StudentCourseDetailPage({
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Course Structure PDF Banner */}
+        {course.structurePdfUrl && (
+          <div className="p-4 sm:p-5 rounded-2xl bg-gradient-to-r from-purple-50 via-purple-100/40 to-white border border-purple-200/90 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fade-in">
+            <div className="flex items-center gap-3.5 min-w-0">
+              <div className="w-11 h-11 rounded-2xl bg-[#3C096C] text-white flex items-center justify-center font-bold text-xs shadow-xs shrink-0 ring-2 ring-purple-100">
+                <FileText className="w-6 h-6 text-white" />
+              </div>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="font-bold text-sm sm:text-base text-heading truncate">
+                    Official Course Structure & Curriculum
+                  </span>
+                  <span className="px-2 py-0.5 rounded-md bg-[#3C096C] text-white font-mono text-[10px] font-bold">
+                    PDF Document
+                  </span>
+                </div>
+                <p className="text-xs text-body/70 mt-0.5">
+                  Detailed lesson breakdown, session milestones, repertoire & examination guidelines.
+                </p>
+              </div>
+            </div>
+
+            <a
+              href={course.structurePdfUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              download
+              className="btn-tactile inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer self-start sm:self-auto"
+            >
+              <Download className="w-4 h-4 text-white" />
+              <span>Download Structure PDF</span>
+            </a>
           </div>
         )}
 

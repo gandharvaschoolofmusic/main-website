@@ -269,6 +269,7 @@ model Course {
   sessionCount       Int
   durationWeeks      Int
   thumbnailUrl       String?
+  structurePdfUrl    String?
   startDate          DateTime?                 @db.Timestamptz(6)
   endDate            DateTime?                 @db.Timestamptz(6)
   isPublished        Boolean                   @default(false)
