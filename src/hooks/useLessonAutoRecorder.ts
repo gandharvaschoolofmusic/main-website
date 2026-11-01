@@ -32,8 +32,9 @@ export function useLessonAutoRecorder({
   partnerName,
   instrument,
 }: UseLessonAutoRecorderProps) {
-  // Teachers and Admins record by default
-  const isRecorderRole = isTeacher || callerRole === "ADMIN" || callerRole === "TEACHER";
+  // All participants (Teacher, Student, Admin) record the classroom stage composite
+  // so the lecture is guaranteed to be preserved regardless of who joins/leaves first.
+  const isRecorderRole = true;
 
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -73,7 +74,7 @@ export function useLessonAutoRecorder({
       const mimeType = mediaRecorderRef.current?.mimeType || "video/webm";
       const blob = new Blob(recordedChunksRef.current, { type: mimeType });
 
-      if (blob.size < 1000) {
+      if (blob.size < 100) {
         setIsUploading(false);
         return { success: false, error: "Recording file was too small or empty." };
       }
@@ -160,6 +161,11 @@ export function useLessonAutoRecorder({
 
         rec.addEventListener("stop", onStopHandler);
         try {
+          if (typeof rec.requestData === "function") {
+            try {
+              rec.requestData();
+            } catch {}
+          }
           rec.stop();
         } catch {
           resolve();
@@ -199,13 +205,19 @@ export function useLessonAutoRecorder({
 
     let isCleanedUp = false;
 
-    // Helper: Create hidden video element
+    // Helper: Create off-screen video element (avoids display:none which halts browser decoding)
     const createHiddenVideo = () => {
       const el = document.createElement("video");
       el.muted = true;
       el.autoplay = true;
       el.playsInline = true;
-      el.style.display = "none";
+      el.style.position = "fixed";
+      el.style.top = "-9999px";
+      el.style.left = "-9999px";
+      el.style.width = "480px";
+      el.style.height = "270px";
+      el.style.opacity = "0";
+      el.style.pointerEvents = "none";
       document.body.appendChild(el);
       return el;
     };
@@ -228,6 +240,14 @@ export function useLessonAutoRecorder({
         audioCtx.resume().catch(() => {});
       }
     };
+
+    // Unlock AudioContext on any user gesture (click, tap, keypress)
+    const handleUserGestureUnlock = () => {
+      resumeAudioIfSuspended();
+    };
+    window.addEventListener("click", handleUserGestureUnlock, { passive: true });
+    window.addEventListener("touchstart", handleUserGestureUnlock, { passive: true });
+    window.addEventListener("keydown", handleUserGestureUnlock, { passive: true });
 
     // 2. Connect audio tracks to destination
     const addAudioTrack = (track: MediaStreamTrack, id: string) => {
@@ -505,19 +525,27 @@ export function useLessonAutoRecorder({
           }
         };
 
-        // Slice every 10 seconds into chunks to ensure data availability
-        recorder.start(10000);
+        // Slice every 2 seconds into chunks to ensure data availability even for short calls
+        recorder.start(2000);
         mediaRecorderRef.current = recorder;
         isRecordingRef.current = true;
         setIsRecording(true);
         recordingStartTimeRef.current = Date.now();
 
-        // Start render loop
+        // Draw initial frame immediately so stream has active frames
+        drawFrame(performance.now());
         animationFrameIdRef.current = requestAnimationFrame(drawFrame);
       } catch (recErr) {
         console.warn("[AutoRecorder] Failed to start MediaRecorder:", recErr);
       }
     };
+
+    // Background timer to keep drawing frames even if tab is minimized/in background
+    const bgRenderInterval = setInterval(() => {
+      if (typeof document !== "undefined" && document.hidden && !isCleanedUp) {
+        drawFrame(performance.now());
+      }
+    }, 150);
 
     if (room.state === "connected") {
       startMediaRecording();
@@ -534,6 +562,10 @@ export function useLessonAutoRecorder({
 
     return () => {
       isCleanedUp = true;
+      clearInterval(bgRenderInterval);
+      window.removeEventListener("click", handleUserGestureUnlock);
+      window.removeEventListener("touchstart", handleUserGestureUnlock);
+      window.removeEventListener("keydown", handleUserGestureUnlock);
       window.removeEventListener("beforeunload", handleBeforeUnload);
       window.removeEventListener("pagehide", handleBeforeUnload);
 

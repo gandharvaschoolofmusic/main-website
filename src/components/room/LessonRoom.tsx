@@ -241,6 +241,7 @@ function LessonRoomContent({
     room,
     lessonId: lesson.id,
     isTeacher: lesson.isTeacher,
+    callerRole: lesson.callerRole,
     partnerName: lesson.partnerName,
     instrument: lesson.instrument,
   });

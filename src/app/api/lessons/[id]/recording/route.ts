@@ -217,6 +217,8 @@ export async function POST(
     try {
       revalidateTag("admin-recordings", "max");
       revalidateTag("admin-lessons", "max");
+      revalidateTag("student-recordings", "max");
+      revalidateTag("lessons", "max");
     } catch {
       // Revalidation during non-cache contexts is safe to ignore
     }
