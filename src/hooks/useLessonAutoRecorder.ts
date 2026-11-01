@@ -53,8 +53,9 @@ export function useLessonAutoRecorder({
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenShareVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Audio track sources map
+  // Audio track sources and cloned streams map
   const audioSourcesMapRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
+  const clonedAudioTracksRef = useRef<Map<string, { track: MediaStreamTrack; stream: MediaStream; isCloned: boolean }>>(new Map());
 
   // Upload finalized recording blob to backend
   const uploadRecording = useCallback(async (): Promise<{
@@ -249,15 +250,30 @@ export function useLessonAutoRecorder({
     window.addEventListener("touchstart", handleUserGestureUnlock, { passive: true });
     window.addEventListener("keydown", handleUserGestureUnlock, { passive: true });
 
-    // 2. Connect audio tracks to destination
+    // 2. Connect audio tracks to destination using cloned tracks so the live WebRTC audio is never hijacked
     const addAudioTrack = (track: MediaStreamTrack, id: string) => {
       if (isCleanedUp || audioSourcesMapRef.current.has(id)) return;
       resumeAudioIfSuspended();
       try {
-        const stream = new MediaStream([track]);
+        // Clone track for background recording so Web Audio graph NEVER silences or alters
+        // the original track delivering audio to the participant's speakers!
+        let audioTrackToUse = track;
+        let isCloned = false;
+        try {
+          if (typeof track.clone === "function") {
+            audioTrackToUse = track.clone();
+            isCloned = true;
+          }
+        } catch (cloneErr) {
+          console.warn("[AutoRecorder] Track clone fallback to direct:", cloneErr);
+          audioTrackToUse = track;
+        }
+
+        const stream = new MediaStream([audioTrackToUse]);
         const source = audioCtx.createMediaStreamSource(stream);
         source.connect(destination);
         audioSourcesMapRef.current.set(id, source);
+        clonedAudioTracksRef.current.set(id, { track: audioTrackToUse, stream, isCloned });
       } catch (err) {
         console.warn("[AutoRecorder] Could not connect audio track:", err);
       }
@@ -272,6 +288,15 @@ export function useLessonAutoRecorder({
           // Ignore
         }
         audioSourcesMapRef.current.delete(id);
+      }
+      const item = clonedAudioTracksRef.current.get(id);
+      if (item) {
+        if (item.isCloned) {
+          try {
+            item.track.stop();
+          } catch {}
+        }
+        clonedAudioTracksRef.current.delete(id);
       }
     };
 
@@ -575,6 +600,16 @@ export function useLessonAutoRecorder({
       room.off(RoomEvent.LocalTrackUnpublished, handleLocalTrackUnpublished);
 
       stopAndUpload();
+
+      // Clean up cloned audio tracks
+      clonedAudioTracksRef.current.forEach((item) => {
+        if (item.isCloned) {
+          try {
+            item.track.stop();
+          } catch {}
+        }
+      });
+      clonedAudioTracksRef.current.clear();
 
       // Clean up hidden video elements
       if (localVideoRef.current) {

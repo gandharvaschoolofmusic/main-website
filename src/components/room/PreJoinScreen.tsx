@@ -46,7 +46,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
 
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
-  // Load saved audio mode and mute preferences from localStorage
+  // Load saved audio mode preference from localStorage and clear legacy persistent mute flags
   useEffect(() => {
     try {
       const savedMode = localStorage.getItem("toneroom_audio_mode") as AudioMode;
@@ -54,11 +54,9 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (savedMode === "TALKING" || savedMode === "PLAYING") setAudioMode(savedMode);
 
-      const savedMicMute = localStorage.getItem("toneroom_mic_muted");
-      if (savedMicMute !== null) setIsAudioMuted(savedMicMute === "true");
-
-      const savedCamMute = localStorage.getItem("toneroom_cam_muted");
-      if (savedCamMute !== null) setIsVideoMuted(savedCamMute === "true");
+      // Clean up legacy persistent mute keys so microphone is never trapped muted
+      localStorage.removeItem("toneroom_mic_muted");
+      localStorage.removeItem("toneroom_cam_muted");
     } catch {
       // Ignore localStorage errors
     }
@@ -100,18 +98,6 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
 
         streamRef.current = initialStream;
         setStream(initialStream);
-
-        // Synchronize initial track enabled state with saved mute state
-        try {
-          if (localStorage.getItem("toneroom_mic_muted") === "true") {
-            initialStream.getAudioTracks().forEach((t) => (t.enabled = false));
-          }
-          if (localStorage.getItem("toneroom_cam_muted") === "true") {
-            initialStream.getVideoTracks().forEach((t) => (t.enabled = false));
-          }
-        } catch {
-          // Ignore
-        }
 
         if (videoRef.current) {
           videoRef.current.srcObject = initialStream;
@@ -233,13 +219,11 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   };
 
   const handleJoin = () => {
-    // Save preferences
+    // Save hardware device preferences (do not persist mute flags across sessions)
     try {
       localStorage.setItem("toneroom_mic_id", selectedAudioDevice);
       localStorage.setItem("toneroom_cam_id", selectedVideoDevice);
       localStorage.setItem("toneroom_audio_mode", audioMode);
-      localStorage.setItem("toneroom_mic_muted", String(isAudioMuted));
-      localStorage.setItem("toneroom_cam_muted", String(isVideoMuted));
     } catch {
       // Ignore
     }

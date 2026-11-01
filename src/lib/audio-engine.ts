@@ -3,6 +3,7 @@ import {
   createLocalAudioTrack,
   LocalAudioTrack,
   Room,
+  Track,
   TrackPublishOptions,
 } from "livekit-client";
 import { logger } from "@/lib/logger";
@@ -104,8 +105,12 @@ export async function switchLocalAudioMode(
     }
   }
 
-  // 3. Publish with high-fidelity or speech preset
-  const publishOptions = getAudioPublishOptions(targetMode);
+  // 3. Publish with high-fidelity or speech preset and explicitly identify as microphone source
+  const publishOptions: TrackPublishOptions = {
+    ...getAudioPublishOptions(targetMode),
+    source: Track.Source.Microphone,
+    name: "microphone",
+  };
   await localParticipant.publishTrack(newTrack, publishOptions);
 
   logger.info(

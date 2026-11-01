@@ -5,8 +5,6 @@ import Image from "next/image";
 
 import {
   LiveKitRoom,
-  RoomAudioRenderer,
-  StartAudio,
   useRoomContext,
 } from "@livekit/components-react";
 import {
@@ -14,9 +12,13 @@ import {
   DisconnectReason,
   LocalAudioTrack,
   LocalTrackPublication,
+  Participant,
+  RemoteParticipant,
   RemoteTrack,
+  RemoteTrackPublication,
   RoomEvent,
   Track,
+  TrackPublication,
 } from "livekit-client";
 import { AudioMode, switchLocalAudioMode } from "@/lib/audio-engine";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
@@ -107,8 +109,6 @@ export function LessonRoom(props: LessonRoomProps) {
           );
         }}
       >
-        <RoomAudioRenderer />
-        <StartAudio label="Click to allow audio playback" />
         <LessonRoomContent
           lesson={lesson}
           initialConfig={initialConfig}
@@ -299,7 +299,11 @@ function LessonRoomContent({
         if (initialConfig.isAudioMuted) {
           console.log("[Audio] Muting audio track per user Pre-Join selection");
           track.mute();
-          await room.localParticipant.setMicrophoneEnabled(false);
+          await room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
+        } else {
+          console.log("[Audio] Ensuring mic track is unmuted and transmitting");
+          track.unmute();
+          await room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
         }
       } catch (err) {
         console.warn(`[Audio] Failed to initialize audio track (attempt ${attempt + 1}):`, err);
@@ -330,38 +334,149 @@ function LessonRoomContent({
     } else {
       room.once(RoomEvent.Connected, () => void initAudio(0));
     }
-  }, [room, initialConfig.audioMode, initialConfig.audioDeviceId]);
+  }, [room, initialConfig.audioMode, initialConfig.audioDeviceId, initialConfig.isAudioMuted]);
 
-  // 3b. Unmute and start audio playback automatically on any user gesture or remote track arrival
+  // 3b. Dedicated Remote Audio Playback Manager:
+  // Guarantees remote participant audio (e.g. Teacher's voice to Student, Student to Teacher)
+  // plays out through speakers without being throttled, suspended, or blocked by layout engines.
   useEffect(() => {
     if (!room) return;
 
-    const unlockAudio = async () => {
-      if (!room.canPlaybackAudio) {
-        try {
-          await room.startAudio();
-          console.log("[Audio] Audio playback successfully started via user gesture");
-        } catch (e) {
-          console.warn("[Audio] Could not start audio playback:", e);
-        }
+    // Create an active, unthrottled DOM container for remote audio elements.
+    // Kept in the layout tree (avoids display:none which halts audio decoding in Chromium & Safari).
+    const audioContainer = document.createElement("div");
+    audioContainer.id = "toneroom-remote-audio-container";
+    audioContainer.style.position = "fixed";
+    audioContainer.style.top = "-9999px";
+    audioContainer.style.left = "-9999px";
+    audioContainer.style.width = "1px";
+    audioContainer.style.height = "1px";
+    audioContainer.style.opacity = "0";
+    audioContainer.style.pointerEvents = "none";
+    document.body.appendChild(audioContainer);
+
+    const attachedElements = new Map<string, HTMLAudioElement>();
+
+    const playAudioTrack = async (track: RemoteTrack, participantIdentity: string) => {
+      if (track.kind !== Track.Kind.Audio) return;
+
+      const trackKey = `${participantIdentity}_${track.sid || "audio"}`;
+      console.log(`[Audio] Attaching remote audio track from ${participantIdentity} (${trackKey})`);
+
+      // Clean up previous element if any
+      const existingEl = attachedElements.get(trackKey);
+      if (existingEl) {
+        track.detach(existingEl);
+        existingEl.remove();
+        attachedElements.delete(trackKey);
+      }
+
+      const audioEl = document.createElement("audio");
+      audioEl.autoplay = true;
+      audioEl.setAttribute("playsinline", "true");
+      audioEl.volume = 1.0;
+      audioEl.muted = false;
+
+      track.attach(audioEl);
+      audioContainer.appendChild(audioEl);
+      attachedElements.set(trackKey, audioEl);
+
+      try {
+        await audioEl.play();
+        console.log(`[Audio] Remote audio playing smoothly for ${participantIdentity}`);
+      } catch (playErr) {
+        console.warn(`[Audio] Remote audio play() waiting for user interaction:`, playErr);
       }
     };
 
-    // Attempt immediately (gesture token from PreJoin 'Join now' click may still be valid)
-    void unlockAudio();
-
-    const handleTrackSubscribed = (track: RemoteTrack) => {
-      if (track.kind === Track.Kind.Audio) {
-        void unlockAudio();
+    const stopAudioTrack = (track: RemoteTrack, participantIdentity: string) => {
+      if (track.kind !== Track.Kind.Audio) return;
+      const trackKey = `${participantIdentity}_${track.sid || "audio"}`;
+      const el = attachedElements.get(trackKey);
+      if (el) {
+        track.detach(el);
+        el.remove();
+        attachedElements.delete(trackKey);
       }
+    };
+
+    // Attach any remote tracks from participants who are already in the room
+    room.remoteParticipants.forEach((p) => {
+      p.audioTrackPublications.forEach((pub) => {
+        if (pub.track) {
+          void playAudioTrack(pub.track, p.identity);
+        }
+      });
+    });
+
+    // Listen for new remote track arrivals
+    const handleTrackSubscribed = (
+      track: RemoteTrack,
+      _pub: unknown,
+      participant: RemoteParticipant,
+    ) => {
+      if (track.kind === Track.Kind.Audio) {
+        void playAudioTrack(track, participant.identity);
+        void room.startAudio();
+      }
+    };
+
+    const handleTrackUnsubscribed = (
+      track: RemoteTrack,
+      _pub: unknown,
+      participant: RemoteParticipant,
+    ) => {
+      if (track.kind === Track.Kind.Audio) {
+        stopAudioTrack(track, participant.identity);
+      }
+    };
+
+    const handleTrackUnmuted = (
+      pub: TrackPublication,
+      participant: Participant,
+    ) => {
+      if (pub.kind === Track.Kind.Audio && pub.track && pub.track instanceof RemoteTrack) {
+        void playAudioTrack(pub.track, participant.identity);
+      }
+    };
+
+    const handleParticipantConnected = (participant: RemoteParticipant) => {
+      participant.audioTrackPublications.forEach((pub) => {
+        if (pub.track) {
+          void playAudioTrack(pub.track, participant.identity);
+        }
+      });
+    };
+
+    const handleAudioPlaybackChanged = () => {
+      attachedElements.forEach((el) => {
+        if (el.paused) {
+          el.play().catch(() => {});
+        }
+      });
     };
 
     room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    room.on(RoomEvent.AudioPlaybackStatusChanged, (canPlay) => {
-      if (!canPlay) {
-        console.warn("[Audio] Autoplay blocked incoming audio. Click anywhere to unblock.");
-      }
-    });
+    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+    room.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
+    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    room.on(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
+
+    // Unconditionally unlock Web Audio and resume any deferred media elements on user gesture
+    const unlockAudio = async () => {
+      try {
+        await room.startAudio();
+      } catch {}
+
+      attachedElements.forEach((el) => {
+        if (el.paused) {
+          el.play().catch(() => {});
+        }
+      });
+    };
+
+    // Attempt immediately (click from PreJoin "Join now" may satisfy browser autoplay)
+    void unlockAudio();
 
     window.addEventListener("click", unlockAudio, { passive: true });
     window.addEventListener("touchstart", unlockAudio, { passive: true });
@@ -369,9 +484,21 @@ function LessonRoomContent({
 
     return () => {
       room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
+      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
+      room.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
+      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      room.off(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
       window.removeEventListener("click", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
       window.removeEventListener("keydown", unlockAudio);
+
+      attachedElements.forEach((el) => {
+        el.pause();
+        el.srcObject = null;
+        el.remove();
+      });
+      attachedElements.clear();
+      audioContainer.remove();
     };
   }, [room]);
 
