@@ -1096,13 +1096,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                             Controlled course catalog records
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsCreateEnrollmentOpen(true)}
-                          className="text-xs font-bold text-[#3C096C] hover:underline"
-                        >
-                          + Enroll
-                        </button>
                       </div>
 
                       <div className="space-y-3">
@@ -1146,13 +1139,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                             Individual sessions · {selectedStudent.timezone}
                           </p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsScheduleClassOpen(true)}
-                          className="text-xs font-bold text-[#3C096C] hover:underline"
-                        >
-                          + Schedule
-                        </button>
                       </div>
 
                       <div className="space-y-3">
@@ -1291,13 +1277,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           </h3>
                           <p className="text-xs text-body/60 mt-0.5">INR only</p>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => setIsRecordPaymentOpen(true)}
-                          className="px-2.5 py-1 rounded-lg border border-purple-200 hover:bg-purple-50 text-[#3C096C] text-xs font-bold transition-colors"
-                        >
-                          + Record payment
-                        </button>
                       </div>
 
                       {/* Outstanding balance banner */}
@@ -1390,14 +1369,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       Live virtual sessions and historic attendance for {selectedStudent.name}
                     </p>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsScheduleClassOpen(true)}
-                    className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#3C096C] hover:bg-[#3C096C]/90 text-white text-xs font-semibold shadow-xs transition-all active:scale-95 shrink-0"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>Schedule Class</span>
-                  </button>
                 </div>
 
                 {/* Section 1: UPCOMING CLASSES */}
@@ -1425,14 +1396,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           There are currently no active or pending future classes for this student.
                         </p>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => setIsScheduleClassOpen(true)}
-                        className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl border border-neutral-200 hover:bg-neutral-50 text-xs font-semibold text-heading transition-all active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Schedule New Class</span>
-                      </button>
                     </div>
                   ) : (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
@@ -1796,14 +1759,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       <p className="text-xs text-body/60 max-w-sm mx-auto">
                         No payments have been recorded for this student yet.
                       </p>
-                      <button
-                        type="button"
-                        onClick={() => setIsRecordPaymentOpen(true)}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-[#3C096C] text-white text-xs font-semibold active:scale-95"
-                      >
-                        <Plus className="w-3.5 h-3.5" />
-                        <span>Record Payment</span>
-                      </button>
                     </div>
                   ) : (
                     <div className="divide-y divide-neutral-100 overflow-x-auto">
