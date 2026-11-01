@@ -2,7 +2,7 @@
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
 
-import { useState, useTransition, useMemo } from "react";
+import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
 import {
   Globe,
@@ -52,6 +52,7 @@ import {
   toggleStudentAccessAction,
   updateStudentLessonStatusAction,
 } from "@/actions/student-admin";
+import { isStudentInActiveTrialPeriod } from "@/lib/student-filters";
 
 export interface StudentRecord {
   id: string;
@@ -165,58 +166,7 @@ interface TeacherOption {
   instruments: string[];
 }
 
-/**
- * Determines whether a student is currently in their trial period
- * (i.e. has active/pending trial requests, has not completed their trial lesson,
- * and has not enrolled or converted into a paid student).
- *
- * Students who are currently in their trial period are managed under the Trials section
- * and do not appear in the Students Directory until their trial completes or they enroll.
- */
-export function isStudentInActiveTrialPeriod(student: {
-  enrollments?: Array<any>;
-  trials?: Array<{ isConverted: boolean; status?: string; allottedLessonStatus?: string | null }>;
-  lessons?: Array<{ status: string }>;
-  trialStatus?: { status: string; lessonsUsed?: number; lessonsGranted?: number } | null;
-  trialRequestsAsStudent?: Array<{
-    isConverted: boolean;
-    status: string;
-    allottedLesson?: { status: string } | null;
-  }>;
-  lessonsAsStudent?: Array<{ status: string }>;
-}): boolean {
-  // 1. If student has any active or past course enrollment, they are an enrolled student (NOT in trial period)
-  if (student.enrollments && student.enrollments.length > 0) return false;
-
-  const trialRequests = student.trialRequestsAsStudent ?? student.trials ?? [];
-  // If student has no trial requests at all (e.g. manually created student), they are not in a trial
-  if (trialRequests.length === 0) return false;
-
-  // 2. If any trial was converted, they are converted to an enrolled student
-  const isConverted = trialRequests.some((t: any) => t.isConverted);
-  if (isConverted) return false;
-
-  // 3. Check if trial period is completed (conducted at least 1 lesson, e.g. trial lesson completed)
-  const allLessons = student.lessonsAsStudent ?? student.lessons ?? [];
-  const hasCompletedLesson = allLessons.some(
-    (l) => l.status === "COMPLETED"
-  );
-  if (hasCompletedLesson) return false;
-
-  // Check if allotted trial lesson is completed
-  const hasCompletedTrialLesson = trialRequests.some(
-    (t: any) =>
-      t.allottedLesson?.status === "COMPLETED" ||
-      t.allottedLessonStatus === "COMPLETED"
-  );
-  if (hasCompletedTrialLesson) return false;
-
-  // 4. Check if trial status is exhausted
-  if (student.trialStatus?.status === "EXHAUSTED") return false;
-
-  // Otherwise, the student is currently in their trial period (pending, scheduled, or awaiting trial session)
-  return true;
-}
+export { isStudentInActiveTrialPeriod };
 
 interface AdminStudentsManagerProps {
   initialStudents: StudentRecord[];
@@ -233,6 +183,13 @@ export function AdminStudentsManager({
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     initialStudents[0]?.id || ""
   );
+
+  useEffect(() => {
+    setStudents(initialStudents);
+    if (!selectedStudentId && initialStudents.length > 0) {
+      setSelectedStudentId(initialStudents[0].id);
+    }
+  }, [initialStudents, selectedStudentId]);
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"ALL" | "ACTIVE" | "DUE">("ALL");
   const [activeTab, setActiveTab] = useState<

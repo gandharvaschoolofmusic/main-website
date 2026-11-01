@@ -5,8 +5,8 @@ import { unstable_cache } from "next/cache";
 import {
   AdminStudentsManager,
   StudentRecord,
-  isStudentInActiveTrialPeriod,
 } from "./AdminStudentsManager";
+import { isStudentInActiveTrialPeriod } from "@/lib/student-filters";
 
 export const metadata = {
   title: "Students | Admin Portal | Gandharva School of Music",
@@ -274,7 +274,7 @@ const getCachedAdminStudentsData = unstable_cache(
       teacherOptions,
     };
   },
-  ["admin-students-data-v2"],
+  ["admin-students-data-v3"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
