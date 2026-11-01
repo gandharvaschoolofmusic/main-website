@@ -212,7 +212,7 @@ export function AdminEnrollmentsManager({
 
   // Selected Student Context (URL parameter has top priority; otherwise empty so admin first selects student)
   const [selectedStudentId, setSelectedStudentId] = useState<string>(() => {
-    if (paramStudentId && students.some((s) => s.id === paramStudentId)) {
+    if (paramStudentId) {
       return paramStudentId;
     }
     if (paramEnrollmentId) {
@@ -1600,11 +1600,11 @@ export function AdminEnrollmentsManager({
                   <div>
                     <label className="text-xs font-bold text-heading flex items-center gap-1.5">
                       <GraduationCap className="w-4 h-4 text-[#3C096C]" />
-                      <span>Student (Converted &amp; Enrolled Roster)</span>
+                      <span>Student (Enrolled &amp; Registered Roster)</span>
                     </label>
                   </div>
                   <span className="text-[11px] font-semibold text-purple-900 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200/70 self-start sm:self-auto font-numeric">
-                    {students.length} Converted Students
+                    {students.length} Students
                   </span>
                 </div>
 

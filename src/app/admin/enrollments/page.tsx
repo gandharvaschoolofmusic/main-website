@@ -60,11 +60,10 @@ const getCachedAdminEnrollmentsData = unstable_cache(
           orderBy: { name: "asc" },
         }),
 
-        // 3. Fetch students roster — only students converted via Trial CRM
+        // 3. Fetch students roster — all registered students
         db.user.findMany({
           where: {
             role: Role.STUDENT,
-            trialRequestsAsStudent: { some: { isConverted: true } },
           },
           select: {
             id: true,
@@ -101,11 +100,6 @@ const getCachedAdminEnrollmentsData = unstable_cache(
 
         // 5. Fetch enrollments with lessons limited to recent 20 per enrollment
         db.enrollment.findMany({
-          where: {
-            student: {
-              trialRequestsAsStudent: { some: { isConverted: true } },
-            },
-          },
           include: {
             student: {
               select: {
@@ -173,11 +167,6 @@ const getCachedAdminEnrollmentsData = unstable_cache(
 
         // 6. Fetch course admission requests
         db.courseEnrollmentRequest.findMany({
-          where: {
-            student: {
-              trialRequestsAsStudent: { some: { isConverted: true } },
-            },
-          },
           include: {
             student: {
               select: {
@@ -358,7 +347,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       formattedCourseRequests,
     };
   },
-  ["admin-enrollments-data-v2"],
+  ["admin-enrollments-data-v3"],
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 

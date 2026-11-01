@@ -41,6 +41,7 @@ import {
   Check,
   Receipt,
   ChevronDown,
+  GraduationCap,
 } from "lucide-react";
 import {
   createStudentAction,
@@ -909,6 +910,17 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       {selectedStudent.isActive ? "Remove Login Access" : "Grant Login Access"}
                     </span>
                   </button>
+
+                  {/* Direct Enrolment button */}
+                  <Link
+                    href={`/admin/enrollments?studentId=${selectedStudent.id}`}
+                    title={`Directly enroll ${selectedStudent.name} into courses & timetable without trial`}
+                    className="btn-tactile inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold transition-all border border-purple-200 bg-purple-50 hover:bg-purple-100 text-[#3C096C] hover:border-purple-300 shadow-2xs active:scale-95 cursor-pointer"
+                  >
+                    <GraduationCap className="w-3.5 h-3.5 text-[#3C096C]" />
+                    <span>Direct Enrolment</span>
+                    <ExternalLink className="w-3 h-3 text-[#3C096C]/70" />
+                  </Link>
                 </div>
               </div>
 
