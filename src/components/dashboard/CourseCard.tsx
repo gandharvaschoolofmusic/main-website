@@ -100,9 +100,7 @@ export function CourseCard({ course, basePath = "/student/dashboard/courses" }: 
         {course.structurePdfUrl && (
           <div className="pt-1">
             <a
-              href={course.structurePdfUrl}
-              target="_blank"
-              rel="noopener noreferrer"
+              href={`/api/courses/structure-pdf?slug=${encodeURIComponent(course.slug)}`}
               download
               className="w-full inline-flex items-center justify-between px-3 py-2 rounded-xl bg-purple-50/80 hover:bg-purple-100 text-[#3C096C] text-xs font-bold border border-purple-200/80 transition-all shadow-2xs group/pdf cursor-pointer active:scale-[0.99]"
               title="Download Course Structure PDF"

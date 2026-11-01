@@ -1357,11 +1357,10 @@ export function AdminCoursesManager({
 
                     {c.structurePdfUrl && (
                       <a
-                        href={c.structurePdfUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
+                        href={`/api/courses/structure-pdf?slug=${encodeURIComponent(c.slug)}`}
+                        download
                         className="px-2.5 py-1.5 rounded-xl bg-purple-50 hover:bg-purple-100 text-[#3C096C] text-xs font-semibold flex items-center gap-1.5 transition-all border border-purple-200/80 shadow-2xs cursor-pointer"
-                        title="Download / View Course Structure PDF"
+                        title="Download Course Structure PDF"
                       >
                         <FileText className="w-3.5 h-3.5 text-[#3C096C]" />
                         <span>Structure PDF</span>
@@ -2012,7 +2011,13 @@ export function AdminCoursesManager({
                           {structurePdfName || "Course Structure PDF"}
                         </p>
                         <a
-                          href={structurePdfUrl}
+                          href={
+                            courseId
+                              ? `/api/courses/structure-pdf?courseId=${courseId}&view=preview`
+                              : slug
+                              ? `/api/courses/structure-pdf?slug=${encodeURIComponent(slug)}&view=preview`
+                              : structurePdfUrl
+                          }
                           target="_blank"
                           rel="noopener noreferrer"
                           className="text-[11px] text-[#3C096C] hover:underline flex items-center gap-1 font-medium"

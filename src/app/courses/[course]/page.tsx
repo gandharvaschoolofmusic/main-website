@@ -238,9 +238,7 @@ export default async function Page({
                 </div>
 
                 <a
-                  href={course.structurePdfUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/api/courses/structure-pdf?slug=${encodeURIComponent(course.slug)}`}
                   download
                   className="btn-tactile inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs transition-all active:scale-95 shrink-0 cursor-pointer self-start sm:self-auto"
                 >
