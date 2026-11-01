@@ -792,35 +792,26 @@ export async function saveFullEnrollmentPlanAction(input: {
       });
     }
 
-    // Record payment if paid amount specified
-    if (input.paidAmountRupees && input.paidAmountRupees > 0) {
-      const amountMinorUnits = Math.round(input.paidAmountRupees * 100);
-      const isFull =
-        input.paymentFeeRupees && input.paidAmountRupees >= input.paymentFeeRupees;
-      const receiptCode = `RCPT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+    // Update emiStatus based on existing payments against the total fee (no payment created on save)
+    const existingPayments = await db.payment.aggregate({
+      where: { enrollmentId: targetEnrollmentId, status: PaymentStatus.PAID },
+      _sum: { amountMinorUnits: true },
+    });
+    const totalPaidMinor = existingPayments._sum.amountMinorUnits || 0;
+    const feeMinor = input.paymentFeeRupees
+      ? Math.round(input.paymentFeeRupees * 100)
+      : course.priceMinorUnits;
+    const emiStatus =
+      totalPaidMinor >= feeMinor
+        ? CourseEmiStatus.FULLY_PAID
+        : totalPaidMinor > 0
+        ? CourseEmiStatus.PARTIALLY_PAID
+        : CourseEmiStatus.PENDING_PAYMENT;
 
-      const pmt = await db.payment.create({
-        data: {
-          studentId: student.id,
-          enrollmentId: targetEnrollmentId,
-          amountMinorUnits,
-          currency: "INR",
-          gateway: "manual",
-          gatewayOrderId: `rec_order_${receiptCode}`,
-          gatewayPaymentId: receiptCode,
-          notes: "Initial admission payment tranche",
-          status: PaymentStatus.PAID,
-        },
-      });
-
-      await db.enrollment.update({
-        where: { id: targetEnrollmentId },
-        data: {
-          paymentId: pmt.id,
-          emiStatus: isFull ? CourseEmiStatus.FULLY_PAID : CourseEmiStatus.PARTIALLY_PAID,
-        },
-      });
-    }
+    await db.enrollment.update({
+      where: { id: targetEnrollmentId },
+      data: { emiStatus },
+    });
 
     // Generate scheduled 1-on-1 lessons if slots provided and teacher allotted
     if (input.generatedSlots && input.generatedSlots.length > 0 && teacher && teacher.teacherProfile) {

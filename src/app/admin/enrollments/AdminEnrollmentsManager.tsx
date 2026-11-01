@@ -1096,16 +1096,9 @@ export function AdminEnrollmentsManager({
         courseId: currentCourse.id,
         teacherId: selectedTeacherId || null,
         sessionsRemaining: Math.max(1, totalSessions - completedSessions),
-        status: enrollmentStatus,
+        status: activeEnrollment?.status || EnrollmentStatus.ACTIVE,
         adminNotes: isDraft ? `[DRAFT] ${adminNotes.trim()}` : adminNotes.trim() || undefined,
         paymentFeeRupees: feeRupees,
-        paidAmountRupees: paidRupees,
-        paymentStatus:
-          paidRupees >= feeRupees
-            ? "FULLY_PAID"
-            : paidRupees > 0
-            ? "PARTIALLY_PAID"
-            : "UNPAID",
       });
 
       if (res.success && res.data) {
@@ -3140,9 +3133,9 @@ export function AdminEnrollmentsManager({
                     </span>
                     <input
                       type="number"
+                      readOnly
                       value={paidRupees}
-                      onChange={(e) => setPaidRupees(Number(e.target.value))}
-                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-emerald-700 focus:outline-none focus:border-[#3C096C]"
+                      className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-200 bg-neutral-50/70 text-xs font-bold text-emerald-700 focus:outline-none cursor-default"
                     />
                   </div>
                   <span className="text-[10px] text-body/50 mt-1 block truncate">
@@ -3185,52 +3178,6 @@ export function AdminEnrollmentsManager({
                   <span className="text-[10px] text-body/50 mt-1 block">
                     Enrollment fee – total payments recorded
                   </span>
-                </div>
-              </div>
-
-              {/* Status and Next due date row */}
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="text-xs font-semibold text-heading block mb-1">
-                    Payment status
-                  </label>
-                  <select
-                    value={paymentStatus}
-                    onChange={(e) => setPaymentStatus(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs text-heading font-medium focus:outline-none focus:border-[#3C096C]"
-                  >
-                    <option value="Partially paid">Partially paid</option>
-                    <option value="Fully paid">Fully paid</option>
-                    <option value="Unpaid">Unpaid</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-heading block mb-1">
-                    Enrollment status
-                  </label>
-                  <select
-                    value={enrollmentStatus}
-                    onChange={(e) => setEnrollmentStatus(e.target.value as any)}
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs text-heading font-medium focus:outline-none focus:border-[#3C096C]"
-                  >
-                    <option value="ACTIVE">Active on payment confirmation</option>
-                    <option value="COMPLETED">Completed</option>
-                    <option value="CANCELLED">Cancelled</option>
-                    <option value="REFUNDED">Refunded</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="text-xs font-semibold text-heading block mb-1">
-                    Next due date
-                  </label>
-                  <input
-                    type="date"
-                    value={nextDueDate}
-                    onChange={(e) => setNextDueDate(e.target.value)}
-                    className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs text-heading font-medium focus:outline-none focus:border-[#3C096C]"
-                  />
                 </div>
               </div>
 
