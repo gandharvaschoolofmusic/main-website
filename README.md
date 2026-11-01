@@ -162,8 +162,8 @@ npm run db:seed:admin
 ```
 
 > **Default Seed Administrator Account:**
-> - **Email**: `admin@gandharvaschoolofmusic.com`
-> - **Password**: `Admin@Gandharva2026!`
+> - **Email**: `admin@gmail.com`
+> - **Password**: `*********`
 
 ### 5. Launch Development Server
 ```bash
