@@ -332,6 +332,7 @@ model Enrollment {
   startedAt         DateTime          @default(now()) @db.Timestamptz(6)
   completedAt       DateTime?         @db.Timestamptz(6)
   adminNotes        String?
+  customFeeMinorUnits Int?
   emiStatus         CourseEmiStatus   @default(NOT_APPLICABLE)
   paymentPlan       CoursePaymentPlan @default(FULL_PAYMENT)
   convertedFromTrial Boolean          @default(false)

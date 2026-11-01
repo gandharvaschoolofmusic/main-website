@@ -58,6 +58,7 @@ import {
   AutoScheduleAllotModal,
   getNextWeekdayDate,
   generateWeeklySlotsList,
+  WEEKDAY_OPTIONS,
 } from "./AutoScheduleModal";
 
 export interface ScheduledLessonData {
@@ -216,6 +217,12 @@ export function AdminEnrollmentsManager({
   const isDirectParam = searchParams.get("direct") === "true" || Boolean(initialDirect);
 
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>(initialEnrollments);
+
+  // Sync state when fresh enrollments are loaded from server
+  useEffect(() => {
+    setEnrollments(initialEnrollments);
+  }, [initialEnrollments]);
+
   const [courseRequests, setCourseRequests] = useState<AdminCourseEnrollmentRequestItem[]>(initialCourseRequests);
   const [viewMode, setViewMode] = useState<"PLANNER" | "ROSTER">("PLANNER");
 
@@ -724,8 +731,26 @@ export function AdminEnrollmentsManager({
   // Live calculation of amount due
   const amountDueRupees = Math.max(0, feeRupees - paidRupees);
 
-  // Live preview session dates generator
+  // Live preview session dates generator (uses actual scheduled lessons if available)
   const generatedPreviewDates = useMemo(() => {
+    if (activeEnrollment?.lessons && activeEnrollment.lessons.length > 0) {
+      const sorted = [...activeEnrollment.lessons]
+        .filter((l) => l.status === "SCHEDULED" || l.status === "RESCHEDULED" || l.status === "COMPLETED")
+        .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+
+      if (sorted.length > 0) {
+        return sorted.slice(0, 4).map((l) => {
+          const d = new Date(l.startsAt);
+          return d.toLocaleDateString("en-GB", {
+            weekday: "short",
+            day: "2-digit",
+            month: "short",
+            timeZone: "Asia/Kolkata",
+          });
+        });
+      }
+    }
+
     const list: string[] = [];
     const base = new Date(startDate);
     if (isNaN(base.getTime())) return list;
@@ -759,7 +784,101 @@ export function AdminEnrollmentsManager({
       cur.setDate(cur.getDate() + 1);
     }
     return list;
-  }, [startDate, recurringCadence, totalSessions]);
+  }, [activeEnrollment?.lessons, startDate, recurringCadence, totalSessions]);
+
+  // Dynamic schedule, dates, and session metrics derived from actual lessons and configuration
+  const enrollmentSummaryMetrics = useMemo(() => {
+    const rawLessons = activeEnrollment?.lessons || [];
+    const validLessons = rawLessons
+      .filter((l) => l.status === "SCHEDULED" || l.status === "RESCHEDULED" || l.status === "COMPLETED")
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
+
+    let scheduleLabel = "Weekly · Pending schedule";
+    let datesLabel = "Not scheduled yet";
+    let durationMins = activeEnrollment?.lessons?.[0]?.durationMinutes || installmentDuration || 60;
+
+    if (validLessons.length > 0) {
+      const first = validLessons[0];
+      const last = validLessons[validLessons.length - 1];
+      const firstDate = new Date(first.startsAt);
+      const lastDate = new Date(last.startsAt);
+      durationMins = first.durationMinutes || 60;
+
+      // Extract unique day names in IST
+      const distinctDays = Array.from(
+        new Set(
+          validLessons.map((l) =>
+            new Date(l.startsAt).toLocaleDateString("en-US", {
+              weekday: "short",
+              timeZone: "Asia/Kolkata",
+            })
+          )
+        )
+      );
+
+      const timeStr = firstDate.toLocaleTimeString("en-US", {
+        hour: "2-digit",
+        minute: "2-digit",
+        hour12: true,
+        timeZone: "Asia/Kolkata",
+      });
+
+      scheduleLabel = `${distinctDays.join(" / ")} · ${timeStr} IST`;
+
+      const formatDate = (d: Date) =>
+        d.toLocaleDateString("en-GB", {
+          day: "2-digit",
+          month: "short",
+          year: "numeric",
+          timeZone: "Asia/Kolkata",
+        });
+
+      datesLabel = `${formatDate(firstDate)} – ${formatDate(lastDate)}`;
+    } else {
+      // If no lessons yet recorded in DB, display configured weekly installment schedule preview
+      const dayObj = WEEKDAY_OPTIONS.find((w) => w.dayIndex === installmentDay);
+      const [h, m] = installmentTime.split(":").map(Number);
+      const ampm = (h ?? 17) >= 12 ? "PM" : "AM";
+      const h12 = (h ?? 17) % 12 || 12;
+      const timeStr = `${String(h12).padStart(2, "0")}:${String(m ?? 0).padStart(2, "0")} ${ampm}`;
+      scheduleLabel = `${dayObj?.label || "Wed"} · ${timeStr} IST`;
+
+      if (installmentStartDate) {
+        const [y, mo, da] = installmentStartDate.split("-").map(Number);
+        const startD = new Date(y, mo - 1, da);
+        const endD = new Date(startD.getTime() + Math.max(0, installmentSessionCount - 1) * 7 * 86400000);
+        const formatDate = (d: Date) =>
+          d.toLocaleDateString("en-GB", {
+            day: "2-digit",
+            month: "short",
+            year: "numeric",
+          });
+        datesLabel = `${formatDate(startD)} – ${formatDate(endD)}`;
+      }
+    }
+
+    const scheduledCount = validLessons.length;
+    const sessionsLabel =
+      scheduledCount > 0
+        ? `${scheduledCount} of ${totalSessions} sessions (${durationMins}m)`
+        : `${totalSessions} × ${durationMins} minutes`;
+
+    return {
+      scheduleLabel,
+      datesLabel,
+      sessionsLabel,
+      durationMins,
+      scheduledCount,
+    };
+  }, [
+    activeEnrollment?.lessons,
+    installmentDay,
+    installmentTime,
+    installmentStartDate,
+    installmentSessionCount,
+    installmentDuration,
+    totalSessions,
+  ]);
 
   const formattedIstDate = new Intl.DateTimeFormat("en-GB", {
     day: "2-digit",
@@ -990,6 +1109,26 @@ export function AdminEnrollmentsManager({
       });
 
       if (res.success && res.data) {
+        const targetId = res.data.enrollmentId || activeEnrollment?.id;
+        if (targetId) {
+          setEnrollments((prev) =>
+            prev.map((item) =>
+              item.id === targetId
+                ? {
+                    ...item,
+                    coursePriceMinorUnits: Math.round(feeRupees * 100),
+                    sessionsTotal: totalSessions,
+                    sessionsRemaining: Math.max(1, totalSessions - completedSessions),
+                    teacherId: selectedTeacherId || item.teacherId,
+                    teacherName: currentTeacher?.name || item.teacherName,
+                    status: enrollmentStatus,
+                    adminNotes: isDraft ? `[DRAFT] ${adminNotes.trim()}` : adminNotes.trim() || undefined,
+                  }
+                : item
+            )
+          );
+        }
+
         showToast(
           isDraft
             ? "Enrollment draft saved."
@@ -3176,21 +3315,21 @@ export function AdminEnrollmentsManager({
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-body/70">Schedule</span>
                   <span className="font-semibold text-heading font-numeric">
-                    {recurringCadence === "TUE_THU" ? "Tue / Thu" : "Weekly"} · {startTime} IST
+                    {enrollmentSummaryMetrics.scheduleLabel}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-body/70">Dates</span>
                   <span className="font-semibold text-heading font-numeric">
-                    {startDate} – {endDate}
+                    {enrollmentSummaryMetrics.datesLabel}
                   </span>
                 </div>
 
                 <div className="flex items-center justify-between pt-2">
                   <span className="text-body/70">Sessions</span>
                   <span className="font-semibold text-heading font-numeric">
-                    {totalSessions} × {sessionDurationMinutes} minutes
+                    {enrollmentSummaryMetrics.sessionsLabel}
                   </span>
                 </div>
 

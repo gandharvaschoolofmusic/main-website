@@ -427,6 +427,9 @@ export async function scheduleEnrollmentLessonAction(input: {
     );
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     revalidatePath("/student/dashboard");
@@ -525,6 +528,9 @@ export async function bulkScheduleEnrollmentLessonsAction(input: {
     );
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     revalidatePath("/student/dashboard");
@@ -636,6 +642,9 @@ export async function rescheduleEnrollmentLessonAction(input: {
 
     // 3. Revalidate paths for admin, student, and teacher calendars and dashboards
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/student/dashboard");
     revalidatePath("/student/dashboard/calendar");
@@ -673,6 +682,9 @@ export async function deleteOrCancelEnrollmentLessonAction(
     });
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard");
@@ -741,6 +753,10 @@ export async function saveFullEnrollmentPlanAction(input: {
           sessionsRemaining: totalSessions,
           status: input.status || EnrollmentStatus.ACTIVE,
           adminNotes: input.adminNotes !== undefined ? input.adminNotes : undefined,
+          customFeeMinorUnits:
+            input.paymentFeeRupees !== undefined
+              ? Math.round(input.paymentFeeRupees * 100)
+              : undefined,
         },
       });
     } else {
@@ -752,6 +768,10 @@ export async function saveFullEnrollmentPlanAction(input: {
           sessionsRemaining: totalSessions,
           status: input.status || EnrollmentStatus.ACTIVE,
           adminNotes: input.adminNotes || "Created from Enrollment Planner",
+          customFeeMinorUnits:
+            input.paymentFeeRupees !== undefined
+              ? Math.round(input.paymentFeeRupees * 100)
+              : undefined,
         },
       });
       targetEnrollmentId = created.id;
@@ -829,6 +849,9 @@ export async function saveFullEnrollmentPlanAction(input: {
     }
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/trials");
     revalidatePath("/admin/students");
     revalidatePath("/admin/lessons");
@@ -2200,6 +2223,7 @@ export async function adminApproveAndAllotCourseAction(input: {
           emiStatus,
           paymentPlan,
           convertedFromTrial: true,
+          customFeeMinorUnits: Math.round(input.feeRupees * 100),
           adminNotes:
             input.adminNotes?.trim() ||
             `Approved by admin. Fee: ₹${input.feeRupees}, Paid: ₹${input.paidRupees}, Remaining: ₹${remainingBalance}`,
@@ -2346,6 +2370,9 @@ export async function adminApproveAndAllotCourseAction(input: {
     }
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/admin/trials");
     revalidatePath("/admin");
@@ -2845,6 +2872,9 @@ export async function adminRecordEnrollmentPaymentAction(input: {
     }
 
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
     revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     revalidatePath("/student/dashboard");

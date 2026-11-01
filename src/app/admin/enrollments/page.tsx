@@ -226,7 +226,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       courseInstrument: e.course.instrument,
       courseLevel: e.course.level,
       courseSessionCount: e.course.sessionCount,
-      coursePriceMinorUnits: e.course.priceMinorUnits,
+      coursePriceMinorUnits: e.customFeeMinorUnits ?? e.course.priceMinorUnits,
       courseDurationWeeks: e.course.durationWeeks,
       teacherId: e.teacherId,
       teacherName: assignedFaculty?.name || null,
