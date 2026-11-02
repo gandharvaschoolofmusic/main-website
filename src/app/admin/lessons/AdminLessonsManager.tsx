@@ -83,7 +83,7 @@ export function AdminLessonsManager({
                   ...l,
                   startsAt: res.data!.startsAt,
                   formattedTime: res.data!.formattedTime,
-                  status: l.status === LessonStatus.SCHEDULED ? LessonStatus.RESCHEDULED : l.status,
+                  status: res.data!.status,
                 }
               : l
           )

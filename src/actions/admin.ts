@@ -583,15 +583,26 @@ export async function rescheduleEnrollmentLessonAction(input: {
         ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
         : lesson.payoutAmountMinor;
 
+    const updatePayload: Record<string, unknown> = {
+      startsAt: startsAtDate,
+      durationMinutes: input.durationMinutes || lesson.durationMinutes,
+      status: LessonStatus.RESCHEDULED,
+      ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
+    };
+
+    if (lesson.status === LessonStatus.COMPLETED || lesson.status === LessonStatus.CANCELLED) {
+      updatePayload.teacherJoinedAt = null;
+      updatePayload.teacherLeftAt = null;
+      updatePayload.studentJoinedAt = null;
+      updatePayload.studentLeftAt = null;
+      updatePayload.cancelledBy = null;
+      updatePayload.cancelledAt = null;
+    }
+
     // Automatically set status to RESCHEDULED
     await db.lesson.update({
       where: { id: input.lessonId },
-      data: {
-        startsAt: startsAtDate,
-        durationMinutes: input.durationMinutes || lesson.durationMinutes,
-        status: LessonStatus.RESCHEDULED,
-        ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
-      },
+      data: updatePayload,
     });
 
     const courseOrInstrument =
@@ -665,7 +676,7 @@ export async function updateLessonDateTimeAdminAction(input: {
   startsAt: string;
   durationMinutes?: number;
   adminTimezone?: string;
-}): Promise<AdminActionResponse<{ formattedTime: string; startsAt: string }>> {
+}): Promise<AdminActionResponse<{ formattedTime: string; startsAt: string; status: LessonStatus }>> {
   try {
     const admin = await requireRole(Role.ADMIN);
     const timezone = input.adminTimezone || admin.timezone || "Asia/Kolkata";
@@ -700,29 +711,76 @@ export async function updateLessonDateTimeAdminAction(input: {
         ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
         : lesson.payoutAmountMinor;
 
+    const isFuture = startsAtDate.getTime() > Date.now();
+    // When an admin edits/reschedules a lesson to a future time (or any time in global directory),
+    // change the status to RESCHEDULED so it reappears as an active upcoming lesson.
     const newStatus =
-      lesson.status === LessonStatus.CANCELLED
-        ? LessonStatus.RESCHEDULED
-        : lesson.status === LessonStatus.SCHEDULED
+      isFuture ||
+      lesson.status === LessonStatus.SCHEDULED ||
+      lesson.status === LessonStatus.CANCELLED ||
+      lesson.status === LessonStatus.COMPLETED
         ? LessonStatus.RESCHEDULED
         : lesson.status;
+
+    const updateData: Record<string, unknown> = {
+      startsAt: startsAtDate,
+      status: newStatus,
+      ...(input.durationMinutes ? { durationMinutes: input.durationMinutes } : {}),
+      ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
+    };
+
+    // If moving from COMPLETED or CANCELLED to RESCHEDULED, clear past departure flags so new future class has a clean entry
+    if (
+      (lesson.status === LessonStatus.COMPLETED || lesson.status === LessonStatus.CANCELLED) &&
+      newStatus === LessonStatus.RESCHEDULED
+    ) {
+      updateData.teacherJoinedAt = null;
+      updateData.teacherLeftAt = null;
+      updateData.studentJoinedAt = null;
+      updateData.studentLeftAt = null;
+      updateData.cancelledBy = null;
+      updateData.cancelledAt = null;
+    }
+
+    // If moving from CANCELLED to an active status, re-consume quota if available
+    if (lesson.status === LessonStatus.CANCELLED) {
+      if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
+        const enr = await db.enrollment.findUnique({ where: { id: lesson.enrollmentId } });
+        if (enr && enr.sessionsRemaining > 0) {
+          await db.enrollment.update({
+            where: { id: lesson.enrollmentId },
+            data: { sessionsRemaining: { decrement: 1 } },
+          });
+        }
+      } else if (lesson.lessonSource === LessonSource.TRIAL) {
+        await db.studentTrialStatus.updateMany({
+          where: { studentId: lesson.studentId },
+          data: { lessonsUsed: { increment: 1 } },
+        });
+      }
+    }
 
     // Update the lesson directly in the database
     await db.lesson.update({
       where: { id: input.lessonId },
-      data: {
-        startsAt: startsAtDate,
-        ...(input.durationMinutes ? { durationMinutes: input.durationMinutes } : {}),
-        status: newStatus,
-        ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
-      },
+      data: updateData,
     });
 
-    // If linked to trialRequest, update requestedStartsAt in database as well
+    if (lesson.groupRoomId) {
+      await db.lesson.updateMany({
+        where: { groupRoomId: lesson.groupRoomId },
+        data: updateData,
+      });
+    }
+
+    // If linked to trialRequest, update requestedStartsAt and status in database as well
     if (lesson.trialRequest?.id) {
       await db.trialRequest.update({
         where: { id: lesson.trialRequest.id },
-        data: { requestedStartsAt: startsAtDate },
+        data: {
+          requestedStartsAt: startsAtDate,
+          status: TrialRequestStatus.ALLOTTED,
+        },
       });
     }
 
@@ -805,6 +863,7 @@ export async function updateLessonDateTimeAdminAction(input: {
       data: {
         formattedTime,
         startsAt: startsAtDate.toISOString(),
+        status: newStatus,
       },
     };
   } catch (error) {
