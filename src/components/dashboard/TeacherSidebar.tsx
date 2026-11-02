@@ -165,7 +165,7 @@ export function TeacherSidebar({
     <>
       {/* ── Persistent Left Sidebar for Tablets, Laptops & Desktops (>= 640px) ── */}
       <aside
-        className={`hidden sm:flex flex-col shrink-0 bg-primary text-white sticky top-16 h-[calc(100vh-4rem)] p-3 space-y-2 shadow-xl z-40 select-none overflow-hidden transition-all duration-200 ease-in-out ${
+        className={`hidden sm:flex flex-col shrink-0 bg-gradient-to-b from-[#2B054D] via-[#240442] to-[#1D0235] text-white sticky top-16 h-[calc(100vh-4rem)] p-3 space-y-2 shadow-xl border-r border-white/10 z-40 select-none overflow-hidden transition-all duration-200 ease-in-out ${
           isCollapsed ? "w-16" : "w-56 lg:w-60"
         }`}
       >
@@ -177,7 +177,7 @@ export function TeacherSidebar({
                 <span className="font-serif font-bold text-sm tracking-wide text-white truncate">
                   Gandharva
                 </span>
-                <span className="text-[9px] uppercase font-bold tracking-wider px-1.5 py-0.5 rounded bg-white/10 text-[#FF9E40] shrink-0">
+                <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/10 shrink-0">
                   Faculty
                 </span>
               </div>
@@ -185,7 +185,7 @@ export function TeacherSidebar({
                 type="button"
                 onClick={toggleCollapsed}
                 title="Collapse sidebar to icon rail"
-                className="p-1 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer shrink-0"
+                className="w-7 h-7 rounded-lg text-white/60 hover:text-white hover:bg-white/10 active:scale-95 flex items-center justify-center transition-all cursor-pointer shrink-0"
               >
                 <PanelLeftClose className="w-4 h-4" />
               </button>
@@ -196,7 +196,7 @@ export function TeacherSidebar({
                 type="button"
                 onClick={toggleCollapsed}
                 title="Expand sidebar"
-                className="p-1.5 rounded-lg text-white/50 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-lg text-white/60 hover:text-white hover:bg-white/10 active:scale-95 flex items-center justify-center transition-all cursor-pointer"
               >
                 <PanelLeftOpen className="w-4 h-4" />
               </button>
@@ -221,21 +221,21 @@ export function TeacherSidebar({
                   isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"
                 } ${
                   active
-                    ? "bg-white/15 text-white font-bold shadow-xs"
-                    : "text-white/70 hover:text-white hover:bg-white/5 font-medium"
+                    ? "bg-white/15 text-white font-semibold backdrop-blur-md border border-white/12 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
+                    : "text-white/70 hover:text-white hover:bg-white/6 font-medium"
                 }`}
               >
                 <Icon
                   className={`w-4 h-4 shrink-0 transition-colors ${
-                    active ? "text-[#FF9E40]" : "text-white/70"
+                    active ? "text-[#FFA751]" : "text-white/60"
                   }`}
                 />
                 {!isCollapsed && <span className="truncate flex-1">{item.name}</span>}
                 {!isCollapsed && active && (
-                  <span className="w-1.5 h-4 rounded-full bg-[#FF7803] shrink-0" />
+                  <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[#FFA751] to-[#FF7803] shadow-[0_0_8px_rgba(255,120,3,0.5)] shrink-0" />
                 )}
                 {isCollapsed && active && (
-                  <span className="absolute right-1 top-1 w-1.5 h-1.5 rounded-full bg-[#FF7803]" />
+                  <span className="absolute right-1 top-1 w-1.5 h-1.5 rounded-full bg-[#FF7803] shadow-[0_0_4px_rgba(255,120,3,0.8)]" />
                 )}
               </Link>
             );
@@ -247,11 +247,11 @@ export function TeacherSidebar({
           {!isCollapsed ? (
             <Link
               href="/teacher/dashboard/profile"
-              className="p-2 rounded-xl bg-black/25 hover:bg-black/35 flex items-center gap-2.5 transition-all group cursor-pointer shadow-2xs"
+              className="p-2.5 rounded-2xl bg-white/8 hover:bg-white/12 border border-white/10 backdrop-blur-md flex items-center gap-2.5 transition-all group cursor-pointer shadow-xs active:scale-[0.98]"
               title="Manage Faculty Profile & Photo"
             >
               {teacherImage ? (
-                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs">
+                <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 ring-1 ring-white/20 shadow-xs">
                   <Image
                     src={teacherImage}
                     alt={displayName}
@@ -261,15 +261,15 @@ export function TeacherSidebar({
                   />
                 </div>
               ) : (
-                <div className="w-8 h-8 rounded-full bg-[#4E1A8E] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-inner">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 ring-1 ring-white/20 shadow-inner">
                   {initials}
                 </div>
               )}
               <div className="overflow-hidden min-w-0 flex-1">
-                <div className="text-xs font-bold text-white group-hover:text-[#FF9E40] transition-colors truncate">
+                <div className="text-xs font-semibold text-white group-hover:text-[#FFA751] transition-colors truncate tracking-tight">
                   {displayName}
                 </div>
-                <div className="text-[10px] text-white/50 truncate">
+                <div className="text-[10px] text-white/55 truncate">
                   {displayEmail}
                 </div>
               </div>
@@ -279,10 +279,10 @@ export function TeacherSidebar({
               <Link
                 href="/teacher/dashboard/profile"
                 title={`${displayName} (${displayEmail})`}
-                className="transition-transform hover:scale-105"
+                className="transition-transform hover:scale-105 active:scale-95"
               >
                 {teacherImage ? (
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-xs">
+                  <div className="relative w-8 h-8 rounded-full overflow-hidden ring-1 ring-white/20 shadow-xs">
                     <Image
                       src={teacherImage}
                       alt={displayName}
@@ -292,7 +292,7 @@ export function TeacherSidebar({
                     />
                   </div>
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-[#4E1A8E] text-white flex items-center justify-center font-bold text-xs uppercase shadow-inner">
+                  <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs uppercase ring-1 ring-white/20 shadow-inner">
                     {initials}
                   </div>
                 )}
@@ -303,23 +303,23 @@ export function TeacherSidebar({
       </aside>
 
       {/* ── Mobile Top Bar with Left Drawer Trigger (< 640px) ── */}
-      <div className="sm:hidden sticky top-16 z-30 bg-primary text-white shrink-0 shadow-xs border-b border-white/10 px-3 py-2.5 flex items-center justify-between">
+      <div className="sm:hidden sticky top-16 z-30 bg-[#2B054D]/95 backdrop-blur-xl shrink-0 shadow-xs border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
         <button
           type="button"
           onClick={() => setIsMobileDrawerOpen(true)}
           aria-label="Open navigation menu"
-          className="flex items-center gap-2 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 active:scale-95 transition-all text-white font-medium text-xs cursor-pointer"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 border border-white/10 text-white font-medium text-xs transition-all shadow-xs cursor-pointer"
         >
-          <Menu className="w-4 h-4 text-[#FF9E40]" />
-          <span className="font-semibold truncate max-w-[150px]">
+          <Menu className="w-4 h-4 text-[#FFA751]" />
+          <span className="font-semibold tracking-tight truncate max-w-[150px]">
             {currentItem.name}
           </span>
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-md bg-white/10 text-[#FF9E40]">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/10">
             Faculty
           </span>
-          <div className="w-6 h-6 rounded-full bg-[#4E1A8E] text-white flex items-center justify-center font-bold text-[10px]">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-[10px] ring-1 ring-white/20">
             {initials}
           </div>
         </div>
@@ -328,21 +328,21 @@ export function TeacherSidebar({
       {/* ── Mobile Left Slide-out Drawer (< 640px) ── */}
       {isMobileDrawerOpen && (
         <div className="sm:hidden fixed inset-0 z-50 flex">
-          {/* Backdrop */}
+          {/* Backdrop with smooth Apple blur */}
           <div
-            className="fixed inset-0 bg-black/60 backdrop-blur-xs transition-opacity"
+            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
 
-          {/* Drawer content sliding in from the LEFT */}
-          <aside className="relative flex flex-col w-72 max-w-[85vw] bg-primary text-white h-full p-4 space-y-2 shadow-2xl z-50 select-none overflow-hidden animate-in slide-in-from-left duration-200">
+          {/* Drawer content sliding in from the LEFT with Apple frosted glass & rounded right corner */}
+          <aside className="relative flex flex-col w-[300px] max-w-[85vw] bg-[#2B054D]/92 backdrop-blur-2xl backdrop-saturate-150 text-white h-full p-4 pt-5 pb-6 space-y-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-r border-white/15 rounded-r-3xl z-50 select-none overflow-hidden animate-in slide-in-from-left duration-300 ease-out">
             {/* Drawer Header */}
-            <div className="flex items-center justify-between pb-2 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="font-serif font-bold text-base tracking-wide text-white">
+            <div className="flex items-center justify-between pb-3 border-b border-white/10 px-1">
+              <div className="flex items-center gap-2.5">
+                <span className="font-serif font-bold text-base tracking-tight text-white">
                   Gandharva
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2 py-0.5 rounded bg-white/10 text-[#FF9E40]">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/12">
                   Faculty
                 </span>
               </div>
@@ -350,14 +350,14 @@ export function TeacherSidebar({
                 type="button"
                 onClick={() => setIsMobileDrawerOpen(false)}
                 aria-label="Close navigation menu"
-                className="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition-colors cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10 cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Drawer Nav Items */}
-            <nav className="space-y-1 flex-1 overflow-y-auto pr-1 text-xs py-2 sidebar-scroll">
+            <nav className="space-y-1 flex-1 overflow-y-auto pr-1 text-xs py-1 sidebar-scroll">
               {navItems.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;
@@ -371,20 +371,20 @@ export function TeacherSidebar({
                       setNavigatingTo(item.href);
                       setIsMobileDrawerOpen(false);
                     }}
-                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs transition-all active:scale-[0.98] ${
+                    className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all active:scale-[0.98] ${
                       active
-                        ? "bg-white/15 text-white font-bold shadow-xs ring-1 ring-white/10"
-                        : "text-white/70 hover:text-white hover:bg-white/5 font-medium"
+                        ? "bg-white/15 text-white font-semibold backdrop-blur-md border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.12)]"
+                        : "text-white/70 hover:text-white hover:bg-white/6"
                     }`}
                   >
                     <Icon
                       className={`w-4 h-4 shrink-0 transition-colors ${
-                        active ? "text-[#FF9E40]" : "text-white/70"
+                        active ? "text-[#FFA751]" : "text-white/60"
                       }`}
                     />
                     <span className="truncate flex-1">{item.name}</span>
                     {active && (
-                      <span className="w-1.5 h-4 rounded-full bg-[#FF7803] shrink-0" />
+                      <span className="w-1.5 h-4 rounded-full bg-gradient-to-b from-[#FFA751] to-[#FF7803] shadow-[0_0_8px_rgba(255,120,3,0.6)] shrink-0" />
                     )}
                   </Link>
                 );
@@ -396,28 +396,28 @@ export function TeacherSidebar({
               <Link
                 href="/teacher/dashboard/profile"
                 onClick={() => setIsMobileDrawerOpen(false)}
-                className="p-2.5 rounded-2xl bg-black/25 flex items-center gap-2.5 shadow-2xs"
+                className="p-2.5 rounded-2xl bg-white/8 hover:bg-white/12 border border-white/10 backdrop-blur-md flex items-center gap-3 transition-all active:scale-[0.98] shadow-xs cursor-pointer"
               >
                 {teacherImage ? (
-                  <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs">
+                  <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 ring-1 ring-white/20 shadow-xs">
                     <Image
                       src={teacherImage}
                       alt={displayName}
                       fill
-                      sizes="32px"
+                      sizes="36px"
                       className="object-cover"
                     />
                   </div>
                 ) : (
-                  <div className="w-8 h-8 rounded-full bg-[#4E1A8E] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 shadow-inner">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs uppercase shrink-0 ring-1 ring-white/20 shadow-inner">
                     {initials}
                   </div>
                 )}
                 <div className="min-w-0 flex-1">
-                  <div className="font-bold text-xs text-white truncate">
+                  <div className="font-semibold text-xs text-white truncate tracking-tight">
                     {displayName}
                   </div>
-                  <div className="text-[10px] text-white/50 truncate">
+                  <div className="text-[11px] text-white/55 truncate">
                     {displayEmail}
                   </div>
                 </div>
