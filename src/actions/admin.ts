@@ -29,6 +29,8 @@ import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/les
 import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
+import { formatInViewerTimezone } from "@/lib/timezone";
+import { invalidateLastKnownGood } from "@/lib/db-resilience";
 
 export type AdminActionResponse<T = unknown> = {
   success: boolean;
@@ -655,6 +657,159 @@ export async function rescheduleEnrollmentLessonAction(input: {
   } catch (error) {
     logger.error({ error, input }, "Error rescheduling enrollment lesson");
     return { success: false, error: "Failed to reschedule lesson." };
+  }
+}
+
+export async function updateLessonDateTimeAdminAction(input: {
+  lessonId: string;
+  startsAt: string;
+  durationMinutes?: number;
+  adminTimezone?: string;
+}): Promise<AdminActionResponse<{ formattedTime: string; startsAt: string }>> {
+  try {
+    const admin = await requireRole(Role.ADMIN);
+    const timezone = input.adminTimezone || admin.timezone || "Asia/Kolkata";
+
+    const lesson = await db.lesson.findUnique({
+      where: { id: input.lessonId },
+      include: {
+        student: { select: { id: true, name: true, email: true, timezone: true } },
+        teacher: { select: { id: true, name: true, email: true, timezone: true } },
+        teacherProfile: { select: { id: true, payoutDayRate: true, payoutNightRate: true, payoutPerSession: true } },
+        enrollment: {
+          include: {
+            course: { select: { id: true, title: true, instrument: true } },
+          },
+        },
+        trialRequest: { select: { id: true } },
+      },
+    });
+
+    if (!lesson) {
+      return { success: false, error: "Lesson not found." };
+    }
+
+    const startsAtDate = new Date(input.startsAt);
+    if (isNaN(startsAtDate.getTime())) {
+      return { success: false, error: "Invalid date and time." };
+    }
+
+    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid
+    const updatedPayoutMinor =
+      lesson.payoutStatus !== TeacherPayoutStatus.PAID
+        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
+        : lesson.payoutAmountMinor;
+
+    const newStatus =
+      lesson.status === LessonStatus.CANCELLED
+        ? LessonStatus.RESCHEDULED
+        : lesson.status === LessonStatus.SCHEDULED
+        ? LessonStatus.RESCHEDULED
+        : lesson.status;
+
+    // Update the lesson directly in the database
+    await db.lesson.update({
+      where: { id: input.lessonId },
+      data: {
+        startsAt: startsAtDate,
+        ...(input.durationMinutes ? { durationMinutes: input.durationMinutes } : {}),
+        status: newStatus,
+        ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
+      },
+    });
+
+    // If linked to trialRequest, update requestedStartsAt in database as well
+    if (lesson.trialRequest?.id) {
+      await db.trialRequest.update({
+        where: { id: lesson.trialRequest.id },
+        data: { requestedStartsAt: startsAtDate },
+      });
+    }
+
+    // Invalidate resilient in-memory cache and tags
+    invalidateLastKnownGood("admin-lessons");
+    invalidateLastKnownGood("admin-enrollments");
+    invalidateLastKnownGood("admin-trials");
+
+    // Format new time in admin timezone
+    const formattedTime = formatInViewerTimezone(
+      startsAtDate,
+      timezone,
+      "MMM d, yyyy 'at' h:mm a zzz"
+    );
+
+    const courseOrInstrument =
+      lesson.enrollment?.course?.title || lesson.instrument || "Class";
+    const teacherName = lesson.teacher?.name || "faculty mentor";
+
+    // In-app notifications
+    if (lesson.studentId) {
+      const studentTz = lesson.student?.timezone || "Asia/Kolkata";
+      const studentFormattedDate = startsAtDate.toLocaleString("en-IN", {
+        timeZone: studentTz,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      await createNotification({
+        userId: lesson.studentId,
+        type: NotificationType.LESSON_RESCHEDULED,
+        title: "Class Rescheduled",
+        body: `Your ${courseOrInstrument} session with ${teacherName} has been rescheduled to ${studentFormattedDate}.`,
+        link: "/student/dashboard/calendar",
+      }).catch(() => {});
+    }
+
+    if (lesson.teacherId) {
+      const teacherTz = lesson.teacher?.timezone || "Asia/Kolkata";
+      const teacherFormattedDate = startsAtDate.toLocaleString("en-IN", {
+        timeZone: teacherTz,
+        weekday: "short",
+        month: "short",
+        day: "numeric",
+        hour: "numeric",
+        minute: "2-digit",
+        hour12: true,
+      });
+
+      await createNotification({
+        userId: lesson.teacherId,
+        type: NotificationType.LESSON_RESCHEDULED,
+        title: "Class Rescheduled",
+        body: `Your ${courseOrInstrument} session with ${lesson.student?.name || "student"} has been rescheduled to ${teacherFormattedDate}.`,
+        link: "/teacher/dashboard/calendar",
+      }).catch(() => {});
+    }
+
+    revalidatePath("/admin/lessons");
+    try {
+      revalidateTag("admin-lessons", "max");
+      revalidateTag("lessons", "max");
+      revalidateTag("admin-enrollments", "max");
+      revalidateTag("admin-trials", "max");
+    } catch {}
+    revalidatePath("/admin/enrollments");
+    revalidatePath("/admin/students");
+    revalidatePath("/admin/trials");
+    revalidatePath("/student/dashboard");
+    revalidatePath("/student/dashboard/calendar");
+    revalidatePath("/teacher/dashboard");
+    revalidatePath("/teacher/dashboard/calendar");
+
+    return {
+      success: true,
+      data: {
+        formattedTime,
+        startsAt: startsAtDate.toISOString(),
+      },
+    };
+  } catch (error) {
+    logger.error({ error, input }, "Error updating lesson Date & Time in database");
+    return { success: false, error: "Failed to update date and time in database." };
   }
 }
 

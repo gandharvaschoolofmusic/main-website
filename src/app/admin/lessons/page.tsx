@@ -102,7 +102,7 @@ export default async function AdminLessonsPage() {
         </p>
       </div>
 
-      <AdminLessonsManager initialLessons={formattedLessons} />
+      <AdminLessonsManager initialLessons={formattedLessons} adminTimezone={adminTimezone} />
     </div>
   );
 }

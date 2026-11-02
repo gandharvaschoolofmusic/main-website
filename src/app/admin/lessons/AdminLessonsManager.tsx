@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { LessonStatus, LessonSource } from "@prisma/client";
-import { cancelLessonAdminAction } from "@/actions/admin";
+import { cancelLessonAdminAction, updateLessonDateTimeAdminAction } from "@/actions/admin";
+import { DateTimePicker } from "@/components/ui/DateTimePicker";
 import Link from "next/link";
 import {
   Video,
@@ -12,6 +13,9 @@ import {
   XCircle,
   ExternalLink,
   Loader2,
+  Pencil,
+  Check,
+  X,
 } from "lucide-react";
 
 export interface AdminLessonItem {
@@ -33,15 +37,73 @@ export interface AdminLessonItem {
 
 export function AdminLessonsManager({
   initialLessons,
+  adminTimezone = "Asia/Kolkata",
 }: {
   initialLessons: AdminLessonItem[];
+  adminTimezone?: string;
 }) {
   const [lessons, setLessons] = useState<AdminLessonItem[]>(initialLessons);
   const [statusFilter, setStatusFilter] = useState<"ALL" | LessonStatus>("ALL");
   const [sourceFilter, setSourceFilter] = useState<"ALL" | LessonSource>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
+  const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
+  const [editDateInput, setEditDateInput] = useState<string>("");
+  const [isSaving, setIsSaving] = useState(false);
+  const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
+  const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
   const [isPending, startTransition] = useTransition();
+
+  useEffect(() => {
+    setLessons(initialLessons);
+  }, [initialLessons]);
+
+  const handleStartEdit = (lesson: AdminLessonItem) => {
+    setEditingLessonId(lesson.id);
+    const dateObj = new Date(lesson.startsAt);
+    setEditDateInput(isNaN(dateObj.getTime()) ? new Date().toISOString() : dateObj.toISOString());
+  };
+
+  const handleSaveDateTime = async (lessonId: string) => {
+    if (!editDateInput) return;
+    setIsSaving(true);
+    try {
+      const res = await updateLessonDateTimeAdminAction({
+        lessonId,
+        startsAt: new Date(editDateInput).toISOString(),
+        adminTimezone,
+      });
+
+      if (res.success && res.data) {
+        setLessons((prev) =>
+          prev.map((l) =>
+            l.id === lessonId
+              ? {
+                  ...l,
+                  startsAt: res.data!.startsAt,
+                  formattedTime: res.data!.formattedTime,
+                  status: l.status === LessonStatus.SCHEDULED ? LessonStatus.RESCHEDULED : l.status,
+                }
+              : l
+          )
+        );
+        setEditingLessonId(null);
+        setSavedSuccessId(lessonId);
+        setTimeout(() => setSavedSuccessId(null), 3500);
+        setToast({ text: "Class Date & Time updated directly in database!", type: "success" });
+        setTimeout(() => setToast(null), 4000);
+      } else {
+        setToast({ text: res.error || "Failed to update date and time in database.", type: "error" });
+        setTimeout(() => setToast(null), 4000);
+      }
+    } catch {
+      setToast({ text: "Network error updating date and time.", type: "error" });
+      setTimeout(() => setToast(null), 4000);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleCancelLesson = (lessonId: string, studentName: string) => {
     if (!confirm(`Cancel lesson with ${studentName}? This will restore the student's trial or course session quota.`)) {
@@ -82,6 +144,26 @@ export function AdminLessonsManager({
 
   return (
     <div className="space-y-6">
+      {/* Toast Alert */}
+      {toast && (
+        <div
+          className={`p-3 rounded-xl border text-xs font-semibold flex items-center justify-between shadow-xs animate-in fade-in slide-in-from-top-1 ${
+            toast.type === "success"
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-rose-50 border-rose-200 text-rose-800"
+          }`}
+        >
+          <span>{toast.text}</span>
+          <button
+            type="button"
+            onClick={() => setToast(null)}
+            className="text-body/60 hover:text-heading cursor-pointer p-0.5"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+      )}
+
       {/* Filters Header */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div className="flex items-center gap-3 flex-wrap">
@@ -232,8 +314,64 @@ export function AdminLessonsManager({
                       </span>
                     </td>
 
-                    <td className="py-3.5 px-4 text-heading font-medium whitespace-nowrap font-numeric">
-                      {l.formattedTime}
+                    <td className="py-3.5 px-4 whitespace-nowrap font-numeric">
+                      {editingLessonId === l.id ? (
+                        <div className="flex items-center gap-1.5 min-w-[270px]">
+                          <div className="flex-1">
+                            <DateTimePicker
+                              compact
+                              value={editDateInput}
+                              onChange={setEditDateInput}
+                              placeholder="Pick new date & time"
+                            />
+                          </div>
+                          <button
+                            type="button"
+                            disabled={isSaving || !editDateInput}
+                            onClick={() => handleSaveDateTime(l.id)}
+                            className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center justify-center cursor-pointer shrink-0"
+                            title="Save directly to database"
+                          >
+                            {isSaving ? (
+                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                            ) : (
+                              <Check className="w-3.5 h-3.5" />
+                            )}
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isSaving}
+                            onClick={() => setEditingLessonId(null)}
+                            className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-body transition-colors cursor-pointer shrink-0"
+                            title="Cancel"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-2 group">
+                          <span
+                            onClick={() => handleStartEdit(l)}
+                            className="text-heading font-medium hover:text-primary transition-colors cursor-pointer"
+                            title="Click to edit date & time directly in database"
+                          >
+                            {l.formattedTime}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => handleStartEdit(l)}
+                            className="p-1 rounded-md text-primary/60 hover:text-primary hover:bg-primary/10 transition-colors opacity-70 group-hover:opacity-100 cursor-pointer"
+                            title="Edit Date & Time directly in database"
+                          >
+                            <Pencil className="w-3.5 h-3.5" />
+                          </button>
+                          {savedSuccessId === l.id && (
+                            <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 animate-in fade-in">
+                              Updated in DB!
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </td>
 
                     <td className="py-3.5 px-4">
@@ -298,6 +436,15 @@ export function AdminLessonsManager({
 
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
+                        <button
+                          type="button"
+                          onClick={() => handleStartEdit(l)}
+                          className="p-1.5 rounded-lg bg-purple-50 text-[#3C096C] hover:bg-purple-100 transition-colors border border-purple-200 active:scale-95 shadow-2xs cursor-pointer"
+                          title="Change Date & Time directly in database"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+
                         <Link
                           href={`/lesson/${l.id}`}
                           target="_blank"

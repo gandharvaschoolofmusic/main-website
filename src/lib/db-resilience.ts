@@ -92,3 +92,18 @@ export function getLastKnownGood<T>(cacheKey: string): T | undefined {
   return lastKnownGoodMap.get(cacheKey) as T | undefined;
 }
 
+/**
+ * Invalidate in-memory resilient cache when an entity is updated directly in the database.
+ */
+export function invalidateLastKnownGood(keyOrPrefix?: string): void {
+  if (!keyOrPrefix) {
+    lastKnownGoodMap.clear();
+    return;
+  }
+  for (const key of Array.from(lastKnownGoodMap.keys())) {
+    if (key === keyOrPrefix || key.startsWith(keyOrPrefix)) {
+      lastKnownGoodMap.delete(key);
+    }
+  }
+}
+
