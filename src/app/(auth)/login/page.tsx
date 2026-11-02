@@ -179,67 +179,43 @@ export default function LoginPage() {
     }
 
     const fullNumber = getFullPhoneNumber();
-    const isIndia = selectedCountry.dialCode === "+91";
     setIsSendingOtp(true);
 
     try {
-      const dbPromise = sendPhoneOtpAction(fullNumber, "LOGIN");
-      let fbPromise: Promise<{
-        success: boolean;
-        confirmationResult?: ConfirmationResult;
-        error?: string;
-        isRegionBlocked?: boolean;
-      }> = Promise.resolve({ success: false });
-
       if (isFirebaseConfigured()) {
         const verifier = createRecaptchaVerifier("login-recaptcha-container");
-        if (verifier) {
-          fbPromise = sendFirebaseOtp(fullNumber, verifier);
-        }
-      }
-
-      const [dbRes, fbRes] = await Promise.all([dbPromise, fbPromise]);
-
-      if (!dbRes.success) {
-        setOtpError(dbRes.error || "Failed to dispatch verification code.");
-        setIsSendingOtp(false);
-        return;
-      }
-
-      // Case A: Firebase SMS delivered successfully
-      if (fbRes.success && fbRes.confirmationResult) {
-        setFirebaseConfirmation(fbRes.confirmationResult);
-        setOtpSent(true);
-        setResendCooldown(30);
-        setOtpBanner({
-          message: `A 6-digit verification code has been dispatched via SMS to ${fullNumber}.`,
-        });
-        return;
-      }
-
-      // Case B: Fallback to Email OTP (international student or Firebase SMS region restricted)
-      if (dbRes.data?.emailSent) {
-        setFirebaseConfirmation(null);
-        setOtpSent(true);
-        setResendCooldown(30);
-        setOtpBanner({
-          message: `A 6-digit verification code has been dispatched to your registered email address.`,
-        });
-        return;
-      }
-
-      // Case C: Neither Firebase nor Email succeeded
-      if (!fbRes.success) {
-        if (fbRes.isRegionBlocked || !isIndia) {
-          setOtpError(
-            `SMS delivery is restricted for ${selectedCountry.name} (${selectedCountry.dialCode}). Please sign in using your registered email and password, or contact support.`
-          );
+        if (!verifier) {
+          setOtpError("Failed to initialize security verification. Please refresh.");
           setIsSendingOtp(false);
           return;
         }
-        setOtpError(fbRes.error || "Failed to dispatch verification code.");
-        setIsSendingOtp(false);
-        return;
+
+        // Run user database pre-check and Firebase SMS dispatch concurrently
+        const [dbRes, fbRes] = await Promise.all([
+          sendPhoneOtpAction(fullNumber, "LOGIN"),
+          sendFirebaseOtp(fullNumber, verifier),
+        ]);
+
+        if (!dbRes.success) {
+          setOtpError(dbRes.error || "Failed to dispatch verification code.");
+          setIsSendingOtp(false);
+          return;
+        }
+
+        if (!fbRes.success || !fbRes.confirmationResult) {
+          setOtpError(fbRes.error || "Failed to dispatch SMS via Firebase.");
+          setIsSendingOtp(false);
+          return;
+        }
+
+        setFirebaseConfirmation(fbRes.confirmationResult);
+      } else {
+        const res = await sendPhoneOtpAction(fullNumber, "LOGIN");
+        if (!res.success) {
+          setOtpError(res.error || "Failed to dispatch verification code.");
+          setIsSendingOtp(false);
+          return;
+        }
       }
 
       setOtpSent(true);
@@ -565,14 +541,9 @@ export default function LoginPage() {
 
                   <div>
                     {/* Header Label: OTP */}
-                    <div className="flex items-center justify-between mb-2">
-                      <label className="block text-sm font-bold text-heading">
-                        OTP
-                      </label>
-                      <span className="text-[11px] text-body-muted">
-                        {firebaseConfirmation ? "Sent via SMS" : "Sent via Email"}
-                      </span>
-                    </div>
+                    <label className="block text-sm font-bold text-heading mb-2">
+                      OTP
+                    </label>
 
                     {/* 6 Individual Digit Input Boxes (Matching screenshot) */}
                     <div
