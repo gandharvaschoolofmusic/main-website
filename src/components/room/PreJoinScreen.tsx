@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 
 import { AudioMode } from "@/lib/audio-engine";
+import { getCleanDeviceList, CleanedDeviceOption } from "@/lib/media-devices";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Music, ArrowLeft } from "lucide-react";
 import { RoomIconButton } from "./MeetPrimitives";
@@ -33,8 +34,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
 
-  const [audioDevices, setAudioDevices] = useState<MediaDeviceInfo[]>([]);
-  const [videoDevices, setVideoDevices] = useState<MediaDeviceInfo[]>([]);
+  const [audioDevices, setAudioDevices] = useState<CleanedDeviceOption[]>([]);
+  const [videoDevices, setVideoDevices] = useState<CleanedDeviceOption[]>([]);
 
   const [selectedAudioDevice, setSelectedAudioDevice] = useState<string>("");
   const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>("");
@@ -103,10 +104,10 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
           videoRef.current.srcObject = initialStream;
         }
 
-        // Enumerate devices
-        const devices = await navigator.mediaDevices.enumerateDevices();
-        const mics = devices.filter((d) => d.kind === "audioinput");
-        const cams = devices.filter((d) => d.kind === "videoinput");
+        // Enumerate devices with clean, deduplicated, and friendly labels
+        const rawDevices = await navigator.mediaDevices.enumerateDevices();
+        const mics = getCleanDeviceList(rawDevices, "audioinput", "Default microphone");
+        const cams = getCleanDeviceList(rawDevices, "videoinput", "Default camera");
 
         setAudioDevices(mics);
         setVideoDevices(cams);
@@ -273,8 +274,40 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
             <div className="meet-preview-controls"><RoomIconButton label={isAudioMuted ? "Turn on microphone" : "Turn off microphone"} className={isAudioMuted ? "is-off" : ""} onClick={toggleAudio}>{isAudioMuted ? <MicOff/> : <Mic/>}</RoomIconButton><RoomIconButton label={isVideoMuted ? "Turn on camera" : "Turn off camera"} className={isVideoMuted ? "is-off" : ""} onClick={toggleVideo}>{isVideoMuted ? <VideoOff/> : <VideoIcon/>}</RoomIconButton></div>
           </div>
           <div className="meet-prejoin-devices">
-            <label><Mic size={18}/><select aria-label="Microphone" value={selectedAudioDevice} onChange={(event) => { setSelectedAudioDevice(event.target.value); void handleDeviceChange(event.target.value, selectedVideoDevice); }}><option value="">Default microphone</option>{audioDevices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Microphone ${index + 1}`}</option>)}</select></label>
-            <label><VideoIcon size={18}/><select aria-label="Camera" value={selectedVideoDevice} onChange={(event) => { setSelectedVideoDevice(event.target.value); void handleDeviceChange(selectedAudioDevice, event.target.value); }}><option value="">Default camera</option>{videoDevices.map((device, index) => <option key={device.deviceId} value={device.deviceId}>{device.label || `Camera ${index + 1}`}</option>)}</select></label>
+            <label>
+              <Mic size={18} />
+              <select
+                aria-label="Microphone"
+                value={selectedAudioDevice}
+                onChange={(event) => {
+                  setSelectedAudioDevice(event.target.value);
+                  void handleDeviceChange(event.target.value, selectedVideoDevice);
+                }}
+              >
+                {audioDevices.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <label>
+              <VideoIcon size={18} />
+              <select
+                aria-label="Camera"
+                value={selectedVideoDevice}
+                onChange={(event) => {
+                  setSelectedVideoDevice(event.target.value);
+                  void handleDeviceChange(selectedAudioDevice, event.target.value);
+                }}
+              >
+                {videoDevices.map((device) => (
+                  <option key={device.deviceId} value={device.deviceId}>
+                    {device.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           {stream && !isAudioMuted && <AudioLevelMeter stream={stream} className="mt-3"/>}
           {deviceError && <p className="meet-chat-warning mt-4" role="alert">{deviceError}</p>}
