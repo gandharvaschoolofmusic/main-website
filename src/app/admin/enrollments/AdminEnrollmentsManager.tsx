@@ -12,6 +12,7 @@ import {
   adminApproveAndAllotCourseAction,
   adminRecordEnrollmentPaymentAction,
 } from "@/actions/admin";
+import { adminRejectCourseRequestAction } from "@/actions/courses";
 import { useSearchParams, useRouter } from "next/navigation";
 import {
   Globe,
@@ -21,6 +22,7 @@ import {
   AlertCircle,
   Loader2,
   X,
+  XCircle,
   ChevronRight,
   ChevronDown,
   Search,
@@ -1010,6 +1012,42 @@ export function AdminEnrollmentsManager({
   };
 
   // ─── 0. APPROVE STUDENT COURSE REQUEST & ALLOT ─────────────────────
+  const [rejectingRequest, setRejectingRequest] = useState<AdminCourseEnrollmentRequestItem | null>(null);
+  const [rejectReason, setRejectReason] = useState("");
+
+  const handleOpenRejectModal = (req: AdminCourseEnrollmentRequestItem) => {
+    setRejectingRequest(req);
+    setRejectReason(allotNotes.trim());
+  };
+
+  const handleConfirmReject = () => {
+    if (!rejectingRequest) return;
+
+    startTransition(async () => {
+      const res = await adminRejectCourseRequestAction({
+        requestId: rejectingRequest.id,
+        reason: rejectReason.trim() || undefined,
+      });
+
+      if (res.success) {
+        showToast(
+          `Course admission request for "${rejectingRequest.courseTitle}" from ${rejectingRequest.studentName} has been rejected.`,
+          "success"
+        );
+        setCourseRequests((prev) =>
+          prev.map((r) =>
+            r.id === rejectingRequest.id ? { ...r, status: "REJECTED" } : r
+          )
+        );
+        setRejectingRequest(null);
+        setRejectReason("");
+        router.refresh();
+      } else {
+        showToast(res.error || "Failed to reject course request.", "error");
+      }
+    });
+  };
+
   const handleApproveRequest = (req: AdminCourseEnrollmentRequestItem) => {
     if (!currentStudent) return;
     const fee = allotFeeRupees > 0 ? allotFeeRupees : Math.round(req.coursePriceMinorUnits / 100);
@@ -1659,12 +1697,24 @@ export function AdminEnrollmentsManager({
                       <div className="pt-2 border-t border-neutral-100 flex items-center justify-between text-xs">
                         <span className="text-[11px] text-amber-700 font-semibold flex items-center gap-1">
                           <Clock className="w-3 h-3 text-amber-600 animate-pulse" />
-                          <span>Needs Allotment</span>
+                          <span>Needs Review</span>
                         </span>
-                        <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#3C096C] group-hover:translate-x-0.5 transition-transform">
-                          <span>Select &amp; Allot</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </span>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              handleOpenRejectModal(req);
+                            }}
+                            className="px-2 py-0.5 rounded-md text-[11px] font-semibold text-rose-700 bg-rose-50 hover:bg-rose-100 border border-rose-200 transition-colors"
+                          >
+                            Reject
+                          </button>
+                          <span className="inline-flex items-center gap-1 text-[11px] font-bold text-[#3C096C] group-hover:translate-x-0.5 transition-transform">
+                            <span>Review &amp; Allot</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -1992,10 +2042,22 @@ export function AdminEnrollmentsManager({
                             </div>
                           </div>
 
-                          <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold self-start sm:self-auto flex items-center gap-1">
-                            <Clock className="w-3 h-3 text-amber-600" />
-                            <span>Action Required: Approve Course</span>
-                          </span>
+                          <div className="flex items-center gap-2 self-start sm:self-auto">
+                            <span className="px-2.5 py-1 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold flex items-center gap-1">
+                              <Clock className="w-3 h-3 text-amber-600" />
+                              <span>Action Required: Review Request</span>
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRejectModal(req)}
+                              disabled={isPending}
+                              className="px-2.5 py-1 rounded-full border border-rose-300 bg-rose-50 hover:bg-rose-100 text-rose-700 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer shadow-2xs"
+                              title="Reject this course admission request"
+                            >
+                              <XCircle className="w-3 h-3 text-rose-600" />
+                              <span>Reject</span>
+                            </button>
+                          </div>
                         </div>
 
                         {/* Course Overview Pills */}
@@ -2107,24 +2169,36 @@ export function AdminEnrollmentsManager({
                               type="text"
                               value={allotNotes}
                               onChange={(e) => setAllotNotes(e.target.value)}
-                              placeholder="Admin approval notes or payment receipt details (optional)..."
+                              placeholder="Admin approval/rejection notes or payment receipt details (optional)..."
                               className="w-full px-3.5 py-2 rounded-xl border border-neutral-300 bg-white text-xs text-heading placeholder:text-body/40 focus:outline-none focus:border-[#3C096C]"
                             />
                           </div>
 
-                          <button
-                            type="button"
-                            onClick={() => handleApproveRequest(req)}
-                            disabled={isPending}
-                            className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs active:scale-95 disabled:opacity-50 transition-all cursor-pointer shrink-0"
-                          >
-                            {isPending ? (
-                              <Loader2 className="w-4 h-4 animate-spin text-white" />
-                            ) : (
-                              <CheckCircle2 className="w-4 h-4 text-white" />
-                            )}
-                            <span>Approve & Add Course</span>
-                          </button>
+                          <div className="flex items-center gap-2 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => handleOpenRejectModal(req)}
+                              disabled={isPending}
+                              className="inline-flex items-center justify-center gap-1.5 px-4 py-2.5 rounded-xl border border-rose-300 bg-white hover:bg-rose-50 text-rose-700 text-xs font-bold shadow-2xs active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                              <XCircle className="w-4 h-4 text-rose-600" />
+                              <span>Reject Request</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => handleApproveRequest(req)}
+                              disabled={isPending}
+                              className="inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs active:scale-95 disabled:opacity-50 transition-all cursor-pointer"
+                            >
+                              {isPending ? (
+                                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                              ) : (
+                                <CheckCircle2 className="w-4 h-4 text-white" />
+                              )}
+                              <span>Approve & Add Course</span>
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -3555,6 +3629,100 @@ export function AdminEnrollmentsManager({
                   <>
                     <Check className="w-3.5 h-3.5" />
                     <span>Confirm Reschedule</span>
+                  </>
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ─── REJECT COURSE ADMISSION REQUEST MODAL ─── */}
+      {rejectingRequest && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-xs animate-in fade-in duration-150">
+          <div className="w-full max-w-md rounded-2xl bg-white border border-neutral-200/90 shadow-2xl overflow-hidden animate-in zoom-in-95 duration-150 font-sans">
+            {/* Modal Header */}
+            <div className="px-5 py-4 border-b border-neutral-100 flex items-center justify-between">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-rose-100 text-rose-700 flex items-center justify-center shrink-0">
+                  <XCircle className="w-5 h-5 text-rose-600" />
+                </div>
+                <div>
+                  <h3 className="font-serif font-bold text-base text-heading">
+                    Reject Course Request
+                  </h3>
+                  <p className="text-xs text-body/60 mt-0.5">
+                    {rejectingRequest.studentName} • {rejectingRequest.courseTitle}
+                  </p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingRequest(null);
+                  setRejectReason("");
+                }}
+                className="p-1 rounded-lg text-body/60 hover:text-heading hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-5 space-y-4">
+              <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-200/80 text-xs space-y-1.5">
+                <div className="font-bold text-rose-950 flex items-center gap-1.5">
+                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0" />
+                  <span>Confirm admission request rejection</span>
+                </div>
+                <p className="text-rose-800/80 leading-relaxed">
+                  The admission request for <strong>{rejectingRequest.courseTitle}</strong> submitted by <strong>{rejectingRequest.studentName}</strong> will be marked as rejected. The student will receive a notification in their dashboard.
+                </p>
+              </div>
+
+              {/* Rejection Reason Textarea */}
+              <div className="space-y-1.5">
+                <label className="text-xs font-semibold text-heading block">
+                  Rejection Reason <span className="text-body/50 font-normal">(optional, shared with student)</span>
+                </label>
+                <textarea
+                  rows={3}
+                  value={rejectReason}
+                  onChange={(e) => setRejectReason(e.target.value)}
+                  placeholder="e.g. Schedule clash with requested time, batch full, or please reach out to academy admin..."
+                  className="w-full px-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs text-heading placeholder:text-body/40 focus:outline-none focus:border-rose-500 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-5 py-3.5 bg-neutral-50/80 border-t border-neutral-100 flex items-center justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  setRejectingRequest(null);
+                  setRejectReason("");
+                }}
+                disabled={isPending}
+                className="px-4 py-2 rounded-xl text-xs font-semibold text-body hover:text-heading hover:bg-neutral-100 transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReject}
+                disabled={isPending}
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1.5 cursor-pointer"
+              >
+                {isPending ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin text-white" />
+                    <span>Rejecting...</span>
+                  </>
+                ) : (
+                  <>
+                    <XCircle className="w-3.5 h-3.5 text-white" />
+                    <span>Confirm Rejection</span>
                   </>
                 )}
               </button>
