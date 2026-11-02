@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname, useRouter } from "next/navigation";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import {
   LayoutDashboard,
   Sparkles,
@@ -108,9 +108,17 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
   const pathname = usePathname();
   const router = useRouter();
   const [navigatingTo, setNavigatingTo] = useState<string | null>(null);
+  const activeMobileTabRef = useRef<HTMLAnchorElement | null>(null);
 
   useEffect(() => {
     setNavigatingTo(null);
+    if (activeMobileTabRef.current) {
+      activeMobileTabRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+        inline: "center",
+      });
+    }
   }, [pathname]);
 
   const isActive = (item: NavItem) => {
@@ -201,7 +209,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
       </aside>
 
       {/* Mobile Horizontal Navigation Header */}
-      <div className="md:hidden bg-primary text-white sticky top-16 z-40 shadow-md">
+      <div className="md:hidden bg-primary text-white shrink-0 z-30 shadow-xs border-b border-white/10">
         <div className="flex items-center justify-between px-4 py-2.5">
           <Link href="/admin" className="flex items-center text-sm font-serif font-bold text-white tracking-wide">
             Gandharva
@@ -216,8 +224,8 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
           </div>
         </div>
 
-        {/* Scrollable Tabs */}
-        <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar">
+        {/* Scrollable Tabs with auto-centering and indicator */}
+        <div className="flex items-center gap-1.5 px-3 py-2 overflow-x-auto no-scrollbar scroll-smooth overscroll-x-contain">
           {navItems.map((item) => {
             const active = isActive(item);
             const Icon = item.icon;
@@ -225,17 +233,21 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
             return (
               <Link
                 key={item.name}
+                ref={active ? activeMobileTabRef : undefined}
                 href={item.href}
                 prefetch={true}
                 onClick={() => setNavigatingTo(item.href)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all ${
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs whitespace-nowrap transition-all shrink-0 ${
                   active
-                    ? "bg-white/15 text-white font-bold"
-                    : "text-white/70 hover:text-white hover:bg-white/5"
+                    ? "bg-white/20 text-white font-bold shadow-2xs ring-1 ring-white/20"
+                    : "text-white/70 hover:text-white hover:bg-white/5 font-medium"
                 }`}
               >
-                <Icon className="w-3.5 h-3.5" />
+                <Icon className={`w-3.5 h-3.5 ${active ? "text-[#FF9E40]" : "text-white/70"}`} />
                 <span>{item.name}</span>
+                {active && (
+                  <span className="w-1.5 h-1.5 rounded-full bg-[#FF7803] shrink-0" />
+                )}
               </Link>
             );
           })}

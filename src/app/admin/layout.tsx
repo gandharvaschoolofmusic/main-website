@@ -26,14 +26,14 @@ export default async function AdminPortalLayout({
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100vh-4rem)] max-h-[calc(100vh-4rem)] overflow-hidden bg-[#F8F7FC] text-heading font-sans antialiased">
+    <div className="flex flex-col md:flex-row h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden bg-[#F8F7FC] text-heading font-sans antialiased">
       <AdminSidebar
         currentUser={{
           name: user.name || "Administrator",
           email: user.email,
         }}
       />
-      <main className="flex-1 h-full overflow-y-auto px-4 py-6 md:px-8 md:py-7 min-w-0 main-scroll">
+      <main className="flex-1 min-h-0 overflow-y-auto px-3.5 py-4 sm:px-6 sm:py-6 md:px-8 md:py-7 min-w-0 main-scroll">
         <div className="max-w-[1560px] mx-auto pb-12">{children}</div>
       </main>
     </div>

@@ -147,9 +147,9 @@ export default async function AdminCoursesPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-4 sm:space-y-6 pt-1 sm:pt-0">
       <div>
-        <span className="text-[10px] font-bold uppercase tracking-wider text-accent font-sans">
+        <span className="text-[10px] font-bold uppercase tracking-wider text-accent font-sans block mb-1">
           Academy Curriculum
         </span>
         <SplitHeading

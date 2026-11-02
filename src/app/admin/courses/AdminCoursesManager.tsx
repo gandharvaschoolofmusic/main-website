@@ -934,11 +934,11 @@ export function AdminCoursesManager({
         {/* Top Controls Row: Discipline Filters, Search, Create Button */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Filter Pills: All, Instruments, Singing */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 shrink-0">
             <button
               type="button"
               onClick={() => setDisciplineTab("ALL")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "ALL"
                   ? "bg-[#3C096C] text-white shadow-xs"
                   : "text-gray-600 hover:text-black hover:bg-slate-100"
@@ -957,7 +957,7 @@ export function AdminCoursesManager({
             <button
               type="button"
               onClick={() => setDisciplineTab("INSTRUMENTS")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "INSTRUMENTS"
                   ? "bg-[#3C096C] text-white shadow-xs"
                   : "text-gray-600 hover:text-black hover:bg-slate-100"
@@ -979,7 +979,7 @@ export function AdminCoursesManager({
             <button
               type="button"
               onClick={() => setDisciplineTab("SINGING")}
-              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "SINGING"
                   ? "bg-[#3C096C] text-white shadow-xs"
                   : "text-gray-600 hover:text-black hover:bg-slate-100"
@@ -1000,7 +1000,7 @@ export function AdminCoursesManager({
           </div>
 
           {/* Right side: Search bar & Create Course button */}
-          <div className="flex items-center gap-2 flex-1 lg:flex-initial">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 w-full lg:w-auto">
             <div className="relative flex-1 lg:w-64">
               <Search className="w-3.5 h-3.5 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
               <input
@@ -1024,7 +1024,7 @@ export function AdminCoursesManager({
             <button
               type="button"
               onClick={() => openCreateModal()}
-              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs transition-all shrink-0 active:scale-[0.98] cursor-pointer"
+              className="inline-flex items-center justify-center gap-1.5 px-4 py-2 sm:py-2 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold shadow-xs transition-all shrink-0 active:scale-[0.98] cursor-pointer"
             >
               <Plus className="w-3.5 h-3.5" />
               <span>Create Course Curriculum</span>
@@ -1035,93 +1035,97 @@ export function AdminCoursesManager({
         {/* Level Filters & Publication Status Filters */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pt-2.5 border-t border-slate-100 text-xs">
           {/* Level Filters: All Levels, Foundation, Beginner, Intermediate, Advanced */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted mr-1">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-body-muted shrink-0">
               Proficiency Level:
             </span>
-            {(["ALL", "FOUNDATION", "BEGINNER", "INTERMEDIATE", "ADVANCED"] as const).map((lvl) => {
-              const count = lvl === "ALL"
-                ? courses.filter((c) => {
-                    if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
-                    if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
-                    return true;
-                  }).length
-                : courses.filter((c) => {
-                    if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
-                    if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
-                    return String(c.level).toUpperCase() === lvl;
-                  }).length;
-              const label = lvl === "ALL" ? "All Levels" : lvl.charAt(0) + lvl.slice(1).toLowerCase();
-              const isActive = levelFilter === lvl;
-              return (
-                <button
-                  key={lvl}
-                  type="button"
-                  onClick={() => setLevelFilter(lvl as any)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
-                    isActive
-                      ? "bg-accent text-white shadow-xs"
-                      : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
-                  }`}
-                >
-                  <span>{label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
-                      isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 sm:flex-wrap">
+              {(["ALL", "FOUNDATION", "BEGINNER", "INTERMEDIATE", "ADVANCED"] as const).map((lvl) => {
+                const count = lvl === "ALL"
+                  ? courses.filter((c) => {
+                      if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
+                      if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                      return true;
+                    }).length
+                  : courses.filter((c) => {
+                      if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
+                      if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                      return String(c.level).toUpperCase() === lvl;
+                    }).length;
+                const label = lvl === "ALL" ? "All Levels" : lvl.charAt(0) + lvl.slice(1).toLowerCase();
+                const isActive = levelFilter === lvl;
+                return (
+                  <button
+                    key={lvl}
+                    type="button"
+                    onClick={() => setLevelFilter(lvl as any)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
+                      isActive
+                        ? "bg-accent text-white shadow-xs"
+                        : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
                     }`}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    <span>{label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
 
           {/* Status Filters: All Statuses, Published, Draft */}
-          <div className="flex items-center gap-1.5 flex-wrap">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-body-muted mr-1">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-1.5 sm:gap-2">
+            <span className="text-[10px] sm:text-[11px] font-bold uppercase tracking-wider text-body-muted shrink-0">
               Catalog Status:
             </span>
-            {(["ALL", "PUBLISHED", "DRAFT"] as const).map((st) => {
-              const count = st === "ALL"
-                ? courses.length
-                : st === "PUBLISHED"
-                ? courses.filter((c) => c.isPublished).length
-                : courses.filter((c) => !c.isPublished).length;
-              const label = st === "ALL" ? "All" : st === "PUBLISHED" ? "Published" : "Draft";
-              const isActive = publicationFilter === st;
-              return (
-                <button
-                  key={st}
-                  type="button"
-                  onClick={() => setPublicationFilter(st)}
-                  className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-[0.98] ${
-                    isActive
-                      ? st === "PUBLISHED"
-                        ? "bg-emerald-600 text-white shadow-xs"
-                        : st === "DRAFT"
-                        ? "bg-amber-600 text-white shadow-xs"
-                        : "bg-[#3C096C] text-white shadow-xs"
-                      : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
-                  }`}
-                >
-                  {st === "PUBLISHED" && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
-                  )}
-                  {st === "DRAFT" && (
-                    <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
-                  )}
-                  <span>{label}</span>
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
-                      isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 sm:flex-wrap">
+              {(["ALL", "PUBLISHED", "DRAFT"] as const).map((st) => {
+                const count = st === "ALL"
+                  ? courses.length
+                  : st === "PUBLISHED"
+                  ? courses.filter((c) => c.isPublished).length
+                  : courses.filter((c) => !c.isPublished).length;
+                const label = st === "ALL" ? "All" : st === "PUBLISHED" ? "Published" : "Draft";
+                const isActive = publicationFilter === st;
+                return (
+                  <button
+                    key={st}
+                    type="button"
+                    onClick={() => setPublicationFilter(st)}
+                    className={`px-3 py-1 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
+                      isActive
+                        ? st === "PUBLISHED"
+                          ? "bg-emerald-600 text-white shadow-xs"
+                          : st === "DRAFT"
+                          ? "bg-amber-600 text-white shadow-xs"
+                          : "bg-[#3C096C] text-white shadow-xs"
+                        : "text-body hover:text-heading hover:bg-bg-alt/50 border border-slate-200/80 bg-white"
                     }`}
                   >
-                    {count}
-                  </span>
-                </button>
-              );
-            })}
+                    {st === "PUBLISHED" && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-300 animate-pulse" />
+                    )}
+                    {st === "DRAFT" && (
+                      <span className="w-1.5 h-1.5 rounded-full bg-amber-300" />
+                    )}
+                    <span>{label}</span>
+                    <span
+                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                        isActive ? "bg-white/20 text-white" : "bg-slate-100 text-slate-600"
+                      }`}
+                    >
+                      {count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </div>
       </div>
@@ -1206,8 +1210,12 @@ export function AdminCoursesManager({
                         {c.level}
                       </span>
                       {c.accreditation && (
-                        <span className="px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                          <Award className="w-3 h-3 text-amber-600" /> {c.accreditation}
+                        <span
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-semibold bg-amber-50 text-amber-800 border border-amber-200 max-w-[260px] sm:max-w-xs"
+                          title={c.accreditation}
+                        >
+                          <Award className="w-3 h-3 text-amber-600 shrink-0" />
+                          <span className="truncate">{c.accreditation}</span>
                         </span>
                       )}
                     </div>
