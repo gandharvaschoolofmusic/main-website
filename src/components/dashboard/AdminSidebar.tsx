@@ -189,7 +189,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
     <>
       {/* ── Persistent Left Sidebar for Tablets, Laptops & Desktops (>= 640px) ── */}
       <aside
-        className={`hidden sm:flex flex-col shrink-0 bg-gradient-to-b from-[#2B054D] via-[#240442] to-[#1D0235] text-white h-full max-h-[calc(100vh-4rem)] p-3 space-y-2 shadow-xl border-r border-white/10 z-40 select-none overflow-hidden transition-all duration-200 ease-in-out ${
+        className={`hidden sm:flex flex-col shrink-0 bg-gradient-to-b from-[#2B054D] via-[#240442] to-[#1D0235] text-white h-full max-h-[calc(100vh-4rem)] p-3 space-y-2 shadow-xl z-40 select-none overflow-hidden transition-all duration-200 ease-in-out ${
           isCollapsed ? "w-16" : "w-56 lg:w-60"
         }`}
       >
@@ -201,7 +201,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                 <span className="font-serif font-bold text-sm tracking-wide text-white truncate">
                   Gandharva
                 </span>
-                <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/10 shrink-0">
+                <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-[#FFA751] shrink-0">
                   Admin
                 </span>
               </div>
@@ -245,7 +245,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                   isCollapsed ? "justify-center p-2.5" : "gap-3 px-3 py-2.5"
                 } ${
                   active
-                    ? "bg-white/15 text-white font-semibold backdrop-blur-md border border-white/12 shadow-[inset_0_1px_1px_rgba(255,255,255,0.15)]"
+                    ? "bg-white/15 text-white font-semibold shadow-xs"
                     : "text-white/70 hover:text-white hover:bg-white/6 font-medium"
                 }`}
               >
@@ -266,12 +266,12 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
           })}
         </nav>
 
-        {/* User Card at Bottom */}
+        {/* User Card at Bottom without any white line borders */}
         <div className="pt-2">
           {!isCollapsed ? (
-            <div className="p-2.5 rounded-2xl bg-white/8 hover:bg-white/12 border border-white/10 backdrop-blur-md flex items-center justify-between gap-2.5 shadow-xs transition-all">
+            <div className="p-2.5 rounded-2xl bg-black/25 hover:bg-black/35 flex items-center justify-between gap-2.5 shadow-xs transition-all">
               <div className="flex items-center gap-2.5 min-w-0">
-                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-white/20 shadow-inner">
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-inner">
                   {initials}
                 </div>
                 <div className="min-w-0 flex-1">
@@ -297,7 +297,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
             <div className="flex flex-col items-center gap-2 py-1">
               <div
                 title={`${displayName} (${displayEmail})`}
-                className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs ring-1 ring-white/20 shadow-inner cursor-default"
+                className="w-8 h-8 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs shadow-inner cursor-default"
               >
                 {initials}
               </div>
@@ -316,12 +316,12 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
       </aside>
 
       {/* ── Mobile Top Bar with Left Drawer Trigger (< 640px) ── */}
-      <div className="sm:hidden sticky top-16 z-30 bg-[#2B054D]/95 backdrop-blur-xl shrink-0 shadow-xs border-b border-white/10 px-4 py-2.5 flex items-center justify-between">
+      <div className="sm:hidden sticky top-16 z-30 bg-primary text-white shrink-0 shadow-xs px-4 py-2.5 flex items-center justify-between">
         <button
           type="button"
           onClick={() => setIsMobileDrawerOpen(true)}
           aria-label="Open navigation menu"
-          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 border border-white/10 text-white font-medium text-xs transition-all shadow-xs cursor-pointer"
+          className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/10 hover:bg-white/15 active:scale-95 text-white font-medium text-xs transition-all shadow-xs cursor-pointer"
         >
           <Menu className="w-4 h-4 text-[#FFA751]" />
           <span className="font-semibold tracking-tight truncate max-w-[150px]">
@@ -329,10 +329,10 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
           </span>
         </button>
         <div className="flex items-center gap-2">
-          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/10">
+          <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-[#FFA751]">
             Admin
           </span>
-          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-[10px] ring-1 ring-white/20">
+          <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-[10px]">
             {initials}
           </div>
         </div>
@@ -340,22 +340,22 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
 
       {/* ── Mobile Left Slide-out Drawer (< 640px) ── */}
       {isMobileDrawerOpen && (
-        <div className="sm:hidden fixed inset-0 z-50 flex">
+        <div className="sm:hidden fixed inset-0 z-[70] flex">
           {/* Backdrop with smooth Apple blur */}
           <div
-            className="fixed inset-0 bg-black/50 backdrop-blur-xs transition-opacity duration-300"
+            className="fixed inset-0 z-[65] bg-black/60 backdrop-blur-xs transition-opacity duration-300"
             onClick={() => setIsMobileDrawerOpen(false)}
           />
 
           {/* Drawer content sliding in from the LEFT with Apple frosted glass & rounded right corner */}
-          <aside className="relative flex flex-col w-[300px] max-w-[85vw] bg-[#2B054D]/92 backdrop-blur-2xl backdrop-saturate-150 text-white h-full p-4 pt-5 pb-6 space-y-3 shadow-[0_20px_50px_rgba(0,0,0,0.5)] border-r border-white/15 rounded-r-3xl z-50 select-none overflow-hidden animate-in slide-in-from-left duration-300 ease-out">
-            {/* Drawer Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-white/10 px-1">
+          <aside className="relative z-[70] flex flex-col w-[290px] max-w-[82vw] h-[100dvh] max-h-[100dvh] bg-gradient-to-b from-[#2B054D] via-[#240442] to-[#1C0233] text-white p-4 pt-[max(1rem,env(safe-area-inset-top))] pb-[max(1.25rem,env(safe-area-inset-bottom))] space-y-3 shadow-2xl rounded-r-3xl select-none overflow-hidden animate-in slide-in-from-left duration-300 ease-out">
+            {/* Drawer Header without any white border lines */}
+            <div className="flex items-center justify-between pb-2 px-1">
               <div className="flex items-center gap-2.5">
                 <span className="font-serif font-bold text-base tracking-tight text-white">
                   Gandharva
                 </span>
-                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 backdrop-blur-md text-[#FFA751] border border-white/12">
+                <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-[#FFA751]">
                   Admin
                 </span>
               </div>
@@ -363,14 +363,14 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                 type="button"
                 onClick={() => setIsMobileDrawerOpen(false)}
                 aria-label="Close navigation menu"
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white/80 hover:text-white transition-all border border-white/10 cursor-pointer"
+                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white/80 hover:text-white transition-all cursor-pointer"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Drawer Nav Items */}
-            <nav className="space-y-1 flex-1 overflow-y-auto pr-1 text-xs py-1 sidebar-scroll">
+            <nav className="space-y-1 flex-1 min-h-0 overflow-y-auto pr-1 text-xs py-1 overscroll-contain sidebar-scroll">
               {navItems.map((item) => {
                 const active = isActive(item);
                 const Icon = item.icon;
@@ -386,7 +386,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                     }}
                     className={`flex items-center gap-3 px-3.5 py-2.5 rounded-xl text-xs font-medium transition-all active:scale-[0.98] ${
                       active
-                        ? "bg-white/15 text-white font-semibold backdrop-blur-md border border-white/15 shadow-[inset_0_1px_1px_rgba(255,255,255,0.2),0_2px_8px_rgba(0,0,0,0.12)]"
+                        ? "bg-white/15 text-white font-semibold shadow-xs"
                         : "text-white/70 hover:text-white hover:bg-white/6"
                     }`}
                   >
@@ -404,11 +404,11 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
               })}
             </nav>
 
-            {/* Drawer User Card */}
-            <div className="pt-2 border-t border-white/10">
-              <div className="p-2.5 rounded-2xl bg-white/8 hover:bg-white/12 border border-white/10 backdrop-blur-md flex items-center justify-between gap-3 shadow-xs">
+            {/* Drawer User Card without any white line borders */}
+            <div className="pt-2">
+              <div className="p-2.5 rounded-2xl bg-black/25 hover:bg-black/35 flex items-center justify-between gap-3 shadow-xs">
                 <div className="flex items-center gap-3 min-w-0">
-                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs shrink-0 ring-1 ring-white/20 shadow-inner">
+                  <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-xs shrink-0 shadow-inner">
                     {initials}
                   </div>
                   <div className="min-w-0 flex-1">
@@ -424,7 +424,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                   <button
                     type="submit"
                     title="Sign Out"
-                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white/70 hover:text-white transition-all border border-white/10 cursor-pointer"
+                    className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 active:scale-90 flex items-center justify-center text-white/70 hover:text-white transition-all cursor-pointer"
                   >
                     <LogOut className="w-3.5 h-3.5" />
                   </button>
