@@ -26,7 +26,7 @@ export default async function AdminPortalLayout({
   }
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden bg-[#F8F7FC] text-heading font-sans antialiased">
+    <div className="flex flex-col sm:flex-row h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden bg-[#F8F7FC] text-heading font-sans antialiased">
       <AdminSidebar
         currentUser={{
           name: user.name || "Administrator",
