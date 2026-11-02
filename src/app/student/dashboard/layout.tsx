@@ -74,7 +74,7 @@ export default async function StudentDashboardLayout({
   );
 
   return (
-    <div className="flex flex-col md:flex-row min-h-[calc(100vh-4rem)] bg-gradient-to-b from-bg via-bg-alt/15 to-bg text-heading">
+    <div className="flex flex-col sm:flex-row min-h-[calc(100vh-4rem)] bg-gradient-to-b from-bg via-bg-alt/15 to-bg text-heading">
       <DashboardSidebar
         user={{
           name: user.name || "Student",
