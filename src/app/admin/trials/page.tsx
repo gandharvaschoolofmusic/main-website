@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, TrialRequestStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import {
   AdminTrialsManager,
   AdminTrialRequestItem,
@@ -18,7 +19,8 @@ export const metadata = {
 
 const getCachedAdminTrialsData = unstable_cache(
   async () => {
-    const [dbRequests, dbTeachers, dbCourses] = await Promise.all([
+    return getResilientData("admin-trials-v3", async () => {
+      const [dbRequests, dbTeachers, dbCourses] = await Promise.all([
       db.trialRequest.findMany({
         include: {
           student: {
@@ -187,8 +189,9 @@ const getCachedAdminTrialsData = unstable_cache(
       courses,
       initialKpis,
     };
+    });
   },
-  ["admin-trials-data-v2"],
+  ["admin-trials-data-v3"],
   { revalidate: 30, tags: ["admin-trials", "trials"] }
 );
 
@@ -215,6 +218,16 @@ export default async function AdminTrialsPage() {
     data = await getCachedAdminTrialsData();
   } catch (err) {
     console.error("[AdminTrialsPage] Failed to load cached trials data, using fallback:", err);
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v3");
+    if (fallback) data = fallback;
+  }
+
+  // Safety net: if formattedRequests is empty, check resilient cache for last known good data
+  if (!data.formattedRequests || data.formattedRequests.length === 0) {
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v3");
+    if (fallback && fallback.formattedRequests.length > 0) {
+      data = fallback;
+    }
   }
 
   return (

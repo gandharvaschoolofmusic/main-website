@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, LessonStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { formatInViewerTimezone } from "@/lib/timezone";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
 import { calculateLessonPayoutMinor, getPayoutTierInfo } from "@/lib/teacher-payout";
@@ -19,7 +20,8 @@ export const metadata = {
 
 const getCachedAdminTeacherPaymentsData = unstable_cache(
   async (adminTimezone: string) => {
-    const lessons = await db.lesson.findMany({
+    return getResilientData(`admin-teacher-payments-${adminTimezone}`, async () => {
+      const lessons = await db.lesson.findMany({
       where: {
         status: LessonStatus.COMPLETED,
       },
@@ -96,8 +98,9 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
     });
 
     return formattedSessions;
+    });
   },
-  ["admin-teacher-payments-data-v1"],
+  ["admin-teacher-payments-data-v2"],
   { revalidate: 30, tags: ["admin-teacher-payments", "teacher-payments"] }
 );
 
@@ -110,6 +113,13 @@ export default async function AdminTeacherPaymentsPage() {
     formattedSessions = await getCachedAdminTeacherPaymentsData(adminTimezone);
   } catch (err) {
     console.error("[AdminTeacherPaymentsPage] Failed to load cached teacher payments, using fallback:", err);
+  }
+
+  if (formattedSessions.length === 0) {
+    const fallback = getLastKnownGood<AdminSessionPayoutItem[]>(`admin-teacher-payments-${adminTimezone}`);
+    if (fallback && fallback.length > 0) {
+      formattedSessions = fallback;
+    }
   }
 
   return (

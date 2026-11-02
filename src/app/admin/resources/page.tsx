@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { isStorageConfigured } from "@/lib/supabase-storage";
 import { AdminResourcesClient, AdminResourceItem } from "./AdminResourcesClient";
 import type { AllottedStudentOption } from "@/actions/resources";
@@ -14,8 +15,9 @@ export const metadata = {
 
 const getCachedAdminResourcesData = unstable_cache(
   async () => {
-    // Run all fetches in parallel using direct db queries (never call auth() inside cache scope)
-    const [resources, enrollments, studentsList] = await Promise.all([
+    return getResilientData("admin-resources-v3", async () => {
+      // Run all fetches in parallel using direct db queries (never call auth() inside cache scope)
+      const [resources, enrollments, studentsList] = await Promise.all([
       db.resource.findMany({
         orderBy: { createdAt: "desc" },
         include: {
@@ -154,8 +156,9 @@ const getCachedAdminResourcesData = unstable_cache(
       allStudents,
       isDriveReady,
     };
+    });
   },
-  ["admin-resources-data-v2"],
+  ["admin-resources-data-v3"],
   { revalidate: 30, tags: ["admin-resources", "resources"] }
 );
 
@@ -172,6 +175,13 @@ export default async function AdminResourcesPage() {
     data = await getCachedAdminResourcesData();
   } catch (err) {
     console.error("[AdminResourcesPage] Failed to load cached resources data, using fallback:", err);
+  }
+
+  if (data.formattedResources.length === 0 && data.allStudents.length === 0) {
+    const fallback = getLastKnownGood<typeof data>("admin-resources-v3");
+    if (fallback && (fallback.formattedResources?.length > 0 || fallback.allStudents?.length > 0)) {
+      data = fallback;
+    }
   }
 
   return (

@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { formatInViewerTimezone } from "@/lib/timezone";
 import {
   OverallPaymentsManager,
@@ -18,7 +19,8 @@ export const metadata = {
 
 const getCachedAdminPaymentsData = unstable_cache(
   async (adminTimezone: string) => {
-    const [payments, courses] = await Promise.all([
+    return getResilientData(`admin-payments-${adminTimezone}`, async () => {
+      const [payments, courses] = await Promise.all([
       db.payment.findMany({
         include: {
           student: {
@@ -133,8 +135,9 @@ const getCachedAdminPaymentsData = unstable_cache(
       formattedPayments,
       courseOptions,
     };
+    });
   },
-  ["admin-payments-data-v1"],
+  ["admin-payments-data-v2"],
   { revalidate: 30, tags: ["admin-payments", "payments"] }
 );
 
@@ -151,6 +154,16 @@ export default async function AdminOverallPaymentsPage() {
     data = await getCachedAdminPaymentsData(adminTimezone);
   } catch (err) {
     console.error("[AdminOverallPaymentsPage] Failed to load cached payments data, using fallback:", err);
+    const fallback = getLastKnownGood<typeof data>(`admin-payments-${adminTimezone}`);
+    if (fallback) data = fallback;
+  }
+
+  // Safety net: if formattedPayments is empty, check resilient cache for last known good data
+  if (!data.formattedPayments || data.formattedPayments.length === 0) {
+    const fallback = getLastKnownGood<typeof data>(`admin-payments-${adminTimezone}`);
+    if (fallback && fallback.formattedPayments.length > 0) {
+      data = fallback;
+    }
   }
 
   return (

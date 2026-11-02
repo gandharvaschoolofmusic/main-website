@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, LessonSource } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminLessonsManager, AdminLessonItem } from "./AdminLessonsManager";
 import { formatInViewerTimezone } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
@@ -14,52 +15,54 @@ export const metadata = {
 
 const getCachedAdminLessonsData = unstable_cache(
   async (adminTimezone: string = "Asia/Kolkata") => {
-    const dbLessons = await db.lesson.findMany({
-      include: {
-        teacher: { select: { name: true, email: true } },
-        student: { select: { name: true, email: true } },
-        enrollment: {
-          select: {
-            id: true,
-            course: {
-              select: { id: true, title: true, instrument: true },
+    return getResilientData(`admin-lessons-${adminTimezone}`, async () => {
+      const dbLessons = await db.lesson.findMany({
+        include: {
+          teacher: { select: { name: true, email: true } },
+          student: { select: { name: true, email: true } },
+          enrollment: {
+            select: {
+              id: true,
+              course: {
+                select: { id: true, title: true, instrument: true },
+              },
             },
           },
         },
-      },
-      orderBy: [
-        { startsAt: "asc" },
-      ],
+        orderBy: [
+          { startsAt: "asc" },
+        ],
+      });
+
+      const formattedLessons: AdminLessonItem[] = dbLessons.map((l) => ({
+        id: l.id,
+        trackingCode: getLessonTrackingId(l),
+        startsAt: l.startsAt.toISOString(),
+        createdAt: l.createdAt.toISOString(),
+        formattedTime: formatInViewerTimezone(
+          l.startsAt,
+          adminTimezone,
+          "MMM d, yyyy 'at' h:mm a zzz",
+        ),
+        formattedCreatedDate: formatInViewerTimezone(
+          l.createdAt,
+          adminTimezone,
+          "MMM d, yyyy",
+        ),
+        durationMinutes: l.durationMinutes,
+        instrument: l.instrument,
+        courseTitle: l.enrollment?.course?.title || null,
+        status: l.status,
+        lessonSource: l.lessonSource || (l.enrollmentId ? LessonSource.ENROLLMENT : LessonSource.TRIAL),
+        teacherName: l.teacher?.name || "Teacher",
+        studentName: l.student?.name || "Student",
+        studentEmail: l.student?.email || "",
+      }));
+
+      return formattedLessons;
     });
-
-    const formattedLessons: AdminLessonItem[] = dbLessons.map((l) => ({
-      id: l.id,
-      trackingCode: getLessonTrackingId(l),
-      startsAt: l.startsAt.toISOString(),
-      createdAt: l.createdAt.toISOString(),
-      formattedTime: formatInViewerTimezone(
-        l.startsAt,
-        adminTimezone,
-        "MMM d, yyyy 'at' h:mm a zzz",
-      ),
-      formattedCreatedDate: formatInViewerTimezone(
-        l.createdAt,
-        adminTimezone,
-        "MMM d, yyyy",
-      ),
-      durationMinutes: l.durationMinutes,
-      instrument: l.instrument,
-      courseTitle: l.enrollment?.course?.title || null,
-      status: l.status,
-      lessonSource: l.lessonSource || (l.enrollmentId ? LessonSource.ENROLLMENT : LessonSource.TRIAL),
-      teacherName: l.teacher?.name || "Teacher",
-      studentName: l.student?.name || "Student",
-      studentEmail: l.student?.email || "",
-    }));
-
-    return formattedLessons;
   },
-  ["admin-lessons-data-v2"],
+  ["admin-lessons-data-v3"],
   { revalidate: 30, tags: ["admin-lessons", "lessons"] }
 );
 
@@ -72,6 +75,13 @@ export default async function AdminLessonsPage() {
     formattedLessons = await getCachedAdminLessonsData(adminTimezone);
   } catch (err) {
     console.error("[AdminLessonsPage] Failed to load cached lessons data, using fallback:", err);
+  }
+
+  if (formattedLessons.length === 0) {
+    const fallback = getLastKnownGood<AdminLessonItem[]>(`admin-lessons-${adminTimezone}`);
+    if (fallback && fallback.length > 0) {
+      formattedLessons = fallback;
+    }
   }
 
   return (

@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminUsersManager, AdminUserData } from "./AdminUsersManager";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
@@ -12,7 +13,8 @@ export const metadata = {
 
 const getCachedAdminUsersData = unstable_cache(
   async () => {
-    const dbUsers = await db.user.findMany({
+    return getResilientData("admin-users-v2", async () => {
+      const dbUsers = await db.user.findMany({
       include: {
         trialStatus: true,
         teacherProfile: {
@@ -64,8 +66,9 @@ const getCachedAdminUsersData = unstable_cache(
     }));
 
     return formattedUsers;
+    });
   },
-  ["admin-users-data-v1"],
+  ["admin-users-data-v2"],
   { revalidate: 30, tags: ["admin-users", "users"] }
 );
 
@@ -77,6 +80,16 @@ export default async function AdminUsersPage() {
     formattedUsers = await getCachedAdminUsersData();
   } catch (err) {
     console.error("[AdminUsersPage] Failed to load cached users data, using fallback:", err);
+    const fallback = getLastKnownGood<AdminUserData[]>("admin-users-v2");
+    if (fallback) formattedUsers = fallback;
+  }
+
+  // Safety net: if formattedUsers is empty, check resilient cache for last known good data
+  if (!formattedUsers || formattedUsers.length === 0) {
+    const fallback = getLastKnownGood<AdminUserData[]>("admin-users-v2");
+    if (fallback && fallback.length > 0) {
+      formattedUsers = fallback;
+    }
   }
 
   return (

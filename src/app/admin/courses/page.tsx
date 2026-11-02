@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminCoursesManager, AdminCourseItem } from "./AdminCoursesManager";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
@@ -12,7 +13,8 @@ export const metadata = {
 
 const getCachedAdminCoursesData = unstable_cache(
   async () => {
-    const [dbCourses, dbTeachers] = await Promise.all([
+    return getResilientData("admin-courses-v2", async () => {
+      const [dbCourses, dbTeachers] = await Promise.all([
       db.course.findMany({
         include: {
           _count: {
@@ -114,8 +116,9 @@ const getCachedAdminCoursesData = unstable_cache(
       formattedCourses,
       formattedTeachers,
     };
+    });
   },
-  ["admin-courses-data-v1"],
+  ["admin-courses-data-v2"],
   { revalidate: 30, tags: ["admin-courses", "courses"] }
 );
 
@@ -131,6 +134,16 @@ export default async function AdminCoursesPage() {
     data = await getCachedAdminCoursesData();
   } catch (err) {
     console.error("[AdminCoursesPage] Failed to load cached courses data, using fallback:", err);
+    const fallback = getLastKnownGood<typeof data>("admin-courses-v2");
+    if (fallback) data = fallback;
+  }
+
+  // Safety net: if formattedCourses is empty, check resilient cache for last known good data
+  if (!data.formattedCourses || data.formattedCourses.length === 0) {
+    const fallback = getLastKnownGood<typeof data>("admin-courses-v2");
+    if (fallback && fallback.formattedCourses.length > 0) {
+      data = fallback;
+    }
   }
 
   return (

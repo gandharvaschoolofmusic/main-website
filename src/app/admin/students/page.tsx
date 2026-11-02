@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, LessonStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import {
   AdminStudentsManager,
   StudentRecord,
@@ -15,6 +16,7 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
+    return getResilientData("admin-students-v4", async () => {
     // 0. Auto-conclude scheduled lessons whose scheduled time has elapsed (> 30 mins ago)
     const now = new Date();
     try {
@@ -273,8 +275,9 @@ const getCachedAdminStudentsData = unstable_cache(
       courseOptions,
       teacherOptions,
     };
+    });
   },
-  ["admin-students-data-v3"],
+  ["admin-students-data-v4"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
@@ -291,6 +294,16 @@ export default async function AdminStudentsPage() {
     data = await getCachedAdminStudentsData();
   } catch (err) {
     console.error("[AdminStudentsPage] Failed to load cached students data, using fallback:", err);
+    const fallback = getLastKnownGood<typeof data>("admin-students-v4");
+    if (fallback) data = fallback;
+  }
+
+  // Safety net: if formattedStudents is empty, check resilient cache for last known good data
+  if (!data.formattedStudents || data.formattedStudents.length === 0) {
+    const fallback = getLastKnownGood<typeof data>("admin-students-v4");
+    if (fallback && fallback.formattedStudents.length > 0) {
+      data = fallback;
+    }
   }
 
   return (

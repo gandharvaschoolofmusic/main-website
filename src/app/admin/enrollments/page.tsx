@@ -3,6 +3,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import {
   AdminEnrollmentsManager,
   EnrollmentRecord,
@@ -20,16 +21,9 @@ export const metadata = {
 
 const getCachedAdminEnrollmentsData = unstable_cache(
   async () => {
-    let dbCourses: any[] = [];
-    let dbTeachers: any[] = [];
-    let dbStudents: any[] = [];
-    let dbTrialLeads: any[] = [];
-    let dbEnrollments: any[] = [];
-    let dbCourseRequests: any[] = [];
-
-    try {
+    return getResilientData("admin-enrollments-v4", async () => {
       // Run ALL queries in parallel — cuts total time from sum(all) to max(slowest)
-      [dbCourses, dbTeachers, dbStudents, dbTrialLeads, dbEnrollments, dbCourseRequests] =
+      const [dbCourses, dbTeachers, dbStudents, dbTrialLeads, dbEnrollments, dbCourseRequests] =
         await Promise.all([
         // 1. Fetch catalog
         db.course.findMany({
@@ -194,9 +188,6 @@ const getCachedAdminEnrollmentsData = unstable_cache(
           orderBy: { createdAt: "desc" },
         }),
       ]);
-  } catch (error) {
-    console.error("[AdminEnrollmentsPage] Error querying PostgreSQL:", error);
-  }
 
   const teacherMap = new Map<string, { name: string; payoutRupees: number }>();
   for (const t of dbTeachers) {
@@ -348,8 +339,9 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       formattedTrialLeads,
       formattedCourseRequests,
     };
+    });
   },
-  ["admin-enrollments-data-v3"],
+  ["admin-enrollments-data-v4"],
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 
@@ -377,6 +369,16 @@ export default async function AdminEnrollmentsPage(props: {
     data = await getCachedAdminEnrollmentsData();
   } catch (err) {
     console.error("[AdminEnrollmentsPage] Failed to load cached enrollments data, using fallback:", err);
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v4");
+    if (fallback) data = fallback;
+  }
+
+  // Safety net: if students array is empty, check resilient cache for last known good data
+  if (!data.formattedStudents || data.formattedStudents.length === 0) {
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v4");
+    if (fallback && fallback.formattedStudents.length > 0) {
+      data = fallback;
+    }
   }
 
   // Ensure target student is present in students list even if cache was slightly stale

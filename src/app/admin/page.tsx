@@ -2,6 +2,7 @@ import { getCurrentUser } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import {
   Role,
   LessonStatus,
@@ -29,7 +30,8 @@ export const metadata = {
 // Minimizes load on remote Supabase PostgreSQL by 95% and guarantees < 50ms responses on navigation.
 const getCachedAdminOverviewData = unstable_cache(
   async () => {
-    const now = new Date();
+    return getResilientData("admin-overview-v2", async () => {
+      const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
     const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -208,8 +210,16 @@ const getCachedAdminOverviewData = unstable_cache(
         dbThisWeekRevenueMinor = dbPayments7DaysRaw.reduce((acc, p) => acc + (p.amountMinorUnits || 0), 0);
       }
       if (results[19].status === "fulfilled") dbScheduledLessonsForConflict = results[19].value;
+
+      const rejected = results.filter((r) => r.status === "rejected");
+      if (rejected.length > 3 || results[0].status === "rejected") {
+        const firstError = (rejected[0] as PromiseRejectedResult)?.reason;
+        console.warn(`[AdminOverview] ${rejected.length} overview queries rejected. Triggering resilient retry:`, firstError);
+        throw firstError || new Error(`Database overview query failed with ${rejected.length} rejected promises`);
+      }
     } catch (err) {
       console.error("Failed to query database metrics for admin overview:", err);
+      throw err;
     }
 
     // ─── 1. REAL 10 EXECUTIVE KPIS (100% DATABASE TRUTH) ──────────────────────
@@ -524,8 +534,9 @@ const getCachedAdminOverviewData = unstable_cache(
       payoutApproveCount,
       attentionItems,
     };
+    });
   },
-  ["admin-overview-metrics-v1"],
+  ["admin-overview-metrics-v2"],
   {
     revalidate: 30,
     tags: ["admin-overview"],
@@ -595,7 +606,15 @@ export default async function AdminOverviewPage() {
   try {
     data = await getCachedAdminOverviewData();
   } catch (err) {
-    console.error("Admin overview failed to load live telemetry, falling back to safe defaults:", err);
+    console.error("Admin overview failed to load live telemetry, checking fallback:", err);
+  }
+
+  // Resilient fallback if overview has 0 active students (transient DB drop or uninitialized state)
+  if (!data || data.kpis.activeStudents === 0) {
+    const fallback = getLastKnownGood<typeof FALLBACK_OVERVIEW_DATA>("admin-overview-v2");
+    if (fallback && fallback.kpis?.activeStudents > 0) {
+      data = fallback;
+    }
   }
 
   return <AdminOverviewClient {...data} />;

@@ -2,6 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
+import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminTeachersManager, TeacherRecord } from "./AdminTeachersManager";
 
 export const metadata = {
@@ -11,8 +12,9 @@ export const metadata = {
 
 const getCachedAdminTeachersData = unstable_cache(
   async () => {
-    // Run both queries in parallel
-    const [dbUsers, dbEnrollments] = await Promise.all([
+    return getResilientData("admin-teachers-v2", async () => {
+      // Run both queries in parallel
+      const [dbUsers, dbEnrollments] = await Promise.all([
     // Query teacher users with trimmed relational profiles
     db.user.findMany({
       where: { role: Role.TEACHER },
@@ -283,9 +285,10 @@ const getCachedAdminTeachersData = unstable_cache(
     };
   });
 
-  return formattedTeachers;
-},
-  ["admin-teachers-data-v1"],
+    return formattedTeachers;
+    });
+  },
+  ["admin-teachers-data-v2"],
   { revalidate: 30, tags: ["admin-teachers", "teachers"] }
 );
 
@@ -297,6 +300,16 @@ export default async function AdminTeachersPage() {
     formattedTeachers = await getCachedAdminTeachersData();
   } catch (err) {
     console.error("[AdminTeachersPage] Failed to load cached teachers data, using fallback:", err);
+    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v2");
+    if (fallback) formattedTeachers = fallback;
+  }
+
+  // Safety net: if formattedTeachers is empty, check resilient cache for last known good data
+  if (!formattedTeachers || formattedTeachers.length === 0) {
+    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v2");
+    if (fallback && fallback.length > 0) {
+      formattedTeachers = fallback;
+    }
   }
 
   return <AdminTeachersManager initialTeachers={formattedTeachers} />;

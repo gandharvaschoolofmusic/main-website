@@ -226,6 +226,10 @@ export function AdminEnrollmentsManager({
   }, [initialEnrollments]);
 
   const [courseRequests, setCourseRequests] = useState<AdminCourseEnrollmentRequestItem[]>(initialCourseRequests);
+
+  useEffect(() => {
+    setCourseRequests(initialCourseRequests);
+  }, [initialCourseRequests]);
   const [viewMode, setViewMode] = useState<"PLANNER" | "ROSTER">("PLANNER");
 
   // Selected Student Context (URL parameter has top priority; otherwise empty so admin first selects student)

@@ -3,7 +3,7 @@ import { PrismaClient } from "@prisma/client";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
 
-const POOL_VERSION = 6;
+const POOL_VERSION = 7;
 
 const globalForPrisma = globalThis as unknown as {
   prisma: PrismaClient | undefined;
@@ -57,11 +57,11 @@ const pool =
   new Pool({
     connectionString,
     ssl: isSupabaseOrSsl ? { rejectUnauthorized: false } : undefined,
-    max: 15,
-    idleTimeoutMillis: 300000,
-    connectionTimeoutMillis: 10000,
+    max: 25,
+    idleTimeoutMillis: 15000,
+    connectionTimeoutMillis: 15000,
     keepAlive: true,
-    keepAliveInitialDelayMillis: 10000,
+    keepAliveInitialDelayMillis: 3000,
   });
 
 // Catch background socket errors on idle clients so they do not crash or leak
