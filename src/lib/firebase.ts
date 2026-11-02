@@ -152,7 +152,7 @@ export function createRecaptchaVerifier(
 export async function sendFirebaseOtp(
   phoneNumber: string,
   verifier: RecaptchaVerifier
-): Promise<{ success: boolean; confirmationResult?: ConfirmationResult; error?: string }> {
+): Promise<{ success: boolean; confirmationResult?: ConfirmationResult; error?: string; isRegionBlocked?: boolean }> {
   const auth = getFirebaseAuth();
   if (!auth) {
     return {
@@ -194,21 +194,25 @@ export async function sendFirebaseOtp(
       clearRecaptchaVerifier();
     }
 
+    const isRegionBlocked =
+      error?.code === "auth/operation-not-allowed" ||
+      error?.code === "auth/blocked-at-project-level" ||
+      error?.code === "auth/phone-number-not-allowed" ||
+      error?.message?.includes("SMS unable to be sent until this region enabled") ||
+      error?.message?.includes("blocked-at-project-level") ||
+      error?.message?.includes("operation-not-allowed");
+
     let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";
     if (error?.code === "auth/invalid-phone-number") {
       msg = "Invalid mobile number format. Please ensure the country code is selected and digits are correct.";
+    } else if (isRegionBlocked) {
+      msg = "SMS delivery to this country is restricted by your Firebase project's SMS Region Policy. Enable this country in Firebase Console > Authentication > Settings > SMS region policy, or use Email verification.";
     } else if (error?.code === "auth/quota-exceeded") {
       msg = "SMS quota exceeded for today. Please try again later or contact support.";
     } else if (error?.code === "auth/too-many-requests") {
       msg = "Too many attempts. Please wait a moment before requesting another code.";
     } else if (error?.code === "auth/billing-not-enabled") {
       msg = "Firebase SMS billing is not enabled. Please upgrade to the Blaze plan in Firebase Console, or add this phone under 'Phone numbers for testing'.";
-    } else if (
-      error?.code === "auth/blocked-at-project-level" ||
-      error?.code === "auth/phone-number-not-allowed" ||
-      error?.message?.includes("blocked-at-project-level")
-    ) {
-      msg = "SMS to this country is restricted by your Firebase project's SMS Region Policy. Enable this country in Firebase Console > Authentication > Settings > SMS region policy, or add it to 'Phone numbers for testing'.";
     } else if (error?.code === "auth/captcha-check-failed") {
       msg = "Security verification check failed. Please refresh and try again.";
     } else if (isAlreadyRendered) {
@@ -218,6 +222,7 @@ export async function sendFirebaseOtp(
     return {
       success: false,
       error: msg,
+      isRegionBlocked,
     };
   }
 }

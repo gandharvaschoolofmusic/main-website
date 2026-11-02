@@ -34,6 +34,7 @@ import {
   Award,
   Eye,
   EyeOff,
+  Mail,
 } from "lucide-react";
 import { INSTRUMENTS } from "@/types";
 
@@ -41,6 +42,7 @@ export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [detectedTz, setDetectedTz] = useState("UTC");
   const [selectedRole, setSelectedRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
+  const [emailValue, setEmailValue] = useState("");
 
   // Country code state
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(SUPPORTED_COUNTRIES[0]); // India (+91)
@@ -151,38 +153,80 @@ export default function SignupPage() {
     }
 
     const fullPhone = getFullPhoneNumber();
+    const isIndia = selectedCountry.dialCode === "+91";
+    const emailToUse = emailValue.trim();
+
+    // For international numbers, an email address is required so the verification code can be delivered reliably
+    if (!isIndia && !emailToUse) {
+      setPhoneError(
+        `For international numbers (${selectedCountry.dialCode}), please enter your email address below first so we can deliver your 6-digit verification code.`
+      );
+      const emailInput = document.getElementById("email") as HTMLInputElement;
+      emailInput?.focus();
+      return;
+    }
 
     startSendOtpTransition(async () => {
       try {
+        // 1. Dispatch DB token + email OTP if email is provided
+        const dbPromise = sendPhoneOtpAction(fullPhone, "SIGNUP", emailToUse || undefined);
+
+        // 2. Dispatch Firebase SMS concurrently if configured
+        let fbPromise: Promise<{
+          success: boolean;
+          confirmationResult?: ConfirmationResult;
+          error?: string;
+          isRegionBlocked?: boolean;
+        }> = Promise.resolve({ success: false });
+
         if (isFirebaseConfigured()) {
           const verifier = createRecaptchaVerifier("signup-recaptcha-container");
-          if (!verifier) {
-            setPhoneError("Failed to initialize security verification. Please refresh.");
-            return;
+          if (verifier) {
+            fbPromise = sendFirebaseOtp(fullPhone, verifier);
           }
+        }
 
-          const [dbRes, fbRes] = await Promise.all([
-            sendPhoneOtpAction(fullPhone, "SIGNUP"),
-            sendFirebaseOtp(fullPhone, verifier),
-          ]);
+        const [dbRes, fbRes] = await Promise.all([dbPromise, fbPromise]);
 
-          if (!dbRes.success) {
-            setPhoneError(dbRes.error || "Failed to dispatch verification code.");
-            return;
-          }
+        if (!dbRes.success) {
+          setPhoneError(dbRes.error || "Failed to dispatch verification code.");
+          return;
+        }
 
-          if (!fbRes.success || !fbRes.confirmationResult) {
-            setPhoneError(fbRes.error || "Failed to dispatch SMS via Firebase.");
-            return;
-          }
-
+        // Case A: Firebase SMS delivered successfully
+        if (fbRes.success && fbRes.confirmationResult) {
           setFirebaseConfirmation(fbRes.confirmationResult);
-        } else {
-          const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
-          if (!res.success) {
-            setPhoneError(res.error || "Failed to dispatch verification code.");
+          setOtpSent(true);
+          setResendCooldown(30);
+          setOtpBanner({
+            message: `A 6-digit verification code has been dispatched via SMS to ${fullPhone}.`,
+          });
+          return;
+        }
+
+        // Case B: Fallback to Email OTP (international student or Firebase SMS region restricted)
+        if (dbRes.data?.emailSent) {
+          setFirebaseConfirmation(null);
+          setOtpSent(true);
+          setResendCooldown(30);
+          setOtpBanner({
+            message: `A 6-digit verification code has been dispatched to your email (${emailToUse}).`,
+          });
+          return;
+        }
+
+        // Case C: Neither Firebase nor Email succeeded
+        if (!fbRes.success) {
+          if (fbRes.isRegionBlocked || !isIndia) {
+            setPhoneError(
+              `SMS delivery is not enabled for ${selectedCountry.name} (${selectedCountry.dialCode}). Please enter your email address below to receive the verification code instantly.`
+            );
+            const emailInput = document.getElementById("email") as HTMLInputElement;
+            emailInput?.focus();
             return;
           }
+          setPhoneError(fbRes.error || "Failed to dispatch verification code.");
+          return;
         }
 
         setOtpSent(true);
@@ -681,6 +725,14 @@ export default function SignupPage() {
                     </button>
                   </div>
 
+                  {/* International OTP notice */}
+                  {selectedCountry.dialCode !== "+91" && !otpSent && (
+                    <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/10 text-xs text-primary font-medium animate-fade-in">
+                      <Mail className="w-3.5 h-3.5 shrink-0 text-primary" />
+                      <span>For international numbers ({selectedCountry.dialCode}), your 6-digit OTP will be dispatched to your email address below.</span>
+                    </div>
+                  )}
+
                   {/* 6-Digit OTP verification block */}
                   {otpSent && (
                     <div className="p-3 rounded-xl bg-white border border-border-default/80 space-y-2.5 animate-fade-in">
@@ -691,7 +743,9 @@ export default function SignupPage() {
                         >
                           Enter 6-Digit OTP Code
                         </label>
-                        <span className="text-[11px] text-body-muted">Sent via SMS</span>
+                        <span className="text-[11px] text-body-muted">
+                          {firebaseConfirmation ? "Sent via SMS" : "Sent via Email"}
+                        </span>
                       </div>
                       <div className="flex gap-2">
                         <input
@@ -778,6 +832,8 @@ export default function SignupPage() {
                 type="email"
                 autoComplete="email"
                 required
+                value={emailValue}
+                onChange={(e) => setEmailValue(e.target.value)}
                 placeholder="you@example.com"
                 className="block w-full rounded-xl border border-surface-muted/90 bg-white px-3.5 py-2.5 text-sm text-heading placeholder-body/40 shadow-xs transition-all focus:border-cta focus:outline-none focus:ring-4 focus:ring-cta/15"
               />

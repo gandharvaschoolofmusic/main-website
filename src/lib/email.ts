@@ -167,6 +167,80 @@ export async function sendEmailUpdateVerificationEmail({
   return { success: true };
 }
 
+/**
+ * Send a 6-digit registration / phone verification OTP to the user's email address.
+ * Used for international students when SMS delivery is restricted by regional carrier policies.
+ */
+export async function sendSignupVerificationEmailOtp({
+  email,
+  otpCode,
+  phone,
+  userName,
+}: {
+  email: string;
+  otpCode: string;
+  phone?: string;
+  userName?: string;
+}): Promise<{ success: boolean; error?: string }> {
+  const brandName = "Gandharva School of Music";
+  const subject = `Your ${brandName} Verification Code: ${otpCode}`;
+
+  if (resend) {
+    try {
+      await resend.emails.send({
+        from: fromEmail,
+        to: email,
+        subject,
+        html: `
+          <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+            <div style="text-align: center; margin-bottom: 24px;">
+              <h1 style="color: #6d1b7b; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
+              <p style="color: #78716c; font-size: 13px; margin: 0;">Account Verification</p>
+            </div>
+            
+            <p style="font-size: 14px; line-height: 1.6; color: #374151;">
+              Hello ${userName || "there"},
+            </p>
+            <p style="font-size: 14px; line-height: 1.6; color: #374151;">
+              Thank you for starting your musical journey with us! To complete your registration${phone ? ` for mobile number ${phone}` : ""}, please enter the 6-digit verification code below:
+            </p>
+            
+            <div style="text-align: center; margin: 28px 0;">
+              <div style="display: inline-block; background-color: #fbf6ee; border: 2px dashed #ff7703; border-radius: 12px; padding: 14px 28px;">
+                <span style="font-size: 32px; font-weight: 800; letter-spacing: 8px; color: #6d1b7b; font-family: monospace;">
+                  ${otpCode}
+                </span>
+              </div>
+              <p style="font-size: 12px; color: #b45309; margin-top: 10px; font-weight: 600;">
+                ⏱️ Valid for 10 minutes
+              </p>
+            </div>
+
+            <p style="font-size: 12px; color: #6b7280; line-height: 1.5;">
+              If you did not request this verification code, please ignore this email.
+            </p>
+            
+            <hr style="border: none; border-top: 1px solid #e5e7eb; margin: 24px 0;" />
+            <p style="font-size: 11px; color: #9ca3af; text-align: center; margin: 0;">
+              Gandharva School of Music &bull; Classical & Contemporary Music Education
+            </p>
+          </div>
+        `,
+      });
+      return { success: true };
+    } catch (error: any) {
+      logger.error({ error, email }, "Failed to send signup verification email code via Resend");
+      return { success: false, error: error?.message || "Failed to deliver email" };
+    }
+  }
+
+  logger.info(
+    { email, otpCode, phone },
+    `✉️ [SIGNUP EMAIL OTP] Dispatched 6-digit verification code to ${email}: ${otpCode}`,
+  );
+  return { success: true };
+}
+
 export async function sendPasswordResetEmail(
   email: string,
   token: string,

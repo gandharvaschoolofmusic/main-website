@@ -18,6 +18,7 @@ import {
   Check,
   Music,
   Mic,
+  Mail,
   X,
   Sparkles,
   Piano, Guitar, Drum, ArrowLeft, ChevronDown,
@@ -454,38 +455,76 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
     }
 
     const fullPhone = getFullPhoneNumber();
+    const isIndia = selectedCountry.dialCode === "+91";
+    const emailToUse = studentEmail.trim();
+
+    if (!isIndia && !emailToUse) {
+      setPhoneError(
+        `For international numbers (${selectedCountry.dialCode}), please enter your email address above first so we can deliver your 6-digit verification code.`
+      );
+      const emailInput = document.getElementById("studentEmail") as HTMLInputElement;
+      emailInput?.focus();
+      return;
+    }
 
     startSendOtpTransition(async () => {
       try {
+        const dbPromise = sendPhoneOtpAction(fullPhone, "SIGNUP", emailToUse || undefined);
+        let fbPromise: Promise<{
+          success: boolean;
+          confirmationResult?: ConfirmationResult;
+          error?: string;
+          isRegionBlocked?: boolean;
+        }> = Promise.resolve({ success: false });
+
         if (isFirebaseConfigured()) {
           const verifier = createRecaptchaVerifier("trial-recaptcha-container");
-          if (!verifier) {
-            setPhoneError("Failed to initialize security verification. Please refresh.");
-            return;
+          if (verifier) {
+            fbPromise = sendFirebaseOtp(fullPhone, verifier);
           }
+        }
 
-          const [dbRes, fbRes] = await Promise.all([
-            sendPhoneOtpAction(fullPhone, "SIGNUP"),
-            sendFirebaseOtp(fullPhone, verifier),
-          ]);
+        const [dbRes, fbRes] = await Promise.all([dbPromise, fbPromise]);
 
-          if (!dbRes.success) {
-            setPhoneError(dbRes.error || "Failed to dispatch verification code.");
-            return;
-          }
+        if (!dbRes.success) {
+          setPhoneError(dbRes.error || "Failed to dispatch verification code.");
+          return;
+        }
 
-          if (!fbRes.success || !fbRes.confirmationResult) {
-            setPhoneError(fbRes.error || "Failed to dispatch SMS via Firebase.");
-            return;
-          }
-
+        // Case A: Firebase SMS delivered successfully
+        if (fbRes.success && fbRes.confirmationResult) {
           setFirebaseConfirmation(fbRes.confirmationResult);
-        } else {
-          const res = await sendPhoneOtpAction(fullPhone, "SIGNUP");
-          if (!res.success) {
-            setPhoneError(res.error || "Failed to dispatch verification code.");
+          setOtpSent(true);
+          setResendCooldown(30);
+          setOtpBanner({
+            message: `A 6-digit verification code has been dispatched via SMS to ${fullPhone}.`,
+          });
+          return;
+        }
+
+        // Case B: Fallback to Email OTP (international student or Firebase SMS region restricted)
+        if (dbRes.data?.emailSent) {
+          setFirebaseConfirmation(null);
+          setOtpSent(true);
+          setResendCooldown(30);
+          setOtpBanner({
+            message: `A 6-digit verification code has been dispatched to your email (${emailToUse}).`,
+          });
+          return;
+        }
+
+        // Case C: Neither Firebase nor Email succeeded
+        if (!fbRes.success) {
+          if (fbRes.isRegionBlocked || !isIndia) {
+            setPhoneError(
+              `SMS delivery is not enabled for ${selectedCountry.name} (${selectedCountry.dialCode}). Please enter your email address above to receive the verification code instantly.`
+            );
+            const emailInput = document.getElementById("studentEmail") as HTMLInputElement;
+            emailInput?.focus();
             return;
           }
+          setPhoneError(fbRes.error || "Failed to dispatch verification code.");
+          return;
         }
 
         setOtpSent(true);
@@ -999,6 +1038,14 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                       )}
                     </div>
 
+                    {/* International notice */}
+                    {selectedCountry.dialCode !== "+91" && !otpSent && (
+                      <div className="flex items-center gap-2 px-3 py-2 rounded-xl bg-primary/5 border border-primary/10 text-xs text-primary font-medium animate-fade-in">
+                        <Mail className="w-3.5 h-3.5 shrink-0 text-primary" />
+                        <span>For international numbers ({selectedCountry.dialCode}), your 6-digit OTP will be dispatched to your email address above.</span>
+                      </div>
+                    )}
+
                     {/* 6-Digit OTP verification block */}
                     {otpSent && (
                       <div className="p-3.5 rounded-2xl bg-white border border-border-default/80 space-y-3 animate-fade-in shadow-xs">
@@ -1010,7 +1057,11 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                             Enter 6-Digit OTP Code
                           </label>
                           <span className="text-[11px] text-body">
-                            Sent to <strong className="font-mono text-heading">{getFullPhoneNumber()}</strong>
+                            {firebaseConfirmation ? (
+                              <>Sent via SMS to <strong className="font-mono text-heading">{getFullPhoneNumber()}</strong></>
+                            ) : (
+                              <>Sent to email <strong className="font-semibold text-heading">{studentEmail.trim()}</strong></>
+                            )}
                           </span>
                         </div>
                         <div className="flex gap-2">

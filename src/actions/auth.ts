@@ -11,7 +11,7 @@ import {
   validatePasswordResetToken,
   consumePasswordResetToken,
 } from "@/lib/tokens";
-import { sendVerificationEmail, sendPasswordResetEmail } from "@/lib/email";
+import { sendVerificationEmail, sendPasswordResetEmail, sendSignupVerificationEmailOtp } from "@/lib/email";
 import { auth, signIn, signOut } from "@/lib/auth";
 import { logger } from "@/lib/logger";
 import {
@@ -160,7 +160,7 @@ export async function signupAction(
           passwordHash,
           role,
           timezone,
-          emailVerified: null,
+          emailVerified: new Date(),
           customId,
         },
       });
@@ -295,7 +295,8 @@ export async function signupAction(
 export async function sendPhoneOtpAction(
   rawPhone: string,
   purpose: "LOGIN" | "SIGNUP",
-): Promise<ActionResponse<{ phone: string }>> {
+  email?: string,
+): Promise<ActionResponse<{ phone: string; emailSent?: boolean }>> {
   try {
     const parsed = SendOtpSchema.safeParse({ phone: rawPhone, purpose });
     if (!parsed.success) {
@@ -321,6 +322,8 @@ export async function sendPhoneOtpAction(
       select: {
         role: true,
         isActive: true,
+        email: true,
+        name: true,
         teacherProfile: {
           select: { approvalStatus: true },
         },
@@ -362,11 +365,31 @@ export async function sendPhoneOtpAction(
 
     const token = await createPhoneOtpToken(phone, purpose);
 
+    // If an email address is provided (or for existing login user), dispatch code to email
+    let emailSent = false;
+    const targetEmail = email?.trim() || (purpose === "LOGIN" ? existingUser?.email : undefined);
+    if (targetEmail) {
+      try {
+        const mailRes = await sendSignupVerificationEmailOtp({
+          email: targetEmail,
+          otpCode: token.code,
+          phone,
+          userName: existingUser?.name || undefined,
+        });
+        emailSent = mailRes.success;
+      } catch (e) {
+        logger.warn({ error: e, email: targetEmail }, "Failed to send OTP to email");
+      }
+    }
+
     return {
       success: true,
-      message: `A 6-digit verification code has been dispatched to ${phone}.`,
+      message: emailSent
+        ? `A 6-digit verification code has been dispatched to ${targetEmail}.`
+        : `A 6-digit verification code has been dispatched to ${phone}.`,
       data: {
         phone: token.phone,
+        emailSent,
       },
     };
   } catch (error) {
