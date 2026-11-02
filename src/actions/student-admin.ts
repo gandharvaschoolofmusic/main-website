@@ -2,9 +2,9 @@
 
 import { db } from "@/lib/db";
 import { requireRole } from "@/lib/auth-helpers";
-import { Role, PaymentStatus, EnrollmentStatus, LessonStatus, LessonSource, NotificationType } from "@prisma/client";
+import { Role, PaymentStatus, EnrollmentStatus, LessonStatus, LessonSource, NotificationType, CourseEmiStatus } from "@prisma/client";
 import { hashPassword } from "@/lib/password";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, revalidateTag } from "next/cache";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
 import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
@@ -86,6 +86,7 @@ export async function recordStudentPaymentAction(input: {
   paymentMethod: "UPI" | "CARD" | "NETBANKING" | "CASH" | "BANK_TRANSFER";
   referenceId?: string;
   notes?: string;
+  enrollmentId?: string;
 }): Promise<StudentActionResponse> {
   try {
     await requireRole(Role.ADMIN);
@@ -104,6 +105,21 @@ export async function recordStudentPaymentAction(input: {
       return { success: false, error: "Student not found." };
     }
 
+    // Determine target enrollment: explicit or active enrollment with dues
+    let enrollmentId = input.enrollmentId?.trim() || null;
+    if (!enrollmentId) {
+      const activeEnrollment = await db.enrollment.findFirst({
+        where: {
+          studentId: student.id,
+          status: EnrollmentStatus.ACTIVE,
+        },
+        orderBy: { startedAt: "desc" },
+      });
+      if (activeEnrollment) {
+        enrollmentId = activeEnrollment.id;
+      }
+    }
+
     const receiptRef =
       input.referenceId?.trim() ||
       `MANUAL-${Date.now().toString().slice(-6)}`;
@@ -111,17 +127,53 @@ export async function recordStudentPaymentAction(input: {
     await db.payment.create({
       data: {
         studentId: student.id,
+        enrollmentId: enrollmentId || undefined,
         amountMinorUnits,
         currency: "INR",
         gateway: input.paymentMethod.toLowerCase(),
         gatewayOrderId: `rec_order_${receiptRef}`,
         gatewayPaymentId: receiptRef,
+        notes: input.notes?.trim() || undefined,
         status: PaymentStatus.PAID,
       },
     });
 
+    // If linked to an enrollment, update emiStatus based on total payments vs total course fee
+    if (enrollmentId) {
+      const enr = await db.enrollment.findUnique({
+        where: { id: enrollmentId },
+        include: {
+          course: { select: { priceMinorUnits: true } },
+          payments: { where: { status: PaymentStatus.PAID }, select: { amountMinorUnits: true } },
+        },
+      });
+
+      if (enr) {
+        const totalFee = enr.customFeeMinorUnits ?? enr.course.priceMinorUnits;
+        const totalPaid = enr.payments.reduce((acc, p) => acc + p.amountMinorUnits, 0);
+
+        if (totalPaid >= totalFee) {
+          await db.enrollment.update({
+            where: { id: enrollmentId },
+            data: { emiStatus: CourseEmiStatus.FULLY_PAID },
+          });
+        } else if (totalPaid > 0) {
+          await db.enrollment.update({
+            where: { id: enrollmentId },
+            data: { emiStatus: CourseEmiStatus.PARTIALLY_PAID },
+          });
+        }
+      }
+    }
+
     revalidatePath("/admin/students");
     revalidatePath("/admin/payments");
+    revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-students", "max");
+      revalidateTag("students", "max");
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
 
     return {
       success: true,
@@ -169,6 +221,11 @@ export async function createStudentEnrollmentAction(input: {
 
     revalidatePath("/admin/students");
     revalidatePath("/admin/enrollments");
+    try {
+      revalidateTag("admin-students", "max");
+      revalidateTag("students", "max");
+      revalidateTag("admin-enrollments", "max");
+    } catch {}
 
     return {
       success: true,

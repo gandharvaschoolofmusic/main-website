@@ -16,7 +16,7 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-students-v4", async () => {
+    return getResilientData("admin-students-v5", async () => {
     // 0. Auto-conclude scheduled lessons whose scheduled time has elapsed (> 30 mins ago)
     const now = new Date();
     try {
@@ -43,6 +43,21 @@ const getCachedAdminStudentsData = unstable_cache(
         include: {
           enrollments: {
             include: {
+              payments: {
+                select: {
+                  id: true,
+                  amountMinorUnits: true,
+                  status: true,
+                  createdAt: true,
+                },
+              },
+              payment: {
+                select: {
+                  id: true,
+                  amountMinorUnits: true,
+                  status: true,
+                },
+              },
               course: {
                 include: {
                   teachers: {
@@ -159,24 +174,36 @@ const getCachedAdminStudentsData = unstable_cache(
     ]);
 
     // Format student records cleanly for client state
-    const formattedStudents: StudentRecord[] = dbStudents.map((s) => ({
-      id: s.id,
-      customId: s.customId || null,
-      name: s.name || "Student",
-      email: s.email,
-      phone: s.phone,
-      country: s.country,
-      timezone: s.timezone || "Asia/Kolkata",
-      guardianName: s.guardianName,
-      guardianPhone: s.guardianPhone,
-      age: s.age,
-      gender: s.gender,
-      address: s.address,
-      createdAt: s.createdAt.toISOString(),
-      isActive: s.isActive,
-      enrollments: s.enrollments.map((e) => {
+    const formattedStudents: StudentRecord[] = dbStudents.map((s) => {
+      const formattedEnrollments = s.enrollments.map((e) => {
         const assignedTeacher =
           e.course.teachers[0]?.teacher?.name || null;
+
+        const feeRupees = Math.round(
+          ((e.customFeeMinorUnits ?? e.course.priceMinorUnits) || 0) / 100
+        );
+
+        // Sum all paid payments linked to this enrollment (from enrollment payments relation or primary payment)
+        const paidPaymentIds = new Set<string>();
+        let paidMinor = 0;
+        for (const p of e.payments || []) {
+          if (p.status === "PAID") {
+            paidPaymentIds.add(p.id);
+            paidMinor += p.amountMinorUnits;
+          }
+        }
+        if (e.payment && e.payment.status === "PAID" && !paidPaymentIds.has(e.payment.id)) {
+          paidPaymentIds.add(e.payment.id);
+          paidMinor += e.payment.amountMinorUnits;
+        }
+
+        const totalPaidRupees = Math.round(paidMinor / 100);
+
+        const outstandingRupees =
+          e.status === "CANCELLED" || e.emiStatus === "FULLY_PAID"
+            ? 0
+            : Math.max(0, feeRupees - totalPaidRupees);
+
         return {
           id: e.id,
           courseId: e.courseId,
@@ -188,29 +215,71 @@ const getCachedAdminStudentsData = unstable_cache(
           totalSessions: e.course.sessionCount,
           status: e.status,
           startedAt: e.startedAt.toISOString(),
+          feeRupees,
+          totalPaidRupees,
+          outstandingRupees,
+          emiStatus: e.emiStatus,
+          paymentPlan: e.paymentPlan,
         };
-      }),
-      lessons: s.lessonsAsStudent.map((l) => ({
-        id: l.id,
-        instrument: l.instrument,
-        startsAt: l.startsAt.toISOString(),
-        durationMinutes: l.durationMinutes,
-        status: l.status,
-        teacherName: l.teacher?.name || null,
-        trackingCode: l.trackingCode,
-        recordingUrl: l.recordingUrl,
-      })),
-      payments: s.payments.map((p) => ({
-        id: p.id,
-        amountRupees: Math.round(p.amountMinorUnits / 100),
-        status: p.status,
-        gateway: p.gateway,
-        gatewayPaymentId: p.gatewayPaymentId,
-        notes: p.notes,
-        courseTitle: p.enrollment?.course?.title || null,
-        createdAt: p.createdAt.toISOString(),
-      })),
-      resources: s.resourcesReceived.map((r) => ({
+      });
+
+      // Total outstanding dues for student = active enrollment dues + unlinked CREATED payments - unlinked PAID payments
+      const enrollmentDues = formattedEnrollments
+        .filter((e) => e.status !== "CANCELLED")
+        .reduce((sum, e) => sum + e.outstandingRupees, 0);
+
+      const unlinkedCreatedRupees = s.payments
+        .filter((p) => p.status === "CREATED" && !p.enrollmentId)
+        .reduce((sum, p) => sum + Math.round(p.amountMinorUnits / 100), 0);
+
+      const unlinkedPaidRupees = s.payments
+        .filter((p) => p.status === "PAID" && !p.enrollmentId)
+        .reduce((sum, p) => sum + Math.round(p.amountMinorUnits / 100), 0);
+
+      const totalOutstandingRupees = Math.max(
+        0,
+        enrollmentDues + unlinkedCreatedRupees - unlinkedPaidRupees
+      );
+
+      return {
+        id: s.id,
+        customId: s.customId || null,
+        name: s.name || "Student",
+        email: s.email,
+        phone: s.phone,
+        country: s.country,
+        timezone: s.timezone || "Asia/Kolkata",
+        guardianName: s.guardianName,
+        guardianPhone: s.guardianPhone,
+        age: s.age,
+        gender: s.gender,
+        address: s.address,
+        createdAt: s.createdAt.toISOString(),
+        isActive: s.isActive,
+        outstandingRupees: totalOutstandingRupees,
+        enrollments: formattedEnrollments,
+        lessons: s.lessonsAsStudent.map((l) => ({
+          id: l.id,
+          instrument: l.instrument,
+          startsAt: l.startsAt.toISOString(),
+          durationMinutes: l.durationMinutes,
+          status: l.status,
+          teacherName: l.teacher?.name || null,
+          trackingCode: l.trackingCode,
+          recordingUrl: l.recordingUrl,
+        })),
+        payments: s.payments.map((p) => ({
+          id: p.id,
+          enrollmentId: p.enrollmentId || null,
+          amountRupees: Math.round(p.amountMinorUnits / 100),
+          status: p.status,
+          gateway: p.gateway,
+          gatewayPaymentId: p.gatewayPaymentId,
+          notes: p.notes,
+          courseTitle: p.enrollment?.course?.title || null,
+          createdAt: p.createdAt.toISOString(),
+        })),
+        resources: s.resourcesReceived.map((r) => ({
         id: r.id,
         title: r.resource.title,
         description: r.resource.description || null,
@@ -248,7 +317,8 @@ const getCachedAdminStudentsData = unstable_cache(
         messageCount: c._count?.messages || 0,
         messages: [], // Messages loaded on-demand via API to reduce initial payload
       })),
-    }));
+    };
+  });
 
     const courseOptions = dbCourses.map((c) => ({
       id: c.id,
@@ -277,7 +347,7 @@ const getCachedAdminStudentsData = unstable_cache(
     };
     });
   },
-  ["admin-students-data-v4"],
+  ["admin-students-data-v5"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 

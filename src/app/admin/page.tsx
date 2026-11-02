@@ -11,6 +11,7 @@ import {
   TrialRequestStatus,
   EnrollmentStatus,
   TeacherPayoutStatus,
+  CourseEmiStatus,
 } from "@prisma/client";
 import {
   AdminOverviewClient,
@@ -54,6 +55,7 @@ const getCachedAdminOverviewData = unstable_cache(
     let dbThisWeekRevenueMinor = 0;
     let dbPriorWeekRevenueMinor = 0;
     let dbPendingRevenueMinor = 0;
+    let dbEnrollmentPendingMinor = 0;
     let dbOverdueRevenueMinor = 0;
     let dbOverduePaymentsCount = 0;
     let dbPendingPayoutMinor = 0;
@@ -90,10 +92,19 @@ const getCachedAdminOverviewData = unstable_cache(
             startsAt: { lte: now, gte: new Date(now.getTime() - 90 * 60 * 1000) },
           },
         }),
-        // 5: Active Enrollments with sessionsRemaining
+        // 5: Active Enrollments with sessionsRemaining and financial dues
         db.enrollment.findMany({
           where: { status: EnrollmentStatus.ACTIVE },
-          select: { sessionsRemaining: true },
+          select: {
+            sessionsRemaining: true,
+            customFeeMinorUnits: true,
+            emiStatus: true,
+            course: { select: { priceMinorUnits: true } },
+            payments: {
+              where: { status: PaymentStatus.PAID },
+              select: { amountMinorUnits: true },
+            },
+          },
         }),
         // 6: Revenue collected prior 7-14 days
         db.payment.aggregate({
@@ -171,7 +182,15 @@ const getCachedAdminOverviewData = unstable_cache(
       if (results[5].status === "fulfilled") {
         const enrollments = results[5].value;
         dbActiveEnrollments = enrollments.length;
-        dbGoodStandingEnrollments = enrollments.filter((e) => e.sessionsRemaining > 0).length;
+        dbGoodStandingEnrollments = enrollments.filter((e: any) => e.sessionsRemaining > 0).length;
+        let activeEnrollmentDuesMinor = 0;
+        for (const enr of enrollments) {
+          if (enr.emiStatus === CourseEmiStatus.FULLY_PAID) continue;
+          const feeMinor = enr.customFeeMinorUnits ?? enr.course?.priceMinorUnits ?? 0;
+          const paidMinor = (enr.payments || []).reduce((acc: number, p: any) => acc + (p.amountMinorUnits || 0), 0);
+          activeEnrollmentDuesMinor += Math.max(0, feeMinor - paidMinor);
+        }
+        dbEnrollmentPendingMinor = activeEnrollmentDuesMinor;
       }
       if (results[6].status === "fulfilled") dbPriorWeekRevenueMinor = results[6].value._sum?.amountMinorUnits || 0;
       if (results[7].status === "fulfilled") dbPendingRevenueMinor = results[7].value._sum?.amountMinorUnits || 0;
@@ -246,7 +265,7 @@ const getCachedAdminOverviewData = unstable_cache(
       ? `${standingPct}% in good standing`
       : "No active enrollments";
 
-    const outstandingRupees = (dbPendingRevenueMinor || 0) / 100;
+    const outstandingRupees = ((dbPendingRevenueMinor || 0) + (dbEnrollmentPendingMinor || 0)) / 100;
     const inrOutstanding = outstandingRupees > 0
       ? (outstandingRupees >= 100000
           ? `₹${(outstandingRupees / 100000).toFixed(2)}L`

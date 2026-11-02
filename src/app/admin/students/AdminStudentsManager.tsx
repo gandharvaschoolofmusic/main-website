@@ -4,6 +4,7 @@ import { DateTimePicker } from "@/components/ui/DateTimePicker";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   Globe,
   Upload,
@@ -69,6 +70,7 @@ export interface StudentRecord {
   address: string | null;
   createdAt: string;
   isActive: boolean;
+  outstandingRupees?: number;
   enrollments: {
     id: string;
     courseId: string;
@@ -80,6 +82,11 @@ export interface StudentRecord {
     totalSessions: number;
     status: string;
     startedAt: string;
+    feeRupees?: number;
+    totalPaidRupees?: number;
+    outstandingRupees?: number;
+    emiStatus?: string;
+    paymentPlan?: string;
   }[];
   lessons: {
     id: string;
@@ -93,6 +100,7 @@ export interface StudentRecord {
   }[];
   payments: {
     id: string;
+    enrollmentId?: string | null;
     amountRupees: number;
     status: string;
     gateway: string;
@@ -179,6 +187,7 @@ export function AdminStudentsManager({
   courses,
   teachers,
 }: AdminStudentsManagerProps) {
+  const router = useRouter();
   const [students, setStudents] = useState<StudentRecord[]>(initialStudents);
   const [selectedStudentId, setSelectedStudentId] = useState<string>(
     initialStudents[0]?.id || ""
@@ -328,14 +337,13 @@ export function AdminStudentsManager({
 
     if (statusFilter === "ACTIVE") return s.isActive;
     if (statusFilter === "DUE") {
-      const pendingDue = s.payments.some((p) => p.status === "CREATED");
-      return pendingDue;
+      return (s.outstandingRupees ?? 0) > 0;
     }
     return true;
   });
 
   const dueStudentsCount = eligibleStudents.filter((s) =>
-    s.payments.some((p) => p.status === "CREATED")
+    (s.outstandingRupees ?? 0) > 0
   ).length;
 
   const formattedIstDate = new Intl.DateTimeFormat("en-GB", {
@@ -371,11 +379,19 @@ export function AdminStudentsManager({
     ? selectedStudent.resources.length
     : 0;
 
-  const outstandingRupees = selectedStudent
-    ? selectedStudent.payments
-      .filter((p) => p.status === "CREATED")
-      .reduce((acc, p) => acc + p.amountRupees, 0)
-    : 0;
+  const outstandingRupees = useMemo(() => {
+    if (!selectedStudent) return 0;
+    if (typeof selectedStudent.outstandingRupees === "number") {
+      return selectedStudent.outstandingRupees;
+    }
+    const enrollmentDues = selectedStudent.enrollments
+      .filter((e) => e.status !== "CANCELLED")
+      .reduce((acc, e) => acc + (e.outstandingRupees || 0), 0);
+    const unlinkedCreated = selectedStudent.payments
+      .filter((p) => p.status === "CREATED" && !p.enrollmentId)
+      .reduce((acc, p) => acc + p.amountRupees, 0);
+    return Math.max(0, enrollmentDues + unlinkedCreated);
+  }, [selectedStudent]);
 
   const totalPaidRupees = selectedStudent
     ? selectedStudent.payments
@@ -805,7 +821,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               filteredStudents.map((st) => {
                 const isSelected = selectedStudent?.id === st.id;
                 const primaryCourse = st.enrollments[0]?.courseTitle || "No enrollment";
-                const isDue = st.payments.some((p) => p.status === "CREATED");
+                const isDue = (st.outstandingRupees ?? 0) > 0;
 
                 return (
                   <div
@@ -838,8 +854,8 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                         </div>
                         <div className="mt-1">
                           {isDue ? (
-                            <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md">
-                              Payment due
+                            <span className="text-[10px] font-semibold text-rose-600 bg-rose-50 px-1.5 py-0.5 rounded-md font-numeric">
+                              Due ₹{(st.outstandingRupees || 0).toLocaleString("en-IN")}
                             </span>
                           ) : st.isActive ? (
                             <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded-md">
@@ -1098,14 +1114,14 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   <div className="p-4 rounded-2xl bg-white border border-neutral-200/80 shadow-2xs">
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-body font-medium">Outstanding</span>
-                      <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
+                      <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${outstandingRupees > 0 ? "bg-rose-50 text-rose-600" : "bg-neutral-100 text-body/60"}`}>
                         <IndianRupee className="w-3.5 h-3.5" />
                       </div>
                     </div>
                     <div className="font-serif text-2xl font-bold text-heading mt-2 font-numeric">
                       ₹{outstandingRupees.toLocaleString("en-IN")}
                     </div>
-                    <div className="text-[11px] text-rose-600 font-semibold mt-0.5">
+                    <div className={`text-[11px] font-semibold mt-0.5 ${outstandingRupees > 0 ? "text-rose-600" : "text-emerald-600"}`}>
                       {outstandingRupees > 0 ? "Payment pending" : "No dues"}
                     </div>
                   </div>
@@ -1139,7 +1155,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                               key={enr.id}
                               className="p-3.5 rounded-xl border border-neutral-200/80 bg-neutral-50/40 flex items-center justify-between gap-3"
                             >
-                              <div>
+                              <div className="min-w-0">
                                 <div className="font-bold text-xs text-heading">
                                   {enr.courseTitle} · {enr.courseLevel}
                                 </div>
@@ -1148,10 +1164,31 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                   {Math.max(0, enr.totalSessions - enr.sessionsRemaining)}/
                                   {enr.totalSessions} sessions
                                 </div>
+                                {typeof enr.feeRupees === "number" && enr.feeRupees > 0 && (
+                                  <div className="text-[11px] text-body/60 mt-1 font-numeric flex items-center gap-1.5 flex-wrap">
+                                    <span>Fee: ₹{enr.feeRupees.toLocaleString("en-IN")}</span>
+                                    <span>·</span>
+                                    <span>Paid: ₹{(enr.totalPaidRupees || 0).toLocaleString("en-IN")}</span>
+                                    {(enr.outstandingRupees || 0) > 0 ? (
+                                      <span className="text-rose-600 font-semibold">
+                                        · Due: ₹{(enr.outstandingRupees || 0).toLocaleString("en-IN")}
+                                      </span>
+                                    ) : (
+                                      <span className="text-emerald-600 font-medium">· Paid in Full</span>
+                                    )}
+                                  </div>
+                                )}
                               </div>
-                              <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
-                                {enr.status}
-                              </span>
+                              <div className="flex flex-col items-end gap-1 shrink-0">
+                                <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 border border-emerald-200 text-[10px] font-bold">
+                                  {enr.status}
+                                </span>
+                                {(enr.outstandingRupees || 0) > 0 && (
+                                  <span className="px-1.5 py-0.5 rounded-md bg-rose-50 text-rose-700 border border-rose-200 text-[10px] font-semibold font-numeric">
+                                    Due ₹{(enr.outstandingRupees || 0).toLocaleString("en-IN")}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           ))
                         )}
@@ -1310,11 +1347,26 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       </div>
 
                       {/* Outstanding balance banner */}
-                      <div className="p-3.5 rounded-xl bg-rose-50/70 border border-rose-100 flex items-center justify-between">
-                        <span className="text-xs font-semibold text-rose-900">
-                          Outstanding balance
-                        </span>
-                        <span className="font-serif text-base font-bold text-rose-900 font-numeric">
+                      <div className={`p-3.5 rounded-xl border flex items-center justify-between ${
+                        outstandingRupees > 0
+                          ? "bg-rose-50/70 border-rose-100"
+                          : "bg-emerald-50/60 border-emerald-100"
+                      }`}>
+                        <div>
+                          <span className={`text-xs font-semibold block ${outstandingRupees > 0 ? "text-rose-900" : "text-emerald-900"}`}>
+                            Outstanding balance
+                          </span>
+                          {outstandingRupees > 0 ? (
+                            <span className="text-[11px] text-rose-700/80">
+                              Course fee balance pending
+                            </span>
+                          ) : (
+                            <span className="text-[11px] text-emerald-700/80">
+                              All fees clear
+                            </span>
+                          )}
+                        </div>
+                        <span className={`font-serif text-base font-bold font-numeric ${outstandingRupees > 0 ? "text-rose-900" : "text-emerald-800"}`}>
                           ₹{outstandingRupees.toLocaleString("en-IN")}
                         </span>
                       </div>
@@ -1766,6 +1818,86 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     </button>
                   </div>
                 </div>
+
+                {/* Course Enrollment Fee Breakdown (if student has course enrollments) */}
+                {selectedStudent.enrollments.length > 0 && (
+                  <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs overflow-hidden">
+                    <div className="p-5 border-b border-neutral-100 flex items-center justify-between">
+                      <div>
+                        <h4 className="font-serif text-base font-bold text-heading">
+                          Enrolled Course Tuition Dues
+                        </h4>
+                        <p className="text-xs text-body/60 mt-0.5">
+                          Breakdown of agreed tuition fees, installments received, and pending balances
+                        </p>
+                      </div>
+                    </div>
+                    <div className="divide-y divide-neutral-100">
+                      {selectedStudent.enrollments.map((enr) => {
+                        const fee = enr.feeRupees || 0;
+                        const paid = enr.totalPaidRupees || 0;
+                        const due = enr.outstandingRupees || 0;
+                        const isClear = due === 0;
+
+                        return (
+                          <div
+                            key={enr.id}
+                            className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 hover:bg-neutral-50/50 transition-colors"
+                          >
+                            <div className="flex items-center gap-3.5">
+                              <div
+                                className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${
+                                  isClear
+                                    ? "bg-emerald-50 text-emerald-700"
+                                    : "bg-rose-50 text-rose-700"
+                                }`}
+                              >
+                                <GraduationCap className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className="font-bold text-heading text-sm">
+                                    {enr.courseTitle}
+                                  </span>
+                                  <span className="text-xs px-2 py-0.5 rounded-md bg-neutral-100 text-body font-medium">
+                                    {enr.courseLevel}
+                                  </span>
+                                  <span
+                                    className={`px-2 py-0.5 rounded-md text-[10px] font-bold ${
+                                      isClear
+                                        ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                                        : "bg-rose-50 text-rose-700 border border-rose-200"
+                                    }`}
+                                  >
+                                    {enr.emiStatus || (isClear ? "FULLY_PAID" : "PARTIAL")}
+                                  </span>
+                                </div>
+                                <div className="text-xs text-body/60 mt-1 flex items-center gap-2 flex-wrap font-numeric">
+                                  <span>Agreed Total Fee: <strong className="text-heading">₹{fee.toLocaleString("en-IN")}</strong></span>
+                                  <span>·</span>
+                                  <span>Collected: <strong className="text-emerald-700">₹{paid.toLocaleString("en-IN")}</strong></span>
+                                  <span>·</span>
+                                  <span>Enrollment: <strong>ENR-{enr.id.slice(-4)}</strong></span>
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="text-left sm:text-right shrink-0">
+                              <div className="text-[11px] text-body/60 font-medium">Outstanding Dues</div>
+                              <div
+                                className={`font-serif text-lg font-bold font-numeric mt-0.5 ${
+                                  due > 0 ? "text-rose-600" : "text-emerald-600"
+                                }`}
+                              >
+                                {due > 0 ? `₹${due.toLocaleString("en-IN")}` : "₹0 (Cleared)"}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
 
                 {/* Transactions Ledger */}
                 <div className="bg-white rounded-2xl border border-neutral-200/80 shadow-2xs overflow-hidden">
@@ -2590,9 +2722,11 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               onSubmit={(e) => {
                 e.preventDefault();
                 const formData = new FormData(e.currentTarget);
+                const enrId = formData.get("enrollmentId") ? String(formData.get("enrollmentId")) : undefined;
                 startTransition(async () => {
                   const res = await recordStudentPaymentAction({
                     studentId: selectedStudent.id,
+                    enrollmentId: enrId || undefined,
                     amountRupees: Number(formData.get("amount")),
                     paymentMethod: formData.get("method") as any,
                     referenceId: String(formData.get("reference") || ""),
@@ -2600,6 +2734,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   if (res.success) {
                     showToast(res.message || "Payment recorded.");
                     setIsRecordPaymentOpen(false);
+                    router.refresh();
                   } else {
                     alert(res.error || "Failed to record payment.");
                   }
@@ -2613,6 +2748,26 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                   {selectedStudent.name} ({selectedStudent.email})
                 </div>
               </div>
+
+              {selectedStudent.enrollments.length > 0 && (
+                <div>
+                  <label className="block font-semibold text-heading mb-1">
+                    Apply to Course Enrollment
+                  </label>
+                  <select
+                    name="enrollmentId"
+                    defaultValue={selectedStudent.enrollments[0]?.id}
+                    className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-heading focus:outline-none focus:border-[#3C096C]"
+                  >
+                    {selectedStudent.enrollments.map((enr) => (
+                      <option key={enr.id} value={enr.id}>
+                        {enr.courseTitle} · Due: ₹{(enr.outstandingRupees || 0).toLocaleString("en-IN")}
+                      </option>
+                    ))}
+                    <option value="">General / Unlinked Tuition Payment</option>
+                  </select>
+                </div>
+              )}
 
               <div>
                 <label className="block font-semibold text-heading mb-1">Amount (INR) *</label>
