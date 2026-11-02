@@ -258,7 +258,7 @@ export async function startLessonRoomEgress(params: {
     const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
     const identifier = lessonId || groupRoomId || roomName.replace(/[^a-zA-Z0-9]/g, "_");
     const fileName = `Gandharva_Lesson_${identifier}_${dateStamp}_${timeStamp}.mp4`;
-    const filepath = `recordings/${fileName}`;
+    const filepath = fileName;
 
     // 3. Configure file output with optional S3 credentials
     const s3 = getS3UploadConfig();

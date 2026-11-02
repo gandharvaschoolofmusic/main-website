@@ -115,6 +115,50 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 }
 
 /**
+ * Converts any raw storage location (Supabase S3, AWS S3, Cloudflare R2, or custom bucket URL)
+ * into a valid, browser-playable public HTTPS video URL.
+ */
+function resolvePublicRecordingUrl(rawLocation: string, cleanFileName: string): string {
+  const supabaseUrl =
+    process.env.NEXT_PUBLIC_SUPABASE_URL ||
+    process.env.SUPABASE_URL ||
+    "https://xopunboicdymbwdmxvnu.supabase.co";
+
+  if (!rawLocation) {
+    return `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
+  }
+
+  // Case A: S3 URI scheme (e.g. s3://bucket/path/file.mp4)
+  if (rawLocation.startsWith("s3://")) {
+    const withoutPrefix = rawLocation.slice(5);
+    const slashIdx = withoutPrefix.indexOf("/");
+    const bucket = slashIdx !== -1 ? withoutPrefix.slice(0, slashIdx) : withoutPrefix;
+    const rawKey = slashIdx !== -1 ? withoutPrefix.slice(slashIdx + 1) : cleanFileName;
+    const key = rawKey.replace(/^recordings\//, "");
+
+    // If bucket is Supabase recordings bucket
+    if (bucket === "recordings" || bucket.includes("supabase")) {
+      return `${supabaseUrl}/storage/v1/object/public/recordings/${key}`;
+    }
+    // AWS S3 standard public URL
+    return `https://${bucket}.s3.amazonaws.com/${rawKey}`;
+  }
+
+  // Case B: HTTP / HTTPS URL
+  if (rawLocation.startsWith("http://") || rawLocation.startsWith("https://")) {
+    // If LiveKit was configured with a Supabase S3 endpoint (/storage/v1/s3/<bucket>/<key>)
+    // Convert to public object URL so web browsers and HTML5 video can stream it without S3 signatures
+    if (rawLocation.includes("/storage/v1/s3/")) {
+      return rawLocation.replace("/storage/v1/s3/", "/storage/v1/object/public/");
+    }
+    return rawLocation;
+  }
+
+  // Case C: Relative path or filename fallback
+  return `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
+}
+
+/**
  * Handle webhook events for individual 1:1 lesson rooms (lesson-{lessonId}).
  */
 async function handleIndividualRoom(event: any, lessonId: string) {
@@ -234,13 +278,7 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       const rawFileName = primaryFile.filename || `lesson_${lessonId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      let fileUrl = rawLocation;
-      if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
-        const supabaseUrl =
-          process.env.NEXT_PUBLIC_SUPABASE_URL ||
-          "https://xopunboicdymbwdmxvnu.supabase.co";
-        fileUrl = `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
-      }
+      const fileUrl = resolvePublicRecordingUrl(rawLocation, cleanFileName);
 
       const lesson = await db.lesson.findUnique({
         where: { id: lessonId },
@@ -468,13 +506,7 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       const rawFileName = primaryFile.filename || `group_${groupRoomId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      let fileUrl = rawLocation;
-      if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
-        const supabaseUrl =
-          process.env.NEXT_PUBLIC_SUPABASE_URL ||
-          "https://xopunboicdymbwdmxvnu.supabase.co";
-        fileUrl = `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
-      }
+      const fileUrl = resolvePublicRecordingUrl(rawLocation, cleanFileName);
 
       const groupLessons = await db.lesson.findMany({
         where: { groupRoomId },
