@@ -23,12 +23,13 @@ export const TALKING_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
 
 /**
  * WebRTC constraints for musical instrument performance.
- * Dynamically disables compression and echo suppression while supporting mono or stereo hardware.
+ * Keeps acoustic echo cancellation active to prevent speaker-to-mic feedback loops,
+ * while disabling noise suppression and auto-gain control to preserve pristine instrument harmonics and dynamic range.
  */
 export const PLAYING_AUDIO_CONSTRAINTS: MediaTrackConstraints = {
-  echoCancellation: false,
-  noiseSuppression: false,
-  autoGainControl: false,
+  echoCancellation: true, // Crucial: prevents acoustic echo feedback loops when users use speakers
+  noiseSuppression: false, // Disabled: preserves musical notes, harmonics, sustain, and guitar tones
+  autoGainControl: false,  // Disabled: preserves full musical volume dynamics (pianissimo to fortissimo)
   channelCount: { ideal: 2 },
   sampleRate: { ideal: 48000 },
 };

@@ -288,11 +288,9 @@ function LessonRoomContent({
         if (initialConfig.isAudioMuted) {
           console.log("[Audio] Muting audio track per user Pre-Join selection");
           track.mute();
-          await room.localParticipant.setMicrophoneEnabled(false).catch(() => {});
         } else {
           console.log("[Audio] Ensuring mic track is unmuted and transmitting");
           track.unmute();
-          await room.localParticipant.setMicrophoneEnabled(true).catch(() => {});
         }
       } catch (err) {
         console.warn(`[Audio] Failed to initialize audio track (attempt ${attempt + 1}):`, err);
@@ -344,21 +342,45 @@ function LessonRoomContent({
     audioContainer.style.pointerEvents = "none";
     document.body.appendChild(audioContainer);
 
+    // Strictly enforce ONE audio element per participant source (mic or screen) to eliminate duplicate playback & comb filtering
     const attachedElements = new Map<string, HTMLAudioElement>();
+
+    const getTrackKey = (track: RemoteTrack, participantIdentity: string) => {
+      const source = track.source === Track.Source.ScreenShareAudio ? "screen" : "mic";
+      return `${participantIdentity}_${source}`;
+    };
 
     const playAudioTrack = async (track: RemoteTrack, participantIdentity: string) => {
       if (track.kind !== Track.Kind.Audio) return;
 
-      const trackKey = `${participantIdentity}_${track.sid || "audio"}`;
-      console.log(`[Audio] Attaching remote audio track from ${participantIdentity} (${trackKey})`);
+      const trackKey = getTrackKey(track, participantIdentity);
+      console.log(`[Audio] Managing remote audio playback for ${participantIdentity} (${trackKey})`);
 
-      // Clean up previous element if any
+      // If an element already exists for this participant, check if it is already playing this track
       const existingEl = attachedElements.get(trackKey);
       if (existingEl) {
-        track.detach(existingEl);
+        // If already attached to the track's stream, avoid re-creating DOM element (prevents double audio and glitches)
+        if (track.mediaStream && existingEl.srcObject === track.mediaStream) {
+          if (existingEl.paused) {
+            existingEl.play().catch(() => {});
+          }
+          return;
+        }
+
+        // Clean up previous element if replacing track
+        try {
+          track.detach(existingEl);
+        } catch {}
+        existingEl.pause();
+        existingEl.srcObject = null;
         existingEl.remove();
         attachedElements.delete(trackKey);
       }
+
+      // Detach any previously attached elements for this track to guarantee clean 1:1 playback
+      try {
+        track.detach();
+      } catch {}
 
       const audioEl = document.createElement("audio");
       audioEl.autoplay = true;
@@ -372,7 +394,7 @@ function LessonRoomContent({
 
       try {
         await audioEl.play();
-        console.log(`[Audio] Remote audio playing smoothly for ${participantIdentity}`);
+        console.log(`[Audio] Remote audio playing cleanly for ${participantIdentity}`);
       } catch (playErr) {
         console.warn(`[Audio] Remote audio play() waiting for user interaction:`, playErr);
       }
@@ -380,10 +402,14 @@ function LessonRoomContent({
 
     const stopAudioTrack = (track: RemoteTrack, participantIdentity: string) => {
       if (track.kind !== Track.Kind.Audio) return;
-      const trackKey = `${participantIdentity}_${track.sid || "audio"}`;
+      const trackKey = getTrackKey(track, participantIdentity);
       const el = attachedElements.get(trackKey);
       if (el) {
-        track.detach(el);
+        try {
+          track.detach(el);
+        } catch {}
+        el.pause();
+        el.srcObject = null;
         el.remove();
         attachedElements.delete(trackKey);
       }
@@ -437,6 +463,20 @@ function LessonRoomContent({
       });
     };
 
+    const handleParticipantDisconnected = (participant: RemoteParticipant) => {
+      const micKey = `${participant.identity}_mic`;
+      const screenKey = `${participant.identity}_screen`;
+      [micKey, screenKey].forEach((key) => {
+        const el = attachedElements.get(key);
+        if (el) {
+          el.pause();
+          el.srcObject = null;
+          el.remove();
+          attachedElements.delete(key);
+        }
+      });
+    };
+
     const handleAudioPlaybackChanged = () => {
       attachedElements.forEach((el) => {
         if (el.paused) {
@@ -449,6 +489,7 @@ function LessonRoomContent({
     room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
     room.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
     room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
+    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
     room.on(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
 
     // Unconditionally unlock Web Audio and resume any deferred media elements on user gesture
@@ -476,6 +517,7 @@ function LessonRoomContent({
       room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
       room.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
       room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
+      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
       room.off(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
       window.removeEventListener("click", unlockAudio);
       window.removeEventListener("touchstart", unlockAudio);
@@ -618,6 +660,9 @@ function LessonRoomContent({
         initialConfig.audioDeviceId,
       );
       currentAudioTrackRef.current = track;
+      if (isMuted) {
+        track.mute();
+      }
       setAudioMode(targetMode);
     } catch (err) {
       console.error("Failed to switch audio mode", err);
@@ -626,29 +671,29 @@ function LessonRoomContent({
     }
   };
 
-  // Toggle Microphone
+  // Toggle Microphone cleanly via track mute/unmute to prevent duplicate LiveKit mic track generation
   const handleToggleMic = async () => {
     const nextMuted = !isMuted;
     setIsMuted(nextMuted);
     try {
-      await room.localParticipant.setMicrophoneEnabled(!nextMuted);
       if (currentAudioTrackRef.current) {
         if (nextMuted) {
-          currentAudioTrackRef.current.mute();
+          await currentAudioTrackRef.current.mute();
         } else {
-          currentAudioTrackRef.current.unmute();
+          await currentAudioTrackRef.current.unmute();
         }
       }
-    } catch {
       for (const pub of room.localParticipant.audioTrackPublications.values()) {
         if (pub.track) {
           if (nextMuted) {
-            pub.track.mute();
+            await pub.track.mute();
           } else {
-            pub.track.unmute();
+            await pub.track.unmute();
           }
         }
       }
+    } catch (err) {
+      console.warn("[Audio] Error toggling mic state:", err);
     }
   };
 
