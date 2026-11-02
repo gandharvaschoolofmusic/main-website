@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { WebhookReceiver } from "livekit-server-sdk";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AuthRateLimits } from "@/lib/rate-limit";
+import { startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
 
 const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
 const apiSecret =
@@ -75,9 +77,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  const roomName = event.room?.name;
+  const roomName = event.room?.name || event.egressInfo?.roomName;
   logger.info(
-    { eventType: event.event, roomName, participant: event.participant?.identity },
+    { eventType: event.event, roomName, participant: event.participant?.identity, egressId: event.egressInfo?.egressId },
     "Received valid LiveKit webhook event",
   );
 
@@ -154,6 +156,17 @@ async function handleIndividualRoom(event: any, lessonId: string) {
           "Recorded studentJoinedAt via LiveKit webhook",
         );
       }
+
+      // Automatically initiate LiveKit server-side Room Composite Egress recording
+      startLessonRoomEgress({
+        roomName: `lesson-${lessonId}`,
+        lessonId,
+      }).catch((err) => {
+        logger.warn(
+          { err, lessonId },
+          "Could not initiate LiveKit server-side Egress recording on participant_joined",
+        );
+      });
       break;
     }
 
@@ -191,6 +204,97 @@ async function handleIndividualRoom(event: any, lessonId: string) {
           "Handled room_finished webhook event and finalized timestamps",
         );
       }
+
+      // Ensure any active LiveKit Room Egress is stopped
+      stopActiveRoomEgressByRoom(`lesson-${lessonId}`).catch((err) => {
+        logger.warn({ err, lessonId }, "Failed to stop active room egress on room_finished");
+      });
+      break;
+    }
+
+    case "egress_ended": {
+      const egressInfo = event.egressInfo;
+      if (!egressInfo) break;
+
+      const fileResults = egressInfo.fileResults || [];
+      if (fileResults.length === 0) {
+        logger.warn(
+          { egressId: egressInfo.egressId, lessonId, status: egressInfo.status, error: egressInfo.error },
+          "LiveKit Egress ended with no output file results",
+        );
+        break;
+      }
+
+      const primaryFile = fileResults[0];
+      const rawLocation = primaryFile.location || primaryFile.filename || "";
+      const durationSeconds = primaryFile.duration
+        ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
+        : null;
+      const fileSizeBytes = primaryFile.size ? Number(primaryFile.size) : 0;
+      const rawFileName = primaryFile.filename || `lesson_${lessonId}_${Date.now()}.mp4`;
+      const cleanFileName = rawFileName.split("/").pop() || rawFileName;
+
+      let fileUrl = rawLocation;
+      if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
+        const supabaseUrl =
+          process.env.NEXT_PUBLIC_SUPABASE_URL ||
+          "https://xopunboicdymbwdmxvnu.supabase.co";
+        fileUrl = `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
+      }
+
+      const lesson = await db.lesson.findUnique({
+        where: { id: lessonId },
+      });
+
+      if (!lesson) {
+        logger.warn({ lessonId }, "LiveKit Egress ended for non-existent lesson");
+        break;
+      }
+
+      const recordingRecord = await db.lessonRecording.create({
+        data: {
+          lessonId,
+          fileUrl,
+          fileId: egressInfo.egressId || null,
+          fileName: cleanFileName,
+          fileSizeBytes,
+          durationSeconds,
+          storageBackend: "LIVEKIT_EGRESS",
+          teacherJoinedAt: lesson.teacherJoinedAt,
+          teacherLeftAt: lesson.teacherLeftAt,
+          studentJoinedAt: lesson.studentJoinedAt,
+          studentLeftAt: lesson.studentLeftAt,
+        },
+      });
+
+      // Sum all recording parts for cumulative duration
+      const sumAgg = await db.lessonRecording.aggregate({
+        where: { lessonId },
+        _sum: { durationSeconds: true },
+      });
+      const cumulativeDuration = sumAgg._sum.durationSeconds || durationSeconds;
+
+      await db.lesson.update({
+        where: { id: lessonId },
+        data: {
+          recordingUrl: fileUrl,
+          recordingFileId: egressInfo.egressId || null,
+          recordingDurationSeconds: cumulativeDuration,
+        },
+      });
+
+      logger.info(
+        { lessonId, fileUrl, recordingId: recordingRecord.id, durationSeconds, fileSizeBytes },
+        "Successfully saved LiveKit Egress recording metadata to database",
+      );
+
+      try {
+        revalidateTag("admin-recordings", "max");
+        revalidateTag("admin-lessons", "max");
+        revalidateTag("student-recordings", "max");
+        revalidateTag("lessons", "max");
+      } catch {}
+
       break;
     }
 
@@ -296,6 +400,17 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
           );
         }
       }
+
+      // Automatically initiate LiveKit server-side Room Composite Egress recording for group room
+      startLessonRoomEgress({
+        roomName: groupRoomId,
+        groupRoomId,
+      }).catch((err) => {
+        logger.warn(
+          { err, groupRoomId },
+          "Failed to initiate LiveKit server-side Egress recording for group room",
+        );
+      });
       break;
     }
 
@@ -323,6 +438,87 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
         { groupRoomId, completedCount: result.count },
         "Marked group room lessons as COMPLETED and set exit timestamps upon room_finished",
       );
+
+      // Clean up any remaining active LiveKit Room Egress for group room
+      stopActiveRoomEgressByRoom(groupRoomId).catch((err) => {
+        logger.warn({ err, groupRoomId }, "Failed to stop active group room egress on room_finished");
+      });
+      break;
+    }
+
+    case "egress_ended": {
+      const egressInfo = event.egressInfo;
+      if (!egressInfo) break;
+
+      const fileResults = egressInfo.fileResults || [];
+      if (fileResults.length === 0) {
+        logger.warn(
+          { egressId: egressInfo.egressId, groupRoomId, status: egressInfo.status, error: egressInfo.error },
+          "LiveKit Egress ended with no output file results for group room",
+        );
+        break;
+      }
+
+      const primaryFile = fileResults[0];
+      const rawLocation = primaryFile.location || primaryFile.filename || "";
+      const durationSeconds = primaryFile.duration
+        ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
+        : null;
+      const fileSizeBytes = primaryFile.size ? Number(primaryFile.size) : 0;
+      const rawFileName = primaryFile.filename || `group_${groupRoomId}_${Date.now()}.mp4`;
+      const cleanFileName = rawFileName.split("/").pop() || rawFileName;
+
+      let fileUrl = rawLocation;
+      if (!fileUrl.startsWith("http://") && !fileUrl.startsWith("https://")) {
+        const supabaseUrl =
+          process.env.NEXT_PUBLIC_SUPABASE_URL ||
+          "https://xopunboicdymbwdmxvnu.supabase.co";
+        fileUrl = `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
+      }
+
+      const groupLessons = await db.lesson.findMany({
+        where: { groupRoomId },
+      });
+
+      for (const l of groupLessons) {
+        await db.lessonRecording.create({
+          data: {
+            lessonId: l.id,
+            fileUrl,
+            fileId: egressInfo.egressId || null,
+            fileName: cleanFileName,
+            fileSizeBytes,
+            durationSeconds,
+            storageBackend: "LIVEKIT_EGRESS",
+            teacherJoinedAt: l.teacherJoinedAt,
+            teacherLeftAt: l.teacherLeftAt,
+            studentJoinedAt: l.studentJoinedAt,
+            studentLeftAt: l.studentLeftAt,
+          },
+        });
+      }
+
+      await db.lesson.updateMany({
+        where: { groupRoomId },
+        data: {
+          recordingUrl: fileUrl,
+          recordingFileId: egressInfo.egressId || null,
+          ...(durationSeconds ? { recordingDurationSeconds: durationSeconds } : {}),
+        },
+      });
+
+      logger.info(
+        { groupRoomId, fileUrl, lessonCount: groupLessons.length, durationSeconds, fileSizeBytes },
+        "Successfully saved group room LiveKit Egress recording metadata to database",
+      );
+
+      try {
+        revalidateTag("admin-recordings", "max");
+        revalidateTag("admin-lessons", "max");
+        revalidateTag("student-recordings", "max");
+        revalidateTag("lessons", "max");
+      } catch {}
+
       break;
     }
 

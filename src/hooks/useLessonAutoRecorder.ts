@@ -32,9 +32,9 @@ export function useLessonAutoRecorder({
   partnerName,
   instrument,
 }: UseLessonAutoRecorderProps) {
-  // All participants (Teacher, Student, Admin) record the classroom stage composite
-  // so the lecture is guaranteed to be preserved regardless of who joins/leaves first.
-  const isRecorderRole = true;
+  // Server-side LiveKit Cloud Egress is the primary recording engine (broadcast quality, zero client CPU, instant leave).
+  // Client-side recording is only active if explicitly enabled via NEXT_PUBLIC_ENABLE_CLIENT_RECORDER="true".
+  const isRecorderRole = process.env.NEXT_PUBLIC_ENABLE_CLIENT_RECORDER === "true";
 
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -135,7 +135,7 @@ export function useLessonAutoRecorder({
       return { success: true };
     }
     if (!isRecordingRef.current && recordedChunksRef.current.length === 0) {
-      return { success: false, error: "No recorded chunks available." };
+      return { success: true };
     }
 
     isRecordingRef.current = false;

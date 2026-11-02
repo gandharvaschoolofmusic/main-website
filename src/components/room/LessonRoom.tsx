@@ -29,7 +29,6 @@ import { TurnTakingState } from "./TurnTakingControls";
 import { getSyncedInternetTime } from "@/lib/synced-time";
 import { useMultiCamera } from "@/hooks/useMultiCamera";
 import { MultiCameraModal } from "./MultiCameraModal";
-import { useLessonAutoRecorder } from "@/hooks/useLessonAutoRecorder";
 
 interface LessonRoomProps {
   token: string;
@@ -235,16 +234,6 @@ function LessonRoomContent({
   // Multi-Camera Director Engine
   const multiCam = useMultiCamera(room, isVideoOff);
   const [isMultiCamModalOpen, setIsMultiCamModalOpen] = useState(false);
-
-  // Automatic silent lesson recording (optimized for zero server lag, saves to Supabase)
-  const autoRecorder = useLessonAutoRecorder({
-    room,
-    lessonId: lesson.id,
-    isTeacher: lesson.isTeacher,
-    callerRole: lesson.callerRole,
-    partnerName: lesson.partnerName,
-    instrument: lesson.instrument,
-  });
 
   // Lesson timer
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
@@ -737,26 +726,34 @@ function LessonRoomContent({
     };
   }, [room, multiCam]);
 
-  const [isSavingRecording, setIsSavingRecording] = useState(false);
+  // Ensure server-side LiveKit Cloud Egress recording is active when room is connected
+  useEffect(() => {
+    if (!room) return;
+    const triggerServerRecording = () => {
+      fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" }).catch(() => {});
+    };
+
+    if (room.state === "connected") {
+      triggerServerRecording();
+    } else {
+      room.once(RoomEvent.Connected, triggerServerRecording);
+    }
+  }, [room, lesson.id]);
 
   const handleLeaveRoom = async () => {
-    if (isSavingRecording) return;
-    setIsSavingRecording(true);
-
     try {
-      // Record exit timestamp immediately
+      // 1. Record exit timestamp immediately
       try {
-        fetch(`/api/lessons/${lesson.id}/leave`, {
-          method: "POST",
-          keepalive: true,
-        }).catch(() => {});
+        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+          navigator.sendBeacon(`/api/lessons/${lesson.id}/leave`);
+        } else {
+          fetch(`/api/lessons/${lesson.id}/leave`, {
+            method: "POST",
+            keepalive: true,
+          }).catch(() => {});
+        }
       } catch {}
 
-      // 1. Finalize and await upload of automatic lesson recording
-      await autoRecorder.stopAndUpload();
-    } catch (e) {
-      console.warn("[LessonRoom] Error uploading lesson recording on leave:", e);
-    } finally {
       // 2. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
       try {
         await multiCam.stopSecondaryCamera();
@@ -764,7 +761,16 @@ function LessonRoomContent({
         // Ignore
       }
       releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
-      // 3. Mark intentional leave and return to caller dashboard
+
+      // 3. Disconnect from LiveKit room cleanly
+      try {
+        room.disconnect();
+      } catch {}
+
+      // 4. Return to caller dashboard immediately (seamless, zero-wait exit)
+      onLeave();
+    } catch (e) {
+      console.warn("[LessonRoom] Error during room exit:", e);
       onLeave();
     }
   };
@@ -811,39 +817,6 @@ function LessonRoomContent({
           isTeacher={lesson.isTeacher}
         />
       </MeetRoomUI>
-
-      {/* Apple Design: Translucent Recording Archival Dialog */}
-      {isSavingRecording && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-[#0E0C18]/85 backdrop-blur-xl p-6 transition-all duration-300">
-          <div className="relative max-w-sm w-full bg-[#161226]/95 border border-white/10 rounded-3xl p-7 text-center shadow-2xl flex flex-col items-center gap-5">
-            {/* Subtle top ambient indicator */}
-            <div className="absolute top-0 left-8 right-8 h-[2px] bg-gradient-to-r from-transparent via-[#FF7803] to-transparent" />
-            
-            {/* Spinning Indicator with Gandharva Brand Ring */}
-            <div className="relative w-16 h-16 flex items-center justify-center">
-              <div className="absolute inset-0 rounded-full border-2 border-[#FF7803]/20" />
-              <div className="w-16 h-16 rounded-full border-2 border-transparent border-t-[#FF7803] border-r-[#3C096C] animate-spin" />
-              <div className="w-8 h-8 rounded-full bg-[#3C096C]/40 flex items-center justify-center">
-                <div className="w-3 h-3 rounded-full bg-[#FF7803] animate-ping" />
-              </div>
-            </div>
-
-            <div className="space-y-1.5">
-              <h3 className="font-serif text-lg font-bold text-white tracking-tight">
-                Saving Lesson Recording
-              </h3>
-              <p className="text-xs text-stone-300 leading-relaxed max-w-xs">
-                Archiving session audio and stage video securely to Supabase Cloud Storage. Please keep this tab open...
-              </p>
-            </div>
-
-            <div className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-white/5 border border-white/10 text-[11px] font-mono text-stone-400">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-              Supabase Cloud Sync
-            </div>
-          </div>
-        </div>
-      )}
     </>
   );
 }
