@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import { startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
+import { recordParticipantJoin, recordParticipantLeave } from "@/lib/attendance";
 
 const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
 const apiSecret =
@@ -177,28 +178,23 @@ async function handleIndividualRoom(event: any, lessonId: string) {
         break;
       }
 
-      const now = new Date();
       const isTeacher = participantIdentity === lesson.teacherProfile.userId;
       const isStudent = participantIdentity === lesson.studentId;
 
-      if (isTeacher && !lesson.teacherJoinedAt) {
-        await db.lesson.update({
-          where: { id: lessonId },
-          data: { teacherJoinedAt: now },
+      if (isTeacher) {
+        await recordParticipantJoin({
+          lessonId,
+          userId: participantIdentity,
+          userRole: "TEACHER",
+          userName: event.participant?.name,
         });
-        logger.info(
-          { lessonId, teacherId: participantIdentity, timestamp: now },
-          "Recorded teacherJoinedAt via LiveKit webhook",
-        );
-      } else if (isStudent && !lesson.studentJoinedAt) {
-        await db.lesson.update({
-          where: { id: lessonId },
-          data: { studentJoinedAt: now },
+      } else if (isStudent) {
+        await recordParticipantJoin({
+          lessonId,
+          userId: participantIdentity,
+          userRole: "STUDENT",
+          userName: event.participant?.name,
         });
-        logger.info(
-          { lessonId, studentId: participantIdentity, timestamp: now },
-          "Recorded studentJoinedAt via LiveKit webhook",
-        );
       }
 
       // Automatically initiate LiveKit server-side Room Composite Egress recording
@@ -220,6 +216,21 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       });
 
       if (lesson) {
+        if (lesson.teacherId) {
+          await recordParticipantLeave({
+            lessonId,
+            userId: lesson.teacherId,
+            userRole: "TEACHER",
+          });
+        }
+        if (lesson.studentId) {
+          await recordParticipantLeave({
+            lessonId,
+            userId: lesson.studentId,
+            userRole: "STUDENT",
+          });
+        }
+
         const now = new Date();
         const updateData: {
           status?: "COMPLETED";
@@ -347,28 +358,21 @@ async function handleIndividualRoom(event: any, lessonId: string) {
 
       if (!lesson) break;
 
-      const now = new Date();
       const isTeacher = participantIdentity === lesson.teacherProfile.userId;
       const isStudent = participantIdentity === lesson.studentId;
 
       if (isTeacher) {
-        await db.lesson.update({
-          where: { id: lessonId },
-          data: { teacherLeftAt: now },
+        await recordParticipantLeave({
+          lessonId,
+          userId: participantIdentity,
+          userRole: "TEACHER",
         });
-        logger.info(
-          { lessonId, teacherId: participantIdentity, timestamp: now },
-          "Recorded teacherLeftAt via LiveKit webhook",
-        );
       } else if (isStudent) {
-        await db.lesson.update({
-          where: { id: lessonId },
-          data: { studentLeftAt: now },
+        await recordParticipantLeave({
+          lessonId,
+          userId: participantIdentity,
+          userRole: "STUDENT",
         });
-        logger.info(
-          { lessonId, studentId: participantIdentity, timestamp: now },
-          "Recorded studentLeftAt via LiveKit webhook",
-        );
       }
       break;
     }
@@ -410,31 +414,33 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       );
 
       if (isTeacher) {
-        // Update teacherJoinedAt for ALL lessons in this group that haven't recorded it yet
-        const lessonsToUpdate = groupLessons.filter((l) => !l.teacherJoinedAt);
-        for (const lesson of lessonsToUpdate) {
-          await db.lesson.update({
-            where: { id: lesson.id },
-            data: { teacherJoinedAt: now },
+        for (const lesson of groupLessons) {
+          await recordParticipantJoin({
+            lessonId: lesson.id,
+            userId: participantIdentity,
+            userRole: "TEACHER",
+            userName: event.participant?.name,
           });
         }
         logger.info(
-          { groupRoomId, teacherId: participantIdentity, updatedCount: lessonsToUpdate.length },
-          "Recorded teacherJoinedAt for group room lessons",
+          { groupRoomId, teacherId: participantIdentity, count: groupLessons.length },
+          "Recorded teacher join across group room lessons",
         );
       } else {
-        // Student joined — find their specific lesson row and update studentJoinedAt
+        // Student joined — find their specific lesson row and record join
         const studentLesson = groupLessons.find(
-          (l) => l.studentId === participantIdentity && !l.studentJoinedAt,
+          (l) => l.studentId === participantIdentity,
         );
         if (studentLesson) {
-          await db.lesson.update({
-            where: { id: studentLesson.id },
-            data: { studentJoinedAt: now },
+          await recordParticipantJoin({
+            lessonId: studentLesson.id,
+            userId: participantIdentity,
+            userRole: "STUDENT",
+            userName: event.participant?.name,
           });
           logger.info(
             { groupRoomId, studentId: participantIdentity, lessonId: studentLesson.id },
-            "Recorded studentJoinedAt for group room student",
+            "Recorded student join for group room student",
           );
         }
       }
@@ -454,7 +460,28 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
 
     case "room_finished": {
       const now = new Date();
-      // Mark ALL scheduled lessons in this group room as COMPLETED and fill missing leftAt
+      // Mark ALL scheduled lessons in this group room as COMPLETED and record participant exits
+      const groupLessons = await db.lesson.findMany({
+        where: { groupRoomId },
+      });
+
+      for (const l of groupLessons) {
+        if (l.teacherId) {
+          await recordParticipantLeave({
+            lessonId: l.id,
+            userId: l.teacherId,
+            userRole: "TEACHER",
+          });
+        }
+        if (l.studentId) {
+          await recordParticipantLeave({
+            lessonId: l.id,
+            userId: l.studentId,
+            userRole: "STUDENT",
+          });
+        }
+      }
+
       const result = await db.lesson.updateMany({
         where: { groupRoomId, status: "SCHEDULED" },
         data: { status: "COMPLETED" },
@@ -571,26 +598,30 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       );
 
       if (isTeacher) {
-        await db.lesson.updateMany({
-          where: { groupRoomId },
-          data: { teacherLeftAt: now },
-        });
+        for (const l of groupLessons) {
+          await recordParticipantLeave({
+            lessonId: l.id,
+            userId: participantIdentity,
+            userRole: "TEACHER",
+          });
+        }
         logger.info(
           { groupRoomId, teacherId: participantIdentity, timestamp: now },
-          "Recorded teacherLeftAt for group room",
+          "Recorded teacher exit across group room lessons",
         );
       } else {
         const studentLesson = groupLessons.find(
           (l) => l.studentId === participantIdentity,
         );
         if (studentLesson) {
-          await db.lesson.update({
-            where: { id: studentLesson.id },
-            data: { studentLeftAt: now },
+          await recordParticipantLeave({
+            lessonId: studentLesson.id,
+            userId: participantIdentity,
+            userRole: "STUDENT",
           });
           logger.info(
             { groupRoomId, studentId: participantIdentity, lessonId: studentLesson.id, timestamp: now },
-            "Recorded studentLeftAt for group room student",
+            "Recorded student exit for group room student",
           );
         }
       }

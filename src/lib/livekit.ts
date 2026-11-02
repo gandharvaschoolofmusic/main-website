@@ -262,10 +262,18 @@ export async function startLessonRoomEgress(params: {
 
     // 3. Configure file output with optional S3 credentials
     const s3 = getS3UploadConfig();
+    if (!s3) {
+      logger.info(
+        { roomName },
+        "S3 storage credentials not configured in env; skipping server egress so client recorder archives session to Supabase directly",
+      );
+      return { success: false, error: "S3_NOT_CONFIGURED" };
+    }
+
     const fileOutput = new EncodedFileOutput({
       fileType: EncodedFileType.MP4,
       filepath,
-      ...(s3 ? { output: { case: "s3", value: s3 } } : {}),
+      output: { case: "s3", value: s3 },
     });
 
     // 4. Start composite egress in 720p 30fps with dark theme layout

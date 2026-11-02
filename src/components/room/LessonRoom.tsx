@@ -29,6 +29,7 @@ import { TurnTakingState } from "./TurnTakingControls";
 import { getSyncedInternetTime } from "@/lib/synced-time";
 import { useMultiCamera } from "@/hooks/useMultiCamera";
 import { MultiCameraModal } from "./MultiCameraModal";
+import { useLessonAutoRecorder } from "@/hooks/useLessonAutoRecorder";
 
 interface LessonRoomProps {
   token: string;
@@ -234,6 +235,20 @@ function LessonRoomContent({
   // Multi-Camera Director Engine
   const multiCam = useMultiCamera(room, isVideoOff);
   const [isMultiCamModalOpen, setIsMultiCamModalOpen] = useState(false);
+
+  // Recording engine state: "SERVER_EGRESS" | "CLIENT_RECORDER" | "INITIALIZING"
+  const [recordingMode, setRecordingMode] = useState<"SERVER_EGRESS" | "CLIENT_RECORDER" | "INITIALIZING">("INITIALIZING");
+
+  // Auto-record the classroom session with Supabase cloud archival fail-safe
+  const autoRecorder = useLessonAutoRecorder({
+    room,
+    lessonId: lesson.id,
+    isTeacher: lesson.isTeacher,
+    callerRole: lesson.callerRole,
+    partnerName: lesson.partnerName,
+    instrument: lesson.instrument,
+    enabled: recordingMode === "CLIENT_RECORDER",
+  });
 
   // Lesson timer
   const [remainingSeconds, setRemainingSeconds] = useState<number>(() => {
@@ -771,17 +786,29 @@ function LessonRoomContent({
     };
   }, [room, multiCam]);
 
-  // Ensure server-side LiveKit Cloud Egress recording is active when room is connected
+  // Ensure recording is active when room is connected (prefer server egress; fallback to client recorder)
   useEffect(() => {
     if (!room) return;
-    const triggerServerRecording = () => {
-      fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" }).catch(() => {});
+    const triggerRecording = async () => {
+      try {
+        const res = await fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" });
+        if (res.ok) {
+          const data = await res.json();
+          if (data.mode === "SERVER_EGRESS" && data.success) {
+            setRecordingMode("SERVER_EGRESS");
+            return;
+          }
+        }
+        setRecordingMode("CLIENT_RECORDER");
+      } catch {
+        setRecordingMode("CLIENT_RECORDER");
+      }
     };
 
     if (room.state === "connected") {
-      triggerServerRecording();
+      void triggerRecording();
     } else {
-      room.once(RoomEvent.Connected, triggerServerRecording);
+      room.once(RoomEvent.Connected, () => void triggerRecording());
     }
   }, [room, lesson.id]);
 
@@ -799,7 +826,16 @@ function LessonRoomContent({
         }
       } catch {}
 
-      // 2. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
+      // 2. Stop and upload any in-progress client recording cleanly before room teardown
+      if (recordingMode === "CLIENT_RECORDER") {
+        try {
+          await autoRecorder.stopAndUpload();
+        } catch (uploadErr) {
+          console.warn("[LessonRoom] AutoRecorder upload on leave warning:", uploadErr);
+        }
+      }
+
+      // 3. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
       try {
         await multiCam.stopSecondaryCamera();
       } catch {
@@ -807,12 +843,12 @@ function LessonRoomContent({
       }
       releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
 
-      // 3. Disconnect from LiveKit room cleanly
+      // 4. Disconnect from LiveKit room cleanly
       try {
         room.disconnect();
       } catch {}
 
-      // 4. Return to caller dashboard immediately (seamless, zero-wait exit)
+      // 5. Return to caller dashboard immediately (seamless, zero-wait exit)
       onLeave();
     } catch (e) {
       console.warn("[LessonRoom] Error during room exit:", e);

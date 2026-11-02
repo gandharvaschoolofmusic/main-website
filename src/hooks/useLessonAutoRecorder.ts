@@ -10,6 +10,7 @@ interface UseLessonAutoRecorderProps {
   callerRole?: string;
   partnerName: string;
   instrument: string;
+  enabled?: boolean;
 }
 
 /**
@@ -31,10 +32,15 @@ export function useLessonAutoRecorder({
   callerRole,
   partnerName,
   instrument,
+  enabled,
 }: UseLessonAutoRecorderProps) {
-  // Server-side LiveKit Cloud Egress is the primary recording engine (broadcast quality, zero client CPU, instant leave).
-  // Client-side recording is only active if explicitly enabled via NEXT_PUBLIC_ENABLE_CLIENT_RECORDER="true".
-  const isRecorderRole = process.env.NEXT_PUBLIC_ENABLE_CLIENT_RECORDER === "true";
+  // Client recorder runs whenever enabled (or as automatic fail-safe when teacher is in room)
+  const isRecorderRole =
+    enabled !== undefined
+      ? enabled
+      : process.env.NEXT_PUBLIC_ENABLE_CLIENT_RECORDER === "true" ||
+        isTeacher ||
+        callerRole === "TEACHER";
 
   const [isRecording, setIsRecording] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
@@ -47,6 +53,10 @@ export function useLessonAutoRecorder({
   const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
   const hasUploadedRef = useRef(false);
+  const combinedStreamRef = useRef<MediaStream | null>(null);
+  const selectedMimeRef = useRef<string>("");
+  const isRollingRef = useRef(false);
+  const segmentIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hidden DOM video elements to capture live video frames for canvas compositing
   const localVideoRef = useRef<HTMLVideoElement | null>(null);
@@ -57,32 +67,31 @@ export function useLessonAutoRecorder({
   const audioSourcesMapRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
   const clonedAudioTracksRef = useRef<Map<string, { track: MediaStreamTrack; stream: MediaStream; isCloned: boolean }>>(new Map());
 
-  // Upload finalized recording blob to backend
-  const uploadRecording = useCallback(async (): Promise<{
-    success: boolean;
-    fileUrl?: string;
-    storageBackend?: string;
-    error?: string;
-  }> => {
-    if (hasUploadedRef.current) return { success: true };
-    if (recordedChunksRef.current.length === 0) {
-      return { success: false, error: "No video chunks recorded." };
-    }
+  // Upload a completed segment blob to the backend (Supabase storage)
+  const uploadSegmentBlob = useCallback(
+    async (
+      chunks: Blob[],
+      startTime: number,
+    ): Promise<{
+      success: boolean;
+      fileUrl?: string;
+      storageBackend?: string;
+      error?: string;
+    }> => {
+      if (chunks.length === 0) {
+        return { success: false, error: "No video chunks recorded." };
+      }
 
-    setIsUploading(true);
-
-    try {
-      const mimeType = mediaRecorderRef.current?.mimeType || "video/webm";
-      const blob = new Blob(recordedChunksRef.current, { type: mimeType });
+      const mimeType = selectedMimeRef.current || mediaRecorderRef.current?.mimeType || "video/webm";
+      const blob = new Blob(chunks, { type: mimeType });
 
       if (blob.size < 100) {
-        setIsUploading(false);
-        return { success: false, error: "Recording file was too small or empty." };
+        return { success: false, error: "Recording segment was too small or empty." };
       }
 
       const durationSeconds = Math.max(
         1,
-        Math.round((Date.now() - (recordingStartTimeRef.current || Date.now())) / 1000),
+        Math.round((Date.now() - (startTime || Date.now())) / 1000),
       );
 
       const formData = new FormData();
@@ -93,37 +102,95 @@ export function useLessonAutoRecorder({
       );
       formData.append("durationSeconds", String(durationSeconds));
 
-      // Note: Do NOT use keepalive: true, as browsers strictly reject keepalive fetch requests > 64KB!
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s max timeout for large uploads
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s max timeout for upload
 
-      const res = await fetch(`/api/lessons/${lessonId}/recording`, {
-        method: "POST",
-        body: formData,
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+      try {
+        const res = await fetch(`/api/lessons/${lessonId}/recording`, {
+          method: "POST",
+          body: formData,
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-      if (!res.ok) {
-        const errData = await res.json().catch(() => ({}));
-        throw new Error(errData.error || `Server responded with status ${res.status}`);
+        if (!res.ok) {
+          const errData = await res.json().catch(() => ({}));
+          throw new Error(errData.error || `Server responded with status ${res.status}`);
+        }
+
+        const data = await res.json();
+        return {
+          success: true,
+          fileUrl: data.fileUrl,
+          storageBackend: data.storageBackend,
+        };
+      } catch (err) {
+        clearTimeout(timeoutId);
+        const msg = err instanceof Error ? err.message : String(err);
+        console.warn("[AutoRecorder] Segment upload failed:", msg);
+        return { success: false, error: msg };
+      }
+    },
+    [lessonId],
+  );
+
+  // Rolling segment cycler: every 4 minutes, closes current part and uploads to Supabase in background
+  const cycleRecordingSegment = useCallback(async () => {
+    if (!isRecordingRef.current || !mediaRecorderRef.current || isRollingRef.current) return;
+    const oldRecorder = mediaRecorderRef.current;
+    if (oldRecorder.state !== "recording") return;
+
+    isRollingRef.current = true;
+    const segStartTime = recordingStartTimeRef.current || Date.now();
+    recordingStartTimeRef.current = Date.now();
+
+    try {
+      if (typeof oldRecorder.requestData === "function") {
+        try {
+          oldRecorder.requestData();
+        } catch {}
       }
 
-      const data = await res.json();
-      hasUploadedRef.current = true;
-      setIsUploading(false);
-      return {
-        success: true,
-        fileUrl: data.fileUrl,
-        storageBackend: data.storageBackend,
-      };
+      await new Promise((r) => setTimeout(r, 100));
+
+      try {
+        oldRecorder.stop();
+      } catch {}
+
+      const chunksToUpload = [...recordedChunksRef.current];
+      recordedChunksRef.current = [];
+
+      // Immediately start new MediaRecorder on the existing combinedStream
+      if (combinedStreamRef.current && isRecordingRef.current) {
+        try {
+          const newRecorder = new MediaRecorder(combinedStreamRef.current, {
+            mimeType: selectedMimeRef.current || undefined,
+            videoBitsPerSecond: 450_000,
+            audioBitsPerSecond: 64_000,
+          });
+
+          newRecorder.ondataavailable = (event) => {
+            if (event.data && event.data.size > 0) {
+              recordedChunksRef.current.push(event.data);
+            }
+          };
+
+          newRecorder.start(2000);
+          mediaRecorderRef.current = newRecorder;
+        } catch (recErr) {
+          console.warn("[AutoRecorder] Error restarting segment recorder:", recErr);
+        }
+      }
+
+      if (chunksToUpload.length > 0) {
+        void uploadSegmentBlob(chunksToUpload, segStartTime);
+      }
     } catch (err) {
-      setIsUploading(false);
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn("[AutoRecorder] Upload request failed:", msg);
-      return { success: false, error: msg };
+      console.warn("[AutoRecorder] Error during rolling segment cycle:", err);
+    } finally {
+      isRollingRef.current = false;
     }
-  }, [lessonId]);
+  }, [uploadSegmentBlob]);
 
   // Teardown and stop recorder (returns Promise so callers can await upload completion)
   const stopAndUpload = useCallback(async (): Promise<{
@@ -131,15 +198,17 @@ export function useLessonAutoRecorder({
     fileUrl?: string;
     error?: string;
   }> => {
-    if (hasUploadedRef.current) {
-      return { success: true };
-    }
     if (!isRecordingRef.current && recordedChunksRef.current.length === 0) {
       return { success: true };
     }
 
     isRecordingRef.current = false;
     setIsRecording(false);
+
+    if (segmentIntervalRef.current) {
+      clearInterval(segmentIntervalRef.current);
+      segmentIntervalRef.current = null;
+    }
 
     if (animationFrameIdRef.current) {
       cancelAnimationFrame(animationFrameIdRef.current);
@@ -171,7 +240,6 @@ export function useLessonAutoRecorder({
         } catch {
           resolve();
         }
-        // Fallback safety timeout if stop event is delayed
         setTimeout(resolve, 800);
       });
     }
@@ -181,19 +249,26 @@ export function useLessonAutoRecorder({
       audioSourcesMapRef.current.forEach((src) => {
         try {
           src.disconnect();
-        } catch {
-          // Ignore
-        }
+        } catch {}
       });
       audioSourcesMapRef.current.clear();
       audioContextRef.current?.close();
-    } catch {
-      // Ignore
+    } catch {}
+
+    // Upload finalized recording segment
+    const finalChunks = [...recordedChunksRef.current];
+    recordedChunksRef.current = [];
+    const finalStart = recordingStartTimeRef.current || Date.now();
+
+    if (finalChunks.length > 0) {
+      setIsUploading(true);
+      const res = await uploadSegmentBlob(finalChunks, finalStart);
+      setIsUploading(false);
+      return res;
     }
 
-    // Upload finalized recording
-    return await uploadRecording();
-  }, [uploadRecording]);
+    return { success: true };
+  }, [uploadSegmentBlob]);
 
   useEffect(() => {
     if (!isRecorderRole || !room || !lessonId) return;
@@ -526,6 +601,7 @@ export function useLessonAutoRecorder({
       }
 
       const combinedStream = new MediaStream(tracksToRecord);
+      combinedStreamRef.current = combinedStream;
 
       // Select mime type
       const mimeTypes = [
@@ -536,6 +612,7 @@ export function useLessonAutoRecorder({
       ];
       const selectedMime =
         mimeTypes.find((m) => MediaRecorder.isTypeSupported(m)) || "";
+      selectedMimeRef.current = selectedMime;
 
       try {
         const recorder = new MediaRecorder(combinedStream, {
@@ -556,6 +633,14 @@ export function useLessonAutoRecorder({
         isRecordingRef.current = true;
         setIsRecording(true);
         recordingStartTimeRef.current = Date.now();
+
+        // Progressive cloud backup: cycle every 4 minutes (240,000 ms) so lessons are safely preserved in parts
+        if (segmentIntervalRef.current) clearInterval(segmentIntervalRef.current);
+        segmentIntervalRef.current = setInterval(() => {
+          if (!isCleanedUp) {
+            void cycleRecordingSegment();
+          }
+        }, 240_000);
 
         // Draw initial frame immediately so stream has active frames
         drawFrame(performance.now());
@@ -588,6 +673,10 @@ export function useLessonAutoRecorder({
     return () => {
       isCleanedUp = true;
       clearInterval(bgRenderInterval);
+      if (segmentIntervalRef.current) {
+        clearInterval(segmentIntervalRef.current);
+        segmentIntervalRef.current = null;
+      }
       window.removeEventListener("click", handleUserGestureUnlock);
       window.removeEventListener("touchstart", handleUserGestureUnlock);
       window.removeEventListener("keydown", handleUserGestureUnlock);
@@ -646,7 +735,7 @@ export function useLessonAutoRecorder({
         }
       }
     };
-  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopAndUpload]);
+  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopAndUpload, cycleRecordingSegment]);
 
   return {
     stopAndUpload,

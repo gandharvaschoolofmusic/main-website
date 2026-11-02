@@ -3,6 +3,7 @@ import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
+import { recordParticipantLeave } from "@/lib/attendance";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -43,33 +44,18 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       return NextResponse.json({ error: "Forbidden" }, { status: 403 });
     }
 
-    const updateData: {
-      teacherLeftAt?: Date;
-      studentLeftAt?: Date;
-    } = {};
-
     if (isTeacher) {
-      updateData.teacherLeftAt = now;
-    }
-    if (isStudent) {
-      updateData.studentLeftAt = now;
-    }
-
-    if (Object.keys(updateData).length > 0) {
-      await db.lesson.update({
-        where: { id: lessonId },
-        data: updateData,
+      await recordParticipantLeave({
+        lessonId,
+        userId: lesson.teacherProfile?.userId || lesson.teacherId,
+        userRole: "TEACHER",
       });
-
-      try {
-        revalidateTag("admin-recordings", "max");
-        revalidateTag("admin-lessons", "max");
-      } catch {}
-
-      logger.info(
-        { lessonId, userId, isTeacher, isStudent, timestamp: now },
-        "Recorded participant room exit timestamp",
-      );
+    } else if (isStudent) {
+      await recordParticipantLeave({
+        lessonId,
+        userId: lesson.studentId,
+        userRole: "STUDENT",
+      });
     }
 
     return NextResponse.json({ success: true, timestamp: now.toISOString() });

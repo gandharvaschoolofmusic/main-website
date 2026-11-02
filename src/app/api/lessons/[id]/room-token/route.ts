@@ -4,6 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireLessonParticipant } from "@/lib/auth-helpers";
 import { generateLessonRoomToken } from "@/lib/livekit";
+import { recordParticipantJoin } from "@/lib/attendance";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import {
   isAppError,
@@ -89,45 +90,14 @@ export async function GET(request: Request, { params }: RouteParams) {
       throw new LessonExpiredError();
     }
 
-    // 5. Record server-side entry attendance timestamps
-    if (callerRole === "TEACHER") {
-      const hasLeft = Boolean(lesson.teacherLeftAt);
-      const isStale =
-        lesson.teacherJoinedAt &&
-        now.getTime() - new Date(lesson.teacherJoinedAt).getTime() >
-          2 * 60 * 60 * 1000;
-      const shouldUpdateJoin = !lesson.teacherJoinedAt || hasLeft || isStale;
-
-      await db.lesson.update({
-        where: { id: lesson.id },
-        data: {
-          ...(shouldUpdateJoin ? { teacherJoinedAt: now } : {}),
-          teacherLeftAt: null, // Clear exit timestamp while participant is actively in room
-        },
+    // 5. Record server-side entry attendance timestamps & session logs
+    if (callerRole === "TEACHER" || callerRole === "STUDENT") {
+      await recordParticipantJoin({
+        lessonId: lesson.id,
+        userId: session.user.id,
+        userRole: callerRole,
+        userName: session.user.name || undefined,
       });
-      try {
-        revalidateTag("admin-recordings", "max");
-        revalidateTag("admin-lessons", "max");
-      } catch {}
-    } else if (callerRole === "STUDENT") {
-      const hasLeft = Boolean(lesson.studentLeftAt);
-      const isStale =
-        lesson.studentJoinedAt &&
-        now.getTime() - new Date(lesson.studentJoinedAt).getTime() >
-          2 * 60 * 60 * 1000;
-      const shouldUpdateJoin = !lesson.studentJoinedAt || hasLeft || isStale;
-
-      await db.lesson.update({
-        where: { id: lesson.id },
-        data: {
-          ...(shouldUpdateJoin ? { studentJoinedAt: now } : {}),
-          studentLeftAt: null, // Clear exit timestamp while participant is actively in room
-        },
-      });
-      try {
-        revalidateTag("admin-recordings", "max");
-        revalidateTag("admin-lessons", "max");
-      } catch {}
     }
 
     // 6. Mint LiveKit access token

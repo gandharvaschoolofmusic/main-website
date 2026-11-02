@@ -48,8 +48,9 @@ export async function POST(
       groupRoomId: lesson.groupRoomId,
     });
 
-    logger.info({ lessonId, roomName, result }, "Recording start endpoint invoked");
-    return NextResponse.json(result);
+    const mode = result.success ? "SERVER_EGRESS" : "CLIENT_RECORDER";
+    logger.info({ lessonId, roomName, result, mode }, "Recording start endpoint invoked");
+    return NextResponse.json({ ...result, mode });
   } catch (error) {
     logger.error({ error }, "Error starting room recording via API");
     return NextResponse.json(

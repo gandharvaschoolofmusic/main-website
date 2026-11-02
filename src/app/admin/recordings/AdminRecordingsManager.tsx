@@ -88,6 +88,24 @@ export interface SessionLessonItem {
   teacherDurationSeconds?: number | null;
   studentDurationSeconds?: number | null;
   overlapDurationSeconds?: number | null;
+  teacherSessions?: {
+    id: string;
+    joinedAt: string;
+    leftAt: string | null;
+    formattedJoined: string;
+    formattedLeft: string;
+    durationSeconds: number;
+    isActive: boolean;
+  }[];
+  studentSessions?: {
+    id: string;
+    joinedAt: string;
+    leftAt: string | null;
+    formattedJoined: string;
+    formattedLeft: string;
+    durationSeconds: number;
+    isActive: boolean;
+  }[];
   recordings: RecordingFileItem[];
 }
 
@@ -1126,34 +1144,72 @@ export function AdminRecordingsManager({
                       </div>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-primary/10 text-primary">
-                    Instructor
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/10">
-                  <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
-                      <LogIn className="w-3 h-3 text-emerald-600" />
-                      Joined Room
-                    </div>
-                    <div className="font-mono text-xs font-bold text-emerald-700">
-                      {formatPresence(selectedSession.teacherJoinedAt, selectedSession.formattedTeacherJoined)}
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
-                      <LogOut className="w-3 h-3 text-rose-600" />
-                      Left Room
-                    </div>
-                    <div className="font-mono text-xs font-bold text-rose-700">
-                      {formatPresence(selectedSession.teacherLeftAt, selectedSession.formattedTeacherLeft)}
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedSession.teacherSessions && selectedSession.teacherSessions.length > 1 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                        {selectedSession.teacherSessions.length} Joins
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-primary/10 text-primary">
+                      Instructor
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted">
+                {selectedSession.teacherSessions && selectedSession.teacherSessions.length > 1 ? (
+                  <div className="space-y-1.5 pt-2 border-t border-primary/10 max-h-48 overflow-y-auto pr-1">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-body-muted flex items-center justify-between pb-0.5">
+                      <span>Timeline ({selectedSession.teacherSessions.length} Sessions)</span>
+                      <span>Duration</span>
+                    </div>
+                    {selectedSession.teacherSessions.map((session, idx) => (
+                      <div
+                        key={session.id || idx}
+                        className="p-2 rounded-lg bg-white border border-primary/5 flex items-center justify-between text-xs shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-4 h-4 rounded-full bg-primary/10 text-primary text-[10px] font-bold flex items-center justify-center font-mono shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
+                            <span className="text-emerald-700 font-semibold">{session.formattedJoined}</span>
+                            <span className="text-body-muted">→</span>
+                            <span className={session.isActive ? "text-emerald-600 font-bold animate-pulse" : "text-rose-700 font-semibold"}>
+                              {session.formattedLeft}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-mono text-[11px] font-bold text-heading shrink-0 pl-2">
+                          {formatSecondsToCompact(session.durationSeconds)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-primary/10">
+                    <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                        <LogIn className="w-3 h-3 text-emerald-600" />
+                        Joined Room
+                      </div>
+                      <div className="font-mono text-xs font-bold text-emerald-700">
+                        {formatPresence(selectedSession.teacherJoinedAt, selectedSession.formattedTeacherJoined)}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-white border border-primary/5 space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                        <LogOut className="w-3 h-3 text-rose-600" />
+                        Left Room
+                      </div>
+                      <div className="font-mono text-xs font-bold text-rose-700">
+                        {formatPresence(selectedSession.teacherLeftAt, selectedSession.formattedTeacherLeft)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted border-t border-primary/5">
                   <span>Total Time in Room:</span>
                   <span className="font-bold text-heading">
                     {formatSecondsToCompact(selectedSession.teacherDurationSeconds)}
@@ -1177,34 +1233,72 @@ export function AdminRecordingsManager({
                       </div>
                     </div>
                   </div>
-                  <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-accent/15 text-accent-dark">
-                    Student
-                  </span>
-                </div>
-
-                <div className="grid grid-cols-2 gap-2 pt-2 border-t border-accent/10">
-                  <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
-                      <LogIn className="w-3 h-3 text-emerald-600" />
-                      Joined Room
-                    </div>
-                    <div className="font-mono text-xs font-bold text-emerald-700">
-                      {formatPresence(selectedSession.studentJoinedAt, selectedSession.formattedStudentJoined)}
-                    </div>
-                  </div>
-
-                  <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
-                    <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
-                      <LogOut className="w-3 h-3 text-rose-600" />
-                      Left Room
-                    </div>
-                    <div className="font-mono text-xs font-bold text-rose-700">
-                      {formatPresence(selectedSession.studentLeftAt, selectedSession.formattedStudentLeft)}
-                    </div>
+                  <div className="flex items-center gap-1.5">
+                    {selectedSession.studentSessions && selectedSession.studentSessions.length > 1 && (
+                      <span className="px-2 py-0.5 rounded text-[10px] font-mono font-semibold bg-emerald-500/10 text-emerald-700 border border-emerald-500/20">
+                        {selectedSession.studentSessions.length} Joins
+                      </span>
+                    )}
+                    <span className="px-2 py-0.5 rounded text-[10px] font-mono uppercase tracking-wider font-semibold bg-accent/15 text-accent-dark">
+                      Student
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted">
+                {selectedSession.studentSessions && selectedSession.studentSessions.length > 1 ? (
+                  <div className="space-y-1.5 pt-2 border-t border-accent/10 max-h-48 overflow-y-auto pr-1">
+                    <div className="text-[10px] font-mono uppercase tracking-wider text-body-muted flex items-center justify-between pb-0.5">
+                      <span>Timeline ({selectedSession.studentSessions.length} Sessions)</span>
+                      <span>Duration</span>
+                    </div>
+                    {selectedSession.studentSessions.map((session, idx) => (
+                      <div
+                        key={session.id || idx}
+                        className="p-2 rounded-lg bg-white border border-accent/10 flex items-center justify-between text-xs shadow-2xs"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="w-4 h-4 rounded-full bg-accent/15 text-accent-dark text-[10px] font-bold flex items-center justify-center font-mono shrink-0">
+                            {idx + 1}
+                          </span>
+                          <div className="flex items-center gap-1.5 font-mono text-[11px] truncate">
+                            <span className="text-emerald-700 font-semibold">{session.formattedJoined}</span>
+                            <span className="text-body-muted">→</span>
+                            <span className={session.isActive ? "text-emerald-600 font-bold animate-pulse" : "text-rose-700 font-semibold"}>
+                              {session.formattedLeft}
+                            </span>
+                          </div>
+                        </div>
+                        <span className="font-mono text-[11px] font-bold text-heading shrink-0 pl-2">
+                          {formatSecondsToCompact(session.durationSeconds)}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 gap-2 pt-2 border-t border-accent/10">
+                    <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                        <LogIn className="w-3 h-3 text-emerald-600" />
+                        Joined Room
+                      </div>
+                      <div className="font-mono text-xs font-bold text-emerald-700">
+                        {formatPresence(selectedSession.studentJoinedAt, selectedSession.formattedStudentJoined)}
+                      </div>
+                    </div>
+
+                    <div className="p-2.5 rounded-lg bg-white border border-accent/10 space-y-1">
+                      <div className="flex items-center gap-1 text-[10px] uppercase font-mono tracking-wider text-body-muted">
+                        <LogOut className="w-3 h-3 text-rose-600" />
+                        Left Room
+                      </div>
+                      <div className="font-mono text-xs font-bold text-rose-700">
+                        {formatPresence(selectedSession.studentLeftAt, selectedSession.formattedStudentLeft)}
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                <div className="flex items-center justify-between text-xs font-mono pt-1 text-body-muted border-t border-accent/5">
                   <span>Total Time in Room:</span>
                   <span className="font-bold text-heading">
                     {formatSecondsToCompact(selectedSession.studentDurationSeconds)}
