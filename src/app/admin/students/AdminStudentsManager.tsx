@@ -354,12 +354,29 @@ export function AdminStudentsManager({
   }).format(new Date());
 
   // Metrics for selected student
-  const totalLessons = selectedStudent ? selectedStudent.lessons.length : 0;
   const completedLessons = selectedStudent
     ? selectedStudent.lessons.filter((l) => l.status === "COMPLETED").length
     : 0;
+
+  // Non-cancelled sessions conducted or scheduled up to the present moment
+  const conductedLessons = selectedStudent
+    ? selectedStudent.lessons.filter((l) => {
+        if (l.status === "CANCELLED") return false;
+        if (l.status === "COMPLETED") return true;
+        const lDate = new Date(l.startsAt);
+        const endTime = new Date(lDate.getTime() + (l.durationMinutes || 60) * 60_000);
+        return endTime.getTime() <= Date.now();
+      })
+    : [];
+
+  const conductedSessionsCount = Math.max(completedLessons, conductedLessons.length);
+
   const attendancePct =
-    totalLessons > 0 ? Math.round((completedLessons / totalLessons) * 100) : 0;
+    conductedSessionsCount > 0
+      ? Math.min(100, Math.round((completedLessons / conductedSessionsCount) * 100))
+      : completedLessons > 0
+      ? 100
+      : 0;
 
   const totalCourseSessions = selectedStudent
     ? selectedStudent.enrollments.reduce((acc, e) => acc + e.totalSessions, 0)
@@ -1063,7 +1080,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 {/* ─── 4 Executive Metric Cards Row ────────────────────────── */}
                 <div className="grid grid-cols-2 lg:grid-cols-4 gap-3.5 sm:gap-4">
                   {/* Card 1: Attendance */}
-                  <div className="p-4 rounded-2xl bg-white border border-neutral-200/80 shadow-2xs">
+                  <div
+                    className="p-4 rounded-2xl bg-white border border-neutral-200/80 shadow-2xs"
+                    title={`${completedLessons} attended out of ${conductedSessionsCount} sessions conducted up to present`}
+                  >
                     <div className="flex items-center justify-between">
                       <span className="text-xs text-body font-medium">Attendance</span>
                       <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
@@ -1074,7 +1094,9 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                       {attendancePct}%
                     </div>
                     <div className="text-[11px] text-body/60 font-medium mt-0.5 font-numeric">
-                      {completedLessons} of {totalLessons} sessions
+                      {conductedSessionsCount === 0
+                        ? "0 of 0 sessions"
+                        : `${completedLessons} of ${conductedSessionsCount} sessions`}
                     </div>
                   </div>
 
