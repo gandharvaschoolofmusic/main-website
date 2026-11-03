@@ -30,12 +30,29 @@ export function NavbarWrapper({
         pathname.startsWith("/teacher") ||
         pathname.startsWith("/student") ||
         pathname.startsWith("/classroom") ||
+        pathname.startsWith("/lesson") ||
         pathname.startsWith("/dashboard"))
   );
 
-  // On public pages without a logged-in user, render our authentic Gandharva navbar (LandingHeader)
-  if (!user && !isDashboard) {
-    return <LandingHeader />;
+  // On public pages, render our authentic Gandharva navbar (LandingHeader) with full navigation tabs
+  if (!isDashboard) {
+    return (
+      <>
+        <LandingHeader user={user} signOutAction={signOutAction} />
+        {user && !user.emailVerified && pathname !== "/verify-email" && (
+          <div className="fixed top-20 left-0 right-0 z-40 border-t border-accent/20 bg-accent-subtle px-4 py-2 text-center text-xs text-accent-dark font-medium shadow-xs">
+            Your email is not verified yet. Please check your inbox or{" "}
+            <Link
+              href="/verify-email"
+              className="font-bold underline decoration-accent underline-offset-2 hover:text-accent-active"
+            >
+              verify your email
+            </Link>{" "}
+            to unlock lesson booking and profile publishing.
+          </div>
+        )}
+      </>
+    );
   }
 
   // Otherwise (authenticated portal or dashboard routes),

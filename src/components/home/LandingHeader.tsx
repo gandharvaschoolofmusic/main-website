@@ -4,6 +4,13 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
+import type { NavbarUser } from "@/components/layout/NavbarWrapper";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
+
+export interface LandingHeaderProps {
+  user?: NavbarUser | null;
+  signOutAction?: () => Promise<void>;
+}
 
 const INSTRUMENT_ITEMS = [
   { label: "Piano", href: "/courses/piano" },
@@ -33,7 +40,7 @@ const DANCE_ITEMS = [
   { label: "Bollywood Dance", href: "/courses/bollywood-dance" },
 ];
 
-export function LandingHeader() {
+export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) {
   const pathname = usePathname();
   const isFormPage = ["/login", "/signup", "/book-trial", "/book-your-free-trial"].includes(pathname);
   const [isScrolled, setIsScrolled] = useState(false);
@@ -351,21 +358,71 @@ export function LandingHeader() {
               </ul>
             </nav>
 
-            {/* CTAs */}
+            {/* CTAs / User Profile */}
             <div className="flex-shrink-0 flex items-center gap-2 xl:gap-3">
-              <Link
-                href="/login"
-                className="text-white hover:text-white/80 text-xs xl:text-sm font-semibold px-2.5 py-1.5 transition-colors whitespace-nowrap"
-              >
-                Sign In
-              </Link>
-              <Link
-                href="/book-trial"
-                id="nav-book-trial-cta"
-                className="inline-flex items-center justify-center px-3.5 xl:px-4 py-2 rounded-lg shadow-sm text-xs xl:text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-all btn-tactile whitespace-nowrap"
-              >
-                Book a free trial
-              </Link>
+              {user ? (
+                <div className="flex items-center gap-2 xl:gap-3">
+                  {/* Notification Bell */}
+                  <NotificationBell userRole={user.role} />
+
+                  {/* Dashboard link button */}
+                  <Link
+                    href={
+                      user.role === "ADMIN"
+                        ? "/admin"
+                        : user.role === "TEACHER"
+                        ? "/teacher/dashboard"
+                        : "/student/dashboard"
+                    }
+                    className="flex items-center gap-2 rounded-xl bg-white/15 hover:bg-white/25 pl-2 pr-3 py-1 sm:py-1.5 text-xs xl:text-sm font-semibold text-white transition-all btn-tactile whitespace-nowrap active:scale-95 border border-white/20"
+                  >
+                    {user.image ? (
+                      <div className="relative w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden border border-white/40 shrink-0">
+                        <Image
+                          src={user.image}
+                          alt={user.name || "Profile"}
+                          fill
+                          sizes="24px"
+                          className="object-cover"
+                        />
+                      </div>
+                    ) : (
+                      <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full bg-accent/30 text-accent font-bold text-[10px] flex items-center justify-center border border-white/20 shrink-0">
+                        {user.name?.slice(0, 1).toUpperCase() || "U"}
+                      </div>
+                    )}
+                    <span>Dashboard</span>
+                  </Link>
+
+                  {/* Sign Out Button */}
+                  {signOutAction && (
+                    <form action={signOutAction}>
+                      <button
+                        type="submit"
+                        className="rounded-lg px-2 xl:px-2.5 py-1 text-xs xl:text-sm text-white/80 transition-all hover:text-white hover:bg-white/10 btn-tactile whitespace-nowrap active:scale-95 cursor-pointer"
+                      >
+                        Sign Out
+                      </button>
+                    </form>
+                  )}
+                </div>
+              ) : (
+                <>
+                  <Link
+                    href="/login"
+                    className="text-white hover:text-white/80 text-xs xl:text-sm font-semibold px-2.5 py-1.5 transition-colors whitespace-nowrap"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    href="/book-trial"
+                    id="nav-book-trial-cta"
+                    className="inline-flex items-center justify-center px-3.5 xl:px-4 py-2 rounded-lg shadow-sm text-xs xl:text-sm font-semibold text-white bg-purple-600 hover:bg-purple-700 transition-all btn-tactile whitespace-nowrap"
+                  >
+                    Book a free trial
+                  </Link>
+                </>
+              )}
             </div>
           </div>
         </div>
@@ -390,16 +447,42 @@ export function LandingHeader() {
               />
             </Link>
           </div>
-          <button
-            type="button"
-            onClick={() => setMobileMenuOpen(true)}
-            aria-label="Open Menu"
-            className="text-white p-1 focus:outline-none"
-          >
-            <svg stroke="currentColor" fill="currentColor" viewBox="0 0 512 512" className="w-7 h-7">
-              <path d="M32 96v64h448V96H32zm0 128v64h448v-64H32zm0 128v64h448v-64H32z" />
-            </svg>
-          </button>
+          <div className="flex items-center gap-2">
+            {user && (
+              <div className="flex items-center gap-1.5 mr-1">
+                <NotificationBell userRole={user.role} />
+                <Link
+                  href={
+                    user.role === "ADMIN"
+                      ? "/admin"
+                      : user.role === "TEACHER"
+                      ? "/teacher/dashboard"
+                      : "/student/dashboard"
+                  }
+                  className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs border border-white/30 overflow-hidden"
+                  aria-label="Dashboard"
+                >
+                  {user.image ? (
+                    <div className="relative w-full h-full rounded-full overflow-hidden">
+                      <Image src={user.image} alt={user.name || "Profile"} fill sizes="32px" className="object-cover" />
+                    </div>
+                  ) : (
+                    user.name?.slice(0, 1).toUpperCase() || "U"
+                  )}
+                </Link>
+              </div>
+            )}
+            <button
+              type="button"
+              onClick={() => setMobileMenuOpen(true)}
+              aria-label="Open Menu"
+              className="text-white p-1 focus:outline-none"
+            >
+              <svg stroke="currentColor" fill="currentColor" viewBox="0 0 512 512" className="w-7 h-7">
+                <path d="M32 96v64h448V96H32zm0 128v64h448v-64H32zm0 128v64h448v-64H32z" />
+              </svg>
+            </button>
+          </div>
         </div>
       </div>
 
@@ -603,25 +686,67 @@ export function LandingHeader() {
           >
             Become Our Affiliate
           </Link>
-          <Link
-            href="/login"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block py-1 font-semibold text-purple-700 hover:text-purple-900"
-          >
-            Sign In
-          </Link>
+          {user ? (
+            <div className="space-y-2 pt-3 border-t border-gray-100">
+              <Link
+                href={
+                  user.role === "ADMIN"
+                    ? "/admin"
+                    : user.role === "TEACHER"
+                    ? "/teacher/dashboard"
+                    : "/student/dashboard"
+                }
+                onClick={() => setMobileMenuOpen(false)}
+                className="flex items-center justify-between py-2.5 px-3 rounded-xl bg-purple-50 text-purple-900 font-bold text-sm"
+              >
+                <div className="flex items-center gap-2">
+                  {user.image ? (
+                    <div className="relative w-6 h-6 rounded-full overflow-hidden border border-purple-300">
+                      <Image src={user.image} alt={user.name || "Profile"} fill sizes="24px" className="object-cover" />
+                    </div>
+                  ) : (
+                    <div className="w-6 h-6 rounded-full bg-purple-200 text-purple-900 font-bold text-xs flex items-center justify-center">
+                      {user.name?.slice(0, 1).toUpperCase() || "U"}
+                    </div>
+                  )}
+                  <span>Go to Dashboard</span>
+                </div>
+                <span className="text-xs text-purple-700">→</span>
+              </Link>
+              {signOutAction && (
+                <form action={signOutAction}>
+                  <button
+                    type="submit"
+                    className="w-full text-left py-2 px-3 text-sm font-semibold text-red-600 hover:bg-red-50 rounded-xl transition-colors cursor-pointer"
+                  >
+                    Sign Out ({user.name || user.email})
+                  </button>
+                </form>
+              )}
+            </div>
+          ) : (
+            <Link
+              href="/login"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block py-1 font-semibold text-purple-700 hover:text-purple-900"
+            >
+              Sign In
+            </Link>
+          )}
         </nav>
 
         {/* Mobile Trial Button */}
-        <div className="p-4 pt-2">
-          <Link
-            href="/book-trial"
-            onClick={() => setMobileMenuOpen(false)}
-            className="block w-full bg-[#9506EE] hover:bg-[#8200DA] text-center text-white text-sm font-bold py-3 px-4 rounded-lg shadow-md transition-all btn-tactile"
-          >
-            Book a Free Trial
-          </Link>
-        </div>
+        {(!user || user.role === "STUDENT") && (
+          <div className="p-4 pt-2">
+            <Link
+              href="/book-trial"
+              onClick={() => setMobileMenuOpen(false)}
+              className="block w-full bg-[#9506EE] hover:bg-[#8200DA] text-center text-white text-sm font-bold py-3 px-4 rounded-lg shadow-md transition-all btn-tactile"
+            >
+              Book a Free Trial
+            </Link>
+          </div>
+        )}
       </div>
     </header>
   );
