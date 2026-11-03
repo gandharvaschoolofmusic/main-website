@@ -44,7 +44,7 @@ export function TeacherSupportTicketForm() {
         onClick={() => setIsOpen(true)}
         className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white text-xs font-bold transition-all shadow-xs active:scale-[0.98] cursor-pointer"
       >
-        <Plus className="w-4 h-4" /> Open Faculty Support Ticket
+        <Plus className="w-4 h-4" /> Open Teacher Support Ticket
       </button>
     );
   }
@@ -52,7 +52,7 @@ export function TeacherSupportTicketForm() {
   return (
     <div className="p-6 rounded-2xl border border-border-default bg-white shadow-md space-y-4">
       <div className="flex items-center justify-between border-b border-border-default pb-3">
-        <h3 className="text-sm font-bold text-heading font-serif">Create Faculty Support Ticket</h3>
+        <h3 className="text-sm font-bold text-heading font-serif">Create Teacher Support Ticket</h3>
         <button
           onClick={() => setIsOpen(false)}
           className="p-1 text-body/60 hover:text-heading transition-colors"
@@ -87,7 +87,7 @@ export function TeacherSupportTicketForm() {
             onChange={(e) => setCategory(e.target.value as TicketCategory)}
             className="w-full rounded-xl bg-white border border-border-default px-3.5 py-2 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 shadow-xs"
           >
-            <option value={TicketCategory.BILLING}>Faculty Payouts & Compensation</option>
+            <option value={TicketCategory.BILLING}>Teacher Payouts & Compensation</option>
             <option value={TicketCategory.LESSON}>Student Issues & Rescheduling</option>
             <option value={TicketCategory.TECHNICAL}>LiveKit Video & Audio Engine</option>
             <option value={TicketCategory.COURSE}>Curriculum & Accreditation</option>

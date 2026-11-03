@@ -320,7 +320,7 @@ export function TeacherCalendarView({
                 </span>
                 {selectedDayData.dayEvents.length > 0 && (
                   <span className="px-2 py-0.5 rounded-full text-[9px] font-bold bg-accent-subtle text-accent-dark border border-accent/30">
-                    Faculty Assigned
+                    Teacher Assigned
                   </span>
                 )}
               </div>

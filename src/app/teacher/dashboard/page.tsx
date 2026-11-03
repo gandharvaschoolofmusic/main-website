@@ -9,7 +9,7 @@ import { TeacherLessonList, TeacherDashboardLesson } from "@/components/dashboar
 import { Calendar, Clock, CheckCircle2, AlertCircle, ArrowRight, ShieldCheck } from "lucide-react";
 
 export const metadata = {
-  title: "Upcoming Sessions | Faculty Studio | Gandharva School of Music",
+  title: "Upcoming Sessions | Teacher Studio | Gandharva School of Music",
   description: "View scheduled live music lessons, enter video rooms, and manage students.",
 };
 
@@ -177,7 +177,7 @@ export default async function TeacherDashboardPage() {
           <div>
             <div className="flex items-center gap-3">
               <span className="text-xs font-bold uppercase tracking-wider text-accent-dark font-sans">
-                Gandharva Faculty Studio
+                Gandharva Teacher Studio
               </span>
               <span
                 className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider border ${
@@ -192,7 +192,7 @@ export default async function TeacherDashboardPage() {
               {profile?.approvalStatus === "APPROVED" ? (
                 <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-emerald-50 text-emerald-800 border border-emerald-300">
                   <ShieldCheck className="w-3 h-3 text-emerald-600" />
-                  <span>Approved Faculty</span>
+                  <span>Approved Teacher</span>
                 </span>
               ) : profile?.approvalStatus === "REJECTED" ? (
                 <span className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wider bg-rose-50 text-rose-800 border border-rose-300">
@@ -249,7 +249,7 @@ export default async function TeacherDashboardPage() {
                   </span>
                 </div>
                 <h2 className="font-serif text-lg font-bold text-heading">
-                  Faculty Accreditation Pending Administrative Approval
+                  Teacher Accreditation Pending Administrative Approval
                 </h2>
                 <p className="text-xs text-body max-w-2xl leading-relaxed">
                   Welcome to Gandharva School of Music! Your teaching profile is currently being reviewed by our Academic Board.
@@ -316,7 +316,7 @@ export default async function TeacherDashboardPage() {
                 <span className="px-2.5 py-0.5 rounded-full bg-rose-700 text-white text-[10px] font-bold uppercase tracking-wider">
                   Action Required
                 </span>
-                <span className="text-xs text-rose-800 font-medium">Faculty Application Feedback</span>
+                <span className="text-xs text-rose-800 font-medium">Teacher Application Feedback</span>
               </div>
               <h2 className="font-serif text-lg font-bold text-heading">
                 Updates Requested by Academic Administration
@@ -324,7 +324,7 @@ export default async function TeacherDashboardPage() {
               <p className="text-xs text-rose-900/90 max-w-2xl leading-relaxed">
                 {profile.rejectionReason
                   ? `Note from Admin: "${profile.rejectionReason}"`
-                  : "Your faculty profile was reviewed and needs updates to qualifications or instruments before being approved."}
+                  : "Your teacher profile was reviewed and needs updates to qualifications or instruments before being approved."}
               </p>
             </div>
           </div>

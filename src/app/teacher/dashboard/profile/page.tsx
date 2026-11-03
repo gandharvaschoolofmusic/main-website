@@ -6,7 +6,7 @@ import { TeacherProfileEditor } from "./TeacherProfileEditor";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
 export const metadata = {
-  title: "Profile & Settings | Faculty Studio | Gandharva School of Music",
+  title: "Profile & Settings | Teacher Studio | Gandharva School of Music",
   description: "Manage teacher biography, instruments taught, languages, timezone, and security.",
 };
 
@@ -41,7 +41,7 @@ export default async function TeacherProfilePage() {
     profile = await db.teacherProfile.create({
       data: {
         userId: dbUser.id,
-        bio: "Faculty instructor at Gandharva School of Music.",
+        bio: "Teacher instructor at Gandharva School of Music.",
         instruments: ["Piano"],
         languages: ["English"],
         yearsTeaching: 5,
@@ -60,7 +60,7 @@ export default async function TeacherProfilePage() {
           Studio Credentials
         </span>
         <SplitHeading
-          firstClause="Faculty Profile &"
+          firstClause="Teacher Profile &"
           accentClause="Account Settings"
           as="h1"
           size="lg"

@@ -193,7 +193,7 @@ export function TeacherStudentsList({
                 {/* Footer: Notes Button */}
                 <div className="pt-3 border-t border-border-default/60 flex items-center justify-between">
                   <span className="text-[11px] text-body font-medium">
-                    Faculty Private Log
+                    Teacher Private Log
                   </span>
                   <button
                     type="button"

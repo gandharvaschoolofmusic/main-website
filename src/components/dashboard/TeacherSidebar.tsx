@@ -150,8 +150,8 @@ export function TeacherSidebar({
   };
 
   const currentItem = navItems.find((item) => isActive(item)) || navItems[0];
-  const displayName = teacherName || "Faculty Studio";
-  const displayEmail = teacherEmail || "Faculty Member";
+  const displayName = teacherName || "Teacher Studio";
+  const displayEmail = teacherEmail || "Teacher";
   const initials =
     displayName
       .split(" ")
@@ -159,7 +159,7 @@ export function TeacherSidebar({
       .filter(Boolean)
       .slice(0, 2)
       .join("")
-      .toUpperCase() || "FC";
+      .toUpperCase() || "TC";
 
   return (
     <>
@@ -178,7 +178,7 @@ export function TeacherSidebar({
                   Gandharva
                 </span>
                 <span className="text-[9px] uppercase font-bold tracking-wider px-2 py-0.5 rounded-full bg-white/10 text-[#FFA751] shrink-0">
-                  Faculty
+                  Teacher
                 </span>
               </div>
               <button
@@ -248,7 +248,7 @@ export function TeacherSidebar({
             <Link
               href="/teacher/dashboard/profile"
               className="p-2.5 rounded-2xl bg-black/25 hover:bg-black/35 flex items-center gap-2.5 transition-all group cursor-pointer shadow-xs active:scale-[0.98]"
-              title="Manage Faculty Profile & Photo"
+              title="Manage Teacher Profile & Photo"
             >
               {teacherImage ? (
                 <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs">
@@ -317,7 +317,7 @@ export function TeacherSidebar({
         </button>
         <div className="flex items-center gap-2">
           <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-[#FFA751]">
-            Faculty
+            Teacher
           </span>
           <div className="w-7 h-7 rounded-full bg-gradient-to-br from-[#5A20A2] to-[#3C096C] text-white flex items-center justify-center font-bold text-[10px]">
             {initials}
@@ -343,7 +343,7 @@ export function TeacherSidebar({
                   Gandharva
                 </span>
                 <span className="text-[10px] uppercase font-bold tracking-wider px-2.5 py-0.5 rounded-full bg-white/10 text-[#FFA751]">
-                  Faculty
+                  Teacher
                 </span>
               </div>
               <button

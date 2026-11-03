@@ -5,7 +5,7 @@ import { TeacherCalendarView } from "@/components/dashboard/TeacherCalendarView"
 import { formatInViewerTimezone } from "@/lib/timezone";
 
 export const metadata = {
-  title: "Studio Calendar | Faculty Studio | Gandharva School of Music",
+  title: "Studio Calendar | Teacher Studio | Gandharva School of Music",
   description: "Interactive monthly schedule with availability overlay and booked lessons.",
 };
 

@@ -14,8 +14,8 @@ import { TeacherFaqAccordion } from "./TeacherFaqAccordion";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
 export const metadata = {
-  title: "Faculty Support | Gandharva School of Music",
-  description: "Get help with faculty compensation, scheduling, student concerns, or technical issues.",
+  title: "Teacher Support | Gandharva School of Music",
+  description: "Get help with teacher compensation, scheduling, student concerns, or technical issues.",
 };
 
 export default async function TeacherSupportPage() {
@@ -40,23 +40,23 @@ export default async function TeacherSupportPage() {
     <div className="space-y-8 max-w-4xl">
       <div>
         <span className="text-[10px] font-bold uppercase tracking-wider text-accent font-sans">
-          Faculty Assistance
+          Teacher Assistance
         </span>
         <SplitHeading
-          firstClause="Faculty Help &"
+          firstClause="Teacher Help &"
           accentClause="Support Desk"
           as="h1"
           size="lg"
         />
         <p className="text-xs text-body mt-1 max-w-2xl">
-          Access faculty policies, check compensation FAQs, and communicate directly with academy administration.
+          Access teacher policies, check compensation FAQs, and communicate directly with academy administration.
         </p>
       </div>
 
       {/* Teacher FAQ Section */}
       <div className="space-y-3">
         <h2 className="text-sm font-bold font-serif text-heading">
-          Frequently Asked Faculty Questions
+          Frequently Asked Teacher Questions
         </h2>
         <TeacherFaqAccordion />
       </div>

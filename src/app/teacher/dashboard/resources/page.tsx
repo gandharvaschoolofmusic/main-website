@@ -7,7 +7,7 @@ import type { AllottedStudentOption } from "@/actions/resources";
 import { unstable_cache } from "next/cache";
 
 export const metadata = {
-  title: "Learning Resources | Faculty Studio | Gandharva School of Music",
+  title: "Learning Resources | Teacher Studio | Gandharva School of Music",
   description: "Upload, manage, and share sheet music, practice exercises, and audio tracks with your students.",
 };
 

@@ -6,7 +6,7 @@ import { getLessonTrackingId } from "@/lib/lesson-tracking";
 import { TeacherPaymentManager, type TeacherPayoutItem } from "./TeacherPaymentManager";
 
 export const metadata = {
-  title: "Payment Management | Faculty Studio | Gandharva School of Music",
+  title: "Payment Management | Teacher Studio | Gandharva School of Music",
   description: "View session payout ledger, track paid vs unpaid sessions, and search by session ID.",
 };
 

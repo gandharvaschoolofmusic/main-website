@@ -4,7 +4,7 @@ import { getConversations, getMessageableUsers } from "@/actions/messaging";
 import { MessagingContainer } from "@/components/messaging/MessagingContainer";
 
 export const metadata = {
-  title: "Messages | Faculty Studio",
+  title: "Messages | Teacher Studio",
   description: "Securely message your students. Discuss lessons and student progress.",
 };
 

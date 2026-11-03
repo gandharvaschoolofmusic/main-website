@@ -97,7 +97,7 @@ export function TeacherPaymentManager({
       {/* Header */}
       <div>
         <span className="text-[10px] font-bold uppercase tracking-wider text-accent font-sans">
-          Faculty Studio • Financial Ledger
+          Teacher Studio • Financial Ledger
         </span>
         <SplitHeading
           firstClause="Payment"
@@ -200,7 +200,7 @@ export function TeacherPaymentManager({
                   UPI ID: <span className="font-mono font-bold text-heading">{teacherUpiId}</span>
                 </>
               ) : (
-                "Please configure your UPI ID in Faculty Profile to receive automated session disbursements."
+                "Please configure your UPI ID in Teacher Profile to receive automated session disbursements."
               )}
             </p>
           </div>

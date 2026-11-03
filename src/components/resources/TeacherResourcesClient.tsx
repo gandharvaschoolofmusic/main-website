@@ -383,7 +383,7 @@ export function TeacherResourcesClient({
         <div>
           <div className="flex items-center gap-2">
             <span className="text-xs font-bold uppercase tracking-wider text-accent-dark font-sans">
-              Gandharva Faculty Studio
+              Gandharva Teacher Studio
             </span>
             <span className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-primary-subtle text-primary border border-primary/20">
               <HardDrive className="w-3 h-3" />

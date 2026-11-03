@@ -412,7 +412,7 @@ export function TeacherProfileEditor({
         <div className="border-b border-border-default pb-4">
           <h2 className="font-serif text-lg font-bold text-heading flex items-center gap-2">
             <User className="w-4 h-4 text-primary" />
-            <span>Faculty Profile & Studio Credentials</span>
+            <span>Teacher Profile & Studio Credentials</span>
           </h2>
           <p className="text-xs text-body mt-0.5">
             Update your teaching bio, instrument specialties, languages, and time preferences.
@@ -426,7 +426,7 @@ export function TeacherProfileEditor({
               <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0" />
               <div>
                 <p className="font-bold text-emerald-950">
-                  Accredited & Verified Faculty Member
+                  Accredited & Verified Teacher
                 </p>
                 <p className="text-emerald-800 text-[11px]">
                   Your credentials have been approved by the Gandharva Academic Board.
@@ -435,7 +435,7 @@ export function TeacherProfileEditor({
               </div>
             </div>
             <span className="px-2.5 py-1 rounded-full bg-emerald-600 text-white text-[10px] font-bold uppercase tracking-wider shrink-0">
-              Active Faculty
+              Active Teacher
             </span>
           </div>
         ) : profile?.approvalStatus === "REJECTED" ? (
@@ -452,7 +452,7 @@ export function TeacherProfileEditor({
             <p className="text-[11px] leading-relaxed">
               {profile.rejectionReason
                 ? `Note from Academic Board: "${profile.rejectionReason}"`
-                : "Your faculty application requires additional information or updated instruments before accreditation can be completed."}
+                : "Your teacher application requires additional information or updated instruments before accreditation can be completed."}
             </p>
             <p className="text-[10px] text-rose-800/80">
               Please update your details below and click Save. Our academic team will automatically review your revised credentials.
@@ -587,7 +587,7 @@ export function TeacherProfileEditor({
               className="w-full rounded-xl bg-white border border-border-default p-3.5 text-xs text-heading placeholder-body/50 focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/20 leading-relaxed shadow-xs"
             />
             <p className="text-[11px] text-body">
-              Must be at least 20 characters. Shown on your faculty profile to prospective students.
+              Must be at least 20 characters. Shown on your teacher profile to prospective students.
             </p>
           </div>
 

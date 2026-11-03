@@ -40,7 +40,7 @@ export default async function TeacherTicketDetailPage({
         href="/teacher/dashboard/support"
         className="inline-flex items-center gap-2 text-xs font-semibold text-body hover:text-primary transition-colors"
       >
-        <ArrowLeft className="w-3.5 h-3.5" /> Back to Faculty Support
+        <ArrowLeft className="w-3.5 h-3.5" /> Back to Teacher Support
       </Link>
 
       <div className="rounded-2xl border border-border-default bg-white p-6 shadow-xs space-y-6">
@@ -95,7 +95,7 @@ export default async function TeacherTicketDetailPage({
                     ) : (
                       <>
                         <User className="w-3.5 h-3.5 text-primary" />
-                        <span className="text-primary">You (Faculty)</span>
+                        <span className="text-primary">You (Teacher)</span>
                       </>
                     )}
                   </div>

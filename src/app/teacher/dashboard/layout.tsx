@@ -5,7 +5,7 @@ import { TeacherSidebar } from "@/components/dashboard/TeacherSidebar";
 
 export const metadata = {
   title: "Teacher Studio | Gandharva School of Music",
-  description: "Gandharva Faculty Studio: Manage schedule, lessons, students, and earnings.",
+  description: "Gandharva Teacher Studio: Manage schedule, lessons, students, and earnings.",
 };
 
 export const dynamic = "force-dynamic";
@@ -28,7 +28,7 @@ export default async function TeacherDashboardLayout({
   return (
     <div className="flex flex-col sm:flex-row min-h-[calc(100vh-4rem)] bg-gradient-to-b from-bg via-bg-alt/15 to-bg text-heading">
       <TeacherSidebar
-        teacherName={user.name || "Faculty Studio"}
+        teacherName={user.name || "Teacher Studio"}
         teacherEmail={user.email || ""}
         teacherImage={user.image}
       />

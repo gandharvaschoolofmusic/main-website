@@ -10,14 +10,14 @@ interface FAQItem {
 
 const faqs: FAQItem[] = [
   {
-    question: "When and how are faculty session payouts deposited?",
+    question: "When and how are teacher session payouts deposited?",
     answer:
-      "Faculty compensation is calculated on a fixed session rate (default ₹800 per 60m session) and disbursed on a bi-weekly cycle directly to your registered bank account. You can inspect all delivered sessions and projected balances in the 'Earnings & Payouts' ledger.",
+      "Teacher compensation is calculated on a fixed session rate (default ₹800 per 60m session) and disbursed on a bi-weekly cycle directly to your registered bank account. You can inspect all delivered sessions and projected balances in the 'Earnings & Payouts' ledger.",
   },
   {
     question: "What happens if a student is a no-show for a scheduled lesson?",
     answer:
-      "If a student fails to enter the video classroom within 15 minutes of the scheduled start time, the session is marked as completed with attendance recorded, ensuring faculty receive full session compensation for their reserved time window.",
+      "If a student fails to enter the video classroom within 15 minutes of the scheduled start time, the session is marked as completed with attendance recorded, ensuring teachers receive full session compensation for their reserved time window.",
   },
   {
     question: "How do I handle student reschedule requests?",

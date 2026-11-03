@@ -6,7 +6,7 @@ import { formatInViewerTimezone } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
 export const metadata = {
-  title: "My Students | Faculty Studio | Gandharva School of Music",
+  title: "My Students | Teacher Studio | Gandharva School of Music",
   description: "View enrolled and trial students, curriculum progress, and private teaching notes.",
 };
 

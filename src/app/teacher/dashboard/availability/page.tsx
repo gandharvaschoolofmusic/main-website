@@ -9,7 +9,7 @@ import Link from "next/link";
 import { Globe, ArrowUpRight } from "lucide-react";
 
 export const metadata = {
-  title: "Availability & Schedule | Faculty Studio | Gandharva School of Music",
+  title: "Availability & Schedule | Teacher Studio | Gandharva School of Music",
   description: "Configure weekly teaching hours, holiday blocks, and exception dates.",
 };
 
@@ -132,7 +132,7 @@ export default async function TeacherDashboardAvailabilityPage() {
             </div>
             <p className="text-xs text-body leading-relaxed max-w-xl">
               {isPublished
-                ? "Students can discover your faculty profile and book free trials or enrolled course lessons based on these hours."
+                ? "Students can discover your teacher profile and book free trials or enrolled course lessons based on these hours."
                 : "Your studio profile is currently hidden from student booking. Configure your weekly hours below to activate."}
             </p>
           </div>
