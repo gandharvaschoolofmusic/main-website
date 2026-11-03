@@ -48,14 +48,16 @@ export function CurrencySelector({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/10 hover:bg-white/20 text-white text-xs font-semibold transition-all border border-white/20 shadow-xs cursor-pointer btn-tactile"
+          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer btn-tactile"
           title="Select display currency"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
         >
           <span className="text-sm leading-none">{currencyConfig.flag}</span>
           <span className="tracking-wide">{currencyConfig.code}</span>
-          <span className="text-white/60 text-[11px]">({currencyConfig.symbol})</span>
+          {currencyConfig.symbol !== currencyConfig.code && (
+            <span className="text-white/60 text-[11px]">({currencyConfig.symbol})</span>
+          )}
           <ChevronDown
             className={`w-3 h-3 text-white/70 transition-transform duration-200 ${
               isOpen ? "rotate-180" : ""
@@ -114,7 +116,7 @@ export function CurrencySelector({
         <button
           type="button"
           onClick={() => setIsOpen(!isOpen)}
-          className="flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-all border border-white/20 shadow-xs cursor-pointer btn-tactile whitespace-nowrap"
+          className="flex items-center gap-1.5 px-2.5 py-1 sm:py-1.5 rounded-lg bg-white/15 hover:bg-white/25 text-white text-xs font-semibold transition-all shadow-xs cursor-pointer btn-tactile whitespace-nowrap"
           title="Select display currency"
           aria-expanded={isOpen}
           aria-haspopup="listbox"
@@ -207,7 +209,9 @@ export function CurrencySelector({
                   <span className="flex items-center gap-2">
                     <span>{item.flag}</span>
                     <span>{item.code}</span>
-                    <span className="text-[10px] text-body-muted">({item.symbol})</span>
+                    {item.symbol !== item.code && (
+                      <span className="text-[10px] text-body-muted">({item.symbol})</span>
+                    )}
                   </span>
                   {isSelected && (
                     <Check className="w-3 h-3 text-primary shrink-0" />

@@ -255,7 +255,10 @@ export function getCourseTierPricing({
     if (config.code === "AED") {
       return `AED ${formattedNum}`;
     }
-    if (config.code === "CAD" || config.code === "AUD" || config.code === "SGD") {
+    if (config.code === "SGD") {
+      return `${formattedNum} SGD`;
+    }
+    if (config.code === "CAD" || config.code === "AUD") {
       return `${config.symbol}${formattedNum} ${config.code}`;
     }
     return `${config.symbol}${formattedNum}`;

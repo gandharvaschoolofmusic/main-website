@@ -1864,28 +1864,28 @@ export function AdminCoursesManager({
                       <div className="flex items-center gap-1.5">
                         <span className="text-sm">🇸🇬</span>
                         <span className="text-xs font-bold text-heading">Singapore</span>
-                        <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">S$ SGD</span>
+                        <span className="text-[9px] font-bold text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">SGD</span>
                       </div>
                       <div className="text-[10px] text-body-muted font-numeric mt-0.5">
                         Total: {Number(discountPercent) > 0 ? (
                           <span className="space-x-1">
-                            <span className="line-through text-slate-400">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</span>
-                            <strong className="text-emerald-700 font-bold">S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</strong>
+                            <span className="line-through text-slate-400">{calculateTierTotal(sessionRateSGD).base.toLocaleString()} SGD</span>
+                            <strong className="text-emerald-700 font-bold">{calculateTierTotal(sessionRateSGD).discounted.toLocaleString()} SGD</strong>
                           </span>
                         ) : (
-                          <strong className="text-heading font-bold">S${calculateTierTotal(sessionRateSGD).base.toLocaleString()}</strong>
+                          <strong className="text-heading font-bold">{calculateTierTotal(sessionRateSGD).base.toLocaleString()} SGD</strong>
                         )}
                       </div>
                     </div>
                     <div className="flex items-center gap-1 shrink-0">
                       <div className="relative">
-                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-body/70 pointer-events-none">S$</span>
+                        <span className="absolute left-1.5 top-1/2 -translate-y-1/2 text-[10px] font-bold text-body/70 pointer-events-none">SGD</span>
                         <input
                           type="number"
                           min={0}
                           value={sessionRateSGD || ""}
                           onChange={(e) => setSessionRateSGD(e.target.value === "" ? 0 : Number(e.target.value))}
-                          className="w-20 pl-6 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
+                          className="w-24 pl-8 pr-2 py-1 text-xs font-bold font-numeric text-heading bg-white border border-slate-200 rounded-lg text-right focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-2xs"
                         />
                       </div>
                       <span className="text-[10px] text-body-muted font-medium">/sess</span>
@@ -1973,7 +1973,7 @@ export function AdminCoursesManager({
                     <span>🇬🇧 <strong>£{calculateTierTotal(sessionRateGBP).discounted.toLocaleString()}</strong></span>
                     <span>🇪🇺 <strong>€{calculateTierTotal(sessionRateEUR).discounted.toLocaleString()}</strong></span>
                     <span>🇨🇦 <strong>CA${calculateTierTotal(sessionRateCAD).discounted.toLocaleString()}</strong></span>
-                    <span>🇸🇬 <strong>S${calculateTierTotal(sessionRateSGD).discounted.toLocaleString()}</strong></span>
+                    <span>🇸🇬 <strong>{calculateTierTotal(sessionRateSGD).discounted.toLocaleString()} SGD</strong></span>
                   </div>
                 </div>
               </div>

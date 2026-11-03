@@ -111,7 +111,7 @@ export const SUPPORTED_CURRENCIES: Record<CurrencyCode, CurrencyConfig> = {
   },
   SGD: {
     code: "SGD",
-    symbol: "S$",
+    symbol: "SGD",
     name: "Singapore Dollar",
     flag: "🇸🇬",
     countryName: "Singapore",
@@ -295,7 +295,9 @@ export function convertCoursePrice(
   let formatted = `${config.symbol}${formattedNumber}`;
   if (config.code === "AED") {
     formatted = `AED ${formattedNumber}`;
-  } else if (config.code === "CAD" || config.code === "AUD" || config.code === "SGD") {
+  } else if (config.code === "SGD") {
+    formatted = `${formattedNumber} SGD`;
+  } else if (config.code === "CAD" || config.code === "AUD") {
     formatted = `${config.symbol}${formattedNumber} ${config.code}`;
   } else if (config.code === "USD") {
     formatted = `$${formattedNumber} USD`;
