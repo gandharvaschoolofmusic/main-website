@@ -196,7 +196,7 @@ export function CourseShowcase() {
             </p>
             <div>
               <Link
-                href={`/teachers?instrument=${encodeURIComponent(currentCourse.name)}`}
+                href="/courses"
                 className="inline-block px-8 py-3.5 rounded-lg bg-purple-600 hover:bg-purple-700 text-white font-semibold text-sm md:text-base transition-all shadow-lg shadow-purple-900/50 btn-tactile"
               >
                 See Courses

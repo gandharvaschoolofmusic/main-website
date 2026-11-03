@@ -253,7 +253,6 @@ export async function saveAvailabilityRulesAction(
     revalidatePath("/teacher/availability");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/teacher/onboarding");
-    revalidatePath("/teachers");
     revalidatePath(`/teachers/${profile.id}`);
     revalidatePath("/student/dashboard");
 
@@ -322,7 +321,6 @@ export async function addAvailabilityExceptionAction(
     });
 
     revalidatePath("/teacher/availability");
-    revalidatePath("/teachers");
     revalidatePath(`/teachers/${profile.id}`);
     return {
       success: true,
@@ -363,7 +361,6 @@ export async function deleteAvailabilityExceptionAction(
     });
 
     revalidatePath("/teacher/availability");
-    revalidatePath("/teachers");
     revalidatePath(`/teachers/${profile.id}`);
     return {
       success: true,
@@ -476,7 +473,6 @@ export async function togglePublishTeacherProfileAction(): Promise<
       logger.info({ teacherId: profile.id }, "Teacher profile published");
       revalidatePath("/teacher/dashboard");
       revalidatePath("/teacher/onboarding");
-      revalidatePath("/teachers");
       revalidatePath(`/teachers/${profile.id}`);
       revalidatePath("/student/dashboard");
 
@@ -496,7 +492,6 @@ export async function togglePublishTeacherProfileAction(): Promise<
       logger.info({ teacherId: profile.id }, "Teacher profile unpublished");
       revalidatePath("/teacher/dashboard");
       revalidatePath("/teacher/onboarding");
-      revalidatePath("/teachers");
       revalidatePath(`/teachers/${profile.id}`);
       revalidatePath("/student/dashboard");
 
@@ -566,7 +561,6 @@ export async function updateUserTimezoneAction(
       data: { timezone: timezone.trim() },
     });
 
-    revalidatePath("/teachers");
     return { success: true };
   } catch (error) {
     logger.error({ error, timezone }, "Error updating user timezone");

@@ -540,7 +540,7 @@ export async function sendLessonCancellationEmail(
     "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
   );
 
-  const browseUrl = `${appUrl}/teachers`;
+  const browseUrl = `${appUrl}/courses`;
 
   try {
     const cancellationHtml = `

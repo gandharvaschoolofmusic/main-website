@@ -144,7 +144,6 @@ export async function uploadAvatarAction(formData: FormData): Promise<{
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard/profile");
     revalidatePath("/teacher/dashboard");
-    revalidatePath("/teachers");
     revalidatePath("/");
 
     return { success: true, image: publicUrl };
@@ -188,7 +187,6 @@ export async function removeAvatarAction(): Promise<{
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard/profile");
     revalidatePath("/teacher/dashboard");
-    revalidatePath("/teachers");
     revalidatePath("/");
 
     return { success: true };

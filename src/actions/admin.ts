@@ -1210,7 +1210,6 @@ export async function updateUserAdminAction(input: {
     logger.info({ userId: input.userId }, "User updated by admin");
     revalidatePath("/admin/users");
     revalidatePath("/admin/teachers");
-    revalidatePath("/teachers");
     revalidatePath("/teacher/dashboard");
 
     return { success: true };
@@ -2905,7 +2904,6 @@ export async function updateTeacherApprovalAction(input: {
     revalidatePath("/admin/teachers");
     revalidatePath("/admin/users");
     revalidatePath("/admin");
-    revalidatePath("/teachers");
     revalidatePath(`/teachers/${profile.id}`);
     revalidatePath("/teacher/dashboard");
     revalidatePath("/teacher/dashboard/profile");

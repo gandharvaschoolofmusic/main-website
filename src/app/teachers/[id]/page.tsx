@@ -113,11 +113,11 @@ export default async function TeacherDetailPage({
         {/* Breadcrumb navigation */}
         <div className="flex items-center gap-2 text-xs text-body-muted">
           <Link
-            href="/teachers"
+            href="/courses"
             className="hover:text-heading transition-colors flex items-center gap-1.5 font-medium"
           >
             <ArrowLeft className="w-3.5 h-3.5" />
-            <span>Back to all teachers</span>
+            <span>Back to courses</span>
           </Link>
           <span>/</span>
           <span className="text-heading font-semibold">{teacherName}</span>

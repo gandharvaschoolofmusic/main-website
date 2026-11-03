@@ -19,7 +19,7 @@ const SLIDES = [
     content: (
       <div className="flex gap-4 pt-2">
         <Link
-          href="/teachers"
+          href="/courses"
           className="text-[14px] text-black bg-white hover:bg-gray-100 py-3 px-5 rounded-sm font-medium transition-all shadow-md btn-tactile"
         >
           Explore our courses

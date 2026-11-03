@@ -54,10 +54,10 @@ export default function NotFound() {
             Back to Home
           </Link>
           <Link
-            href="/teachers"
+            href="/courses"
             className="w-full sm:w-auto px-6 py-3 rounded-xl border border-surface-3 hover:border-amber-500/40 bg-surface-1 hover:bg-surface-2 text-text-primary font-medium text-sm transition-all"
           >
-            Browse Teachers
+            Explore Courses
           </Link>
           <Link
             href="/dashboard"

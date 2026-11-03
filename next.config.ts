@@ -48,6 +48,11 @@ const nextConfig: NextConfig = {
         destination: "/book-trial",
         permanent: true,
       },
+      {
+        source: "/teachers",
+        destination: "/courses",
+        permanent: true,
+      },
     ];
   },
 };
