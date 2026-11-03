@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { formatToIST, fromISTInputToUtc } from "@/lib/timezone";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -1251,16 +1252,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                               >
                                 <div className="min-w-0">
                                   <div className="font-bold text-xs text-heading truncate">
-                                    {lDate.toLocaleDateString("en-GB", {
-                                      day: "2-digit",
-                                      month: "short",
-                                    })}{" "}
-                                    ·{" "}
-                                    {lDate.toLocaleTimeString("en-GB", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}{" "}
-                                    · {l.instrument}
+                                    {formatToIST(l.startsAt, "dd MMM · h:mm a 'IST'")} · {l.instrument}
                                   </div>
                                   <div className="text-[11px] text-body/70 mt-0.5 truncate">
                                     Faculty: {l.teacherName || "Assigned Faculty"}
@@ -1546,16 +1538,9 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
 
                           <div className="grid grid-cols-2 gap-2 p-3 rounded-xl bg-neutral-50/70 text-xs">
                             <div>
-                              <div className="text-[10px] text-body/60 font-medium">Session Date & Time</div>
+                              <div className="text-[10px] text-body/60 font-medium">Session Date & Time (IST)</div>
                               <div className="font-bold text-heading font-numeric mt-0.5">
-                                {new Date(l.startsAt).toLocaleDateString("en-GB", {
-                                  weekday: "short",
-                                  day: "2-digit",
-                                  month: "short",
-                                })} · {new Date(l.startsAt).toLocaleTimeString("en-GB", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })}
+                                {formatToIST(l.startsAt, "EEE, dd MMM · h:mm a 'IST'")}
                               </div>
                             </div>
                             <div>
@@ -1653,17 +1638,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           <div className="flex items-center gap-4 text-xs">
                             <div className="text-right">
                               <div className="font-bold text-heading font-numeric">
-                                {new Date(l.startsAt).toLocaleDateString("en-GB", {
-                                  day: "2-digit",
-                                  month: "short",
-                                  year: "numeric",
-                                })}
+                                {formatToIST(l.startsAt, "dd MMM yyyy")}
                               </div>
                               <div className="text-[11px] text-body/60 font-numeric">
-                                {new Date(l.startsAt).toLocaleTimeString("en-GB", {
-                                  hour: "2-digit",
-                                  minute: "2-digit",
-                                })} IST
+                                {formatToIST(l.startsAt, "h:mm a 'IST'")}
                               </div>
                             </div>
 
@@ -2875,7 +2853,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     studentId: selectedStudent.id,
                     teacherId: String(formData.get("teacherId")),
                     instrument: String(formData.get("instrument") || "Hindustani Vocal"),
-                    startsAtIso: new Date(String(formData.get("datetime"))).toISOString(),
+                    startsAtIso: fromISTInputToUtc(String(formData.get("datetime"))).toISOString(),
                     durationMinutes: Number(formData.get("duration") || 60),
                   });
                   if (res.success) {
@@ -2914,7 +2892,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
               </div>
 
               <div>
-                <label className="block font-semibold text-heading mb-1">Date & Time *</label>
+                <label className="block font-semibold text-heading mb-1">Date & Time (IST) *</label>
                 <DateTimePicker
                   name="datetime"
                   required

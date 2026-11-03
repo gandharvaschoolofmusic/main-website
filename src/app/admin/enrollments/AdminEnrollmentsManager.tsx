@@ -2,6 +2,7 @@
 
 import { useState, useTransition, useEffect, useMemo } from "react";
 import { EnrollmentStatus, PaymentStatus, LessonStatus } from "@prisma/client";
+import { formatToIST, toISTInputString, fromISTInputToUtc } from "@/lib/timezone";
 import {
   saveFullEnrollmentPlanAction,
   scheduleEnrollmentLessonAction,
@@ -425,12 +426,12 @@ export function AdminEnrollmentsManager({
 
   // Inline lesson scheduling & management
   const [scheduleMode, setScheduleMode] = useState<"SINGLE" | "BULK">("SINGLE");
-  const [singleLessonDate, setSingleLessonDate] = useState<string>(
-    new Date(Date.now() + 86400000).toISOString().slice(0, 16)
+  const [singleLessonDate, setSingleLessonDate] = useState<string>(() =>
+    toISTInputString(new Date(Date.now() + 86400000))
   );
   const [singleLessonDuration, setSingleLessonDuration] = useState<number>(60);
-  const [bulkStartDate, setBulkStartDate] = useState<string>(
-    new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 16)
+  const [bulkStartDate, setBulkStartDate] = useState<string>(() =>
+    toISTInputString(new Date(Date.now() + 86400000 * 2))
   );
   const [bulkIntervalDays, setBulkIntervalDays] = useState<number>(7);
   const [bulkCount, setBulkCount] = useState<number>(4);
@@ -1192,10 +1193,11 @@ export function AdminEnrollmentsManager({
     }
 
     startTransition(async () => {
+      const utcStartsAtIso = fromISTInputToUtc(singleLessonDate).toISOString();
       const res = await scheduleEnrollmentLessonAction({
         enrollmentId: activeEnrollment.id,
         teacherId: selectedTeacherId || activeEnrollment.teacherId || undefined,
-        startsAt: new Date(singleLessonDate).toISOString(),
+        startsAt: utcStartsAtIso,
         durationMinutes: singleLessonDuration,
       });
 
@@ -1209,7 +1211,7 @@ export function AdminEnrollmentsManager({
         const newLesson: ScheduledLessonData = {
           id: res.data.lessonId,
           trackingCode: res.data.trackingCode,
-          startsAt: new Date(singleLessonDate).toISOString(),
+          startsAt: utcStartsAtIso,
           durationMinutes: singleLessonDuration,
           status: "SCHEDULED",
           teacherId: selectedTeacherId,
@@ -1242,7 +1244,7 @@ export function AdminEnrollmentsManager({
     }
 
     startTransition(async () => {
-      const startMs = new Date(bulkStartDate).getTime();
+      const startMs = fromISTInputToUtc(bulkStartDate).getTime();
       const slots = [];
       for (let i = 0; i < bulkCount; i++) {
         slots.push({
@@ -1274,9 +1276,10 @@ export function AdminEnrollmentsManager({
     if (!rescheduleDateInput) return;
 
     startTransition(async () => {
+      const utcStartsAtIso = fromISTInputToUtc(rescheduleDateInput).toISOString();
       const res = await rescheduleEnrollmentLessonAction({
         lessonId,
-        startsAt: new Date(rescheduleDateInput).toISOString(),
+        startsAt: utcStartsAtIso,
       });
 
       if (res.success) {
@@ -1288,7 +1291,7 @@ export function AdminEnrollmentsManager({
               l.id === lessonId
                 ? {
                     ...l,
-                    startsAt: new Date(rescheduleDateInput).toISOString(),
+                    startsAt: utcStartsAtIso,
                     status: "RESCHEDULED",
                   }
                 : l
@@ -2806,18 +2809,10 @@ export function AdminEnrollmentsManager({
                                 <td className="py-3 px-3.5">
                                   <div>
                                     <div className="font-bold text-heading font-numeric">
-                                      {lDate.toLocaleDateString("en-GB", {
-                                        weekday: "short",
-                                        month: "short",
-                                        day: "numeric",
-                                        year: "numeric",
-                                      })}
+                                      {formatToIST(lesson.startsAt, "EEE, MMM d, yyyy")}
                                     </div>
                                     <div className="text-[11px] text-body/70 font-numeric">
-                                      {lDate.toLocaleTimeString("en-GB", {
-                                        hour: "2-digit",
-                                        minute: "2-digit",
-                                      })}
+                                      {formatToIST(lesson.startsAt, "h:mm a 'IST'")}
                                     </div>
                                   </div>
                                 </td>
@@ -2905,13 +2900,7 @@ export function AdminEnrollmentsManager({
                                         type="button"
                                         onClick={() => {
                                           setReschedulingLessonId(lesson.id);
-                                          const localIso = new Date(
-                                            new Date(lesson.startsAt).getTime() -
-                                              new Date(lesson.startsAt).getTimezoneOffset() * 60000
-                                          )
-                                            .toISOString()
-                                            .slice(0, 16);
-                                          setRescheduleDateInput(localIso);
+                                          setRescheduleDateInput(toISTInputString(lesson.startsAt));
                                         }}
                                         className="text-[11px] text-[#3C096C] font-bold hover:underline"
                                       >
@@ -3578,17 +3567,7 @@ export function AdminEnrollmentsManager({
                   Currently Scheduled
                 </span>
                 <span className="font-bold text-[#3C096C] font-numeric text-sm">
-                  {new Date(reschedulingLesson.startsAt).toLocaleDateString("en-GB", {
-                    weekday: "short",
-                    day: "numeric",
-                    month: "short",
-                    year: "numeric",
-                  })}{" "}
-                  at{" "}
-                  {new Date(reschedulingLesson.startsAt).toLocaleTimeString("en-GB", {
-                    hour: "2-digit",
-                    minute: "2-digit",
-                  })}
+                  {formatToIST(reschedulingLesson.startsAt, "EEE, d MMM yyyy 'at' h:mm a 'IST'")}
                 </span>
                 <span className="text-[11px] text-body/60 block mt-0.5">
                   Duration: {reschedulingLesson.durationMinutes} mins
@@ -3598,7 +3577,7 @@ export function AdminEnrollmentsManager({
               {/* New Date & Time */}
               <div className="space-y-1.5">
                 <label className="text-xs font-semibold text-heading block">
-                  Select New Date & Time
+                  Select New Date & Time (IST)
                 </label>
                 <DateTimePicker
                   value={rescheduleDateInput}

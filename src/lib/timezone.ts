@@ -1,6 +1,84 @@
 import { formatInTimeZone, fromZonedTime, toZonedTime } from "date-fns-tz";
 
 /**
+ * Standard IANA identifier for Indian Standard Time (IST, UTC+05:30).
+ */
+export const IST_TIMEZONE = "Asia/Kolkata";
+
+/**
+ * Format a UTC Date instant into Indian Standard Time (IST).
+ * Standardized across Admin dashboard and notifications.
+ * Defaults to "Nov 4, 2026 at 2:30 PM IST".
+ */
+export function formatToIST(
+  dateInput: Date | string | number | null | undefined,
+  formatStr = "MMM d, yyyy 'at' h:mm a 'IST'"
+): string {
+  if (!dateInput) return "";
+  const d = typeof dateInput === "object" && dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return formatInTimeZone(d, IST_TIMEZONE, formatStr);
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Format date part only in IST (e.g. "Nov 4, 2026" or "Wed, Nov 4, 2026").
+ */
+export function formatISTDateOnly(
+  dateInput: Date | string | number | null | undefined,
+  formatStr = "MMM d, yyyy"
+): string {
+  return formatToIST(dateInput, formatStr);
+}
+
+/**
+ * Format time part only in IST with IST suffix (e.g. "2:30 PM IST").
+ */
+export function formatISTTimeOnly(
+  dateInput: Date | string | number | null | undefined,
+  withSuffix = true
+): string {
+  const pattern = withSuffix ? "h:mm a 'IST'" : "h:mm a";
+  return formatToIST(dateInput, pattern);
+}
+
+/**
+ * Convert a Date/ISO to a wall-clock local input string in IST for datetime pickers ("yyyy-MM-dd'T'HH:mm").
+ */
+export function toISTInputString(
+  dateInput: Date | string | number | null | undefined
+): string {
+  if (!dateInput) return "";
+  const d = typeof dateInput === "object" && dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  try {
+    return formatInTimeZone(d, IST_TIMEZONE, "yyyy-MM-dd'T'HH:mm");
+  } catch {
+    return "";
+  }
+}
+
+/**
+ * Parse an IST datetime-local input string ("yyyy-MM-dd'T'HH:mm" or ISO) into a proper UTC Date object.
+ */
+export function fromISTInputToUtc(istDateTimeStr: string): Date {
+  if (!istDateTimeStr) return new Date();
+  try {
+    const trimmed = istDateTimeStr.trim();
+    // If it already ends with Z or has an explicit offset, parse directly or via fromZonedTime
+    if (trimmed.endsWith("Z") || /[+-]\d{2}:\d{2}$/.test(trimmed)) {
+      return new Date(trimmed);
+    }
+    return fromZonedTime(trimmed, IST_TIMEZONE);
+  } catch {
+    return new Date(istDateTimeStr);
+  }
+}
+
+/**
  * Format a UTC Date instant in the viewer's timezone.
  * Defaults to readable time with timezone abbreviation (e.g., "2:00 PM EDT").
  */

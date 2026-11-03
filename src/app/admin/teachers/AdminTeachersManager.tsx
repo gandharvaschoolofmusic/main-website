@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useMemo } from "react";
 import { TeacherApprovalStatus } from "@prisma/client";
 import { updateTeacherApprovalAction, markLessonPayoutAction } from "@/actions/admin";
+import { formatToIST } from "@/lib/timezone";
 import {
   Globe,
   Upload,
@@ -1224,16 +1225,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                               >
                                 <div className="min-w-0">
                                   <div className="font-bold text-xs text-heading truncate">
-                                    {lDate.toLocaleDateString("en-GB", {
-                                      day: "2-digit",
-                                      month: "short",
-                                    })}{" "}
-                                    ·{" "}
-                                    {lDate.toLocaleTimeString("en-GB", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}{" "}
-                                    · {l.instrument}
+                                    {formatToIST(l.startsAt, "dd MMM · h:mm a 'IST'")} · {l.instrument}
                                   </div>
                                   <div className="text-[11px] text-body/70 mt-0.5 truncate">
                                     Student: {l.studentName || l.studentEmail || "Enrolled Student"}
@@ -1568,18 +1560,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                     <div className="text-[11px] text-body/70 mt-1 flex items-center gap-1.5 font-numeric">
                                       <Calendar className="w-3 h-3 text-purple-600" />
                                       <span>
-                                        {lDate.toLocaleDateString("en-GB", {
-                                          weekday: "short",
-                                          day: "2-digit",
-                                          month: "short",
-                                          year: "numeric",
-                                        })}{" "}
-                                        ·{" "}
-                                        {lDate.toLocaleTimeString("en-GB", {
-                                          hour: "2-digit",
-                                          minute: "2-digit",
-                                        })}{" "}
-                                        IST
+                                        {formatToIST(l.startsAt, "EEE, dd MMM yyyy · h:mm a 'IST'")}
                                       </span>
                                     </div>
                                   </div>
@@ -1681,17 +1662,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                     )}
                                   </div>
                                   <div className="text-[11px] text-body/50 font-numeric">
-                                    {lDate.toLocaleDateString("en-GB", {
-                                      day: "2-digit",
-                                      month: "short",
-                                      year: "numeric",
-                                    })}{" "}
-                                    at{" "}
-                                    {lDate.toLocaleTimeString("en-GB", {
-                                      hour: "2-digit",
-                                      minute: "2-digit",
-                                    })}{" "}
-                                    IST
+                                    {formatToIST(l.startsAt, "dd MMM yyyy 'at' h:mm a 'IST'")}
                                   </div>
                                 </div>
 
@@ -2284,20 +2255,10 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
 
                                 <div className="text-[11px] text-body/50 font-numeric">
                                   Conducted:{" "}
-                                  {lDate.toLocaleDateString("en-GB", {
-                                    day: "2-digit",
-                                    month: "short",
-                                    year: "numeric",
-                                  })}{" "}
-                                  ·{" "}
-                                  {lDate.toLocaleTimeString("en-GB", {
-                                    hour: "2-digit",
-                                    minute: "2-digit",
-                                  })}{" "}
-                                  IST
+                                  {formatToIST(l.startsAt, "dd MMM yyyy · h:mm a 'IST'")}
                                   {l.payoutPaidAt && (
                                     <span className="text-emerald-700 ml-2">
-                                      (Paid on {new Date(l.payoutPaidAt).toLocaleDateString("en-GB")})
+                                      (Paid on {formatToIST(l.payoutPaidAt, "dd MMM yyyy")})
                                     </span>
                                   )}
                                 </div>

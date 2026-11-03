@@ -1,6 +1,7 @@
 "use client";
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { formatToIST, toISTInputString, fromISTInputToUtc } from "@/lib/timezone";
 
 import { useState, useTransition, useMemo, useRef } from "react";
 import { Discipline, CourseLevel } from "@prisma/client";
@@ -725,7 +726,7 @@ export function AdminCoursesManager({
       initialDate.setDate(initialDate.getDate() + 3);
     }
     initialDate.setHours(10, 0, 0, 0);
-    setLessonStartsAt(initialDate.toISOString().slice(0, 16));
+    setLessonStartsAt(toISTInputString(initialDate));
     setLessonTeacherId(curriculumCourse.allottedTeachers[0]?.id || facultyTeachers[0]?.id || "");
   };
 
@@ -737,7 +738,7 @@ export function AdminCoursesManager({
     setLessonDuration(lesson.durationMinutes);
     setLessonStartsAt(
       lesson.scheduledStartsAt
-        ? new Date(lesson.scheduledStartsAt).toISOString().slice(0, 16)
+        ? toISTInputString(lesson.scheduledStartsAt)
         : "",
     );
     setLessonTeacherId(lesson.teacherId || "");
@@ -754,7 +755,7 @@ export function AdminCoursesManager({
         title: lessonTitle,
         description: lessonDescription,
         durationMinutes: lessonDuration,
-        scheduledStartsAt: lessonStartsAt ? new Date(lessonStartsAt).toISOString() : null,
+        scheduledStartsAt: lessonStartsAt ? fromISTInputToUtc(lessonStartsAt).toISOString() : null,
         teacherId: lessonTeacherId || null,
       });
 
@@ -776,7 +777,7 @@ export function AdminCoursesManager({
           title: lessonTitle,
           description: lessonDescription || null,
           durationMinutes: lessonDuration,
-          scheduledStartsAt: lessonStartsAt ? new Date(lessonStartsAt).toISOString() : null,
+          scheduledStartsAt: lessonStartsAt ? fromISTInputToUtc(lessonStartsAt).toISOString() : null,
           teacherId: lessonTeacherId || null,
           teacherName,
         };
@@ -2417,13 +2418,7 @@ export function AdminCoursesManager({
                 curriculumCourse.lessons.map((lesson) => {
                   const teacher = facultyTeachers.find((t) => t.id === lesson.teacherId);
                   const formattedTime = lesson.scheduledStartsAt
-                    ? new Date(lesson.scheduledStartsAt).toLocaleString("en-US", {
-                        weekday: "short",
-                        month: "short",
-                        day: "numeric",
-                        hour: "numeric",
-                        minute: "2-digit",
-                      })
+                    ? formatToIST(lesson.scheduledStartsAt, "EEE, MMM d, yyyy 'at' h:mm a 'IST'")
                     : "Flexible schedule (Relative to enrollment date)";
 
                   return (

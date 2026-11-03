@@ -4,6 +4,7 @@ import { useState, useEffect, useTransition } from "react";
 import { LessonStatus, LessonSource } from "@prisma/client";
 import { cancelLessonAdminAction, updateLessonDateTimeAdminAction } from "@/actions/admin";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
+import { formatToIST, toISTInputString, fromISTInputToUtc } from "@/lib/timezone";
 import Link from "next/link";
 import {
   Video,
@@ -16,6 +17,7 @@ import {
   Pencil,
   Check,
   X,
+  Clock,
 } from "lucide-react";
 
 export interface AdminLessonItem {
@@ -61,18 +63,18 @@ export function AdminLessonsManager({
 
   const handleStartEdit = (lesson: AdminLessonItem) => {
     setEditingLessonId(lesson.id);
-    const dateObj = new Date(lesson.startsAt);
-    setEditDateInput(isNaN(dateObj.getTime()) ? new Date().toISOString() : dateObj.toISOString());
+    setEditDateInput(toISTInputString(lesson.startsAt));
   };
 
   const handleSaveDateTime = async (lessonId: string) => {
     if (!editDateInput) return;
     setIsSaving(true);
     try {
+      const utcDate = fromISTInputToUtc(editDateInput);
       const res = await updateLessonDateTimeAdminAction({
         lessonId,
-        startsAt: new Date(editDateInput).toISOString(),
-        adminTimezone,
+        startsAt: utcDate.toISOString(),
+        adminTimezone: "Asia/Kolkata",
       });
 
       if (res.success && res.data) {
@@ -82,7 +84,7 @@ export function AdminLessonsManager({
               ? {
                   ...l,
                   startsAt: res.data!.startsAt,
-                  formattedTime: res.data!.formattedTime,
+                  formattedTime: formatToIST(res.data!.startsAt),
                   status: res.data!.status,
                 }
               : l
@@ -91,7 +93,7 @@ export function AdminLessonsManager({
         setEditingLessonId(null);
         setSavedSuccessId(lessonId);
         setTimeout(() => setSavedSuccessId(null), 3500);
-        setToast({ text: "Class Date & Time updated directly in database!", type: "success" });
+        setToast({ text: "Class Date & Time updated directly in database (IST)!", type: "success" });
         setTimeout(() => setToast(null), 4000);
       } else {
         setToast({ text: res.error || "Failed to update date and time in database.", type: "error" });
@@ -263,6 +265,11 @@ export function AdminLessonsManager({
             </button>
           </div>
 
+          {/* Timezone Indicator */}
+          <div className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-purple-50 border border-purple-200/60 text-purple-900 text-xs font-semibold shadow-2xs">
+            <Clock className="w-3.5 h-3.5 text-purple-700" />
+            <span>Timezone: <strong className="font-bold">IST (UTC+5:30)</strong></span>
+          </div>
         </div>
 
         {/* Search */}
@@ -285,7 +292,7 @@ export function AdminLessonsManager({
             <thead className="border-b border-primary/10 bg-bg-alt/25 text-heading font-bold uppercase tracking-wider text-[11px]">
               <tr>
                 <th className="py-3.5 px-4 font-bold">Tracking ID</th>
-                <th className="py-3.5 px-4 font-bold">Date & Time</th>
+                <th className="py-3.5 px-4 font-bold">Date & Time (IST)</th>
                 <th className="py-3.5 px-4 font-bold">Session Type</th>
                 <th className="py-3.5 px-4 font-bold">Faculty Instructor</th>
                 <th className="py-3.5 px-4 font-bold">Student</th>
@@ -322,7 +329,7 @@ export function AdminLessonsManager({
                               compact
                               value={editDateInput}
                               onChange={setEditDateInput}
-                              placeholder="Pick new date & time"
+                              placeholder="Pick new date & time (IST)"
                             />
                           </div>
                           <button
@@ -353,9 +360,9 @@ export function AdminLessonsManager({
                           <span
                             onClick={() => handleStartEdit(l)}
                             className="text-heading font-medium hover:text-primary transition-colors cursor-pointer"
-                            title="Click to edit date & time directly in database"
+                            title="Click to edit date & time directly in database (IST)"
                           >
-                            {l.formattedTime}
+                            {formatToIST(l.startsAt) || l.formattedTime}
                           </span>
                           <button
                             type="button"

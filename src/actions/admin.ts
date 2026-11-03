@@ -29,7 +29,7 @@ import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/les
 import { generateNextStudentId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
-import { formatInViewerTimezone } from "@/lib/timezone";
+import { formatToIST, formatInViewerTimezone } from "@/lib/timezone";
 import { invalidateLastKnownGood } from "@/lib/db-resilience";
 
 export type AdminActionResponse<T = unknown> = {
@@ -789,12 +789,8 @@ export async function updateLessonDateTimeAdminAction(input: {
     invalidateLastKnownGood("admin-enrollments");
     invalidateLastKnownGood("admin-trials");
 
-    // Format new time in admin timezone
-    const formattedTime = formatInViewerTimezone(
-      startsAtDate,
-      timezone,
-      "MMM d, yyyy 'at' h:mm a zzz"
-    );
+    // Format new time in Indian Standard Time (IST)
+    const formattedTime = formatToIST(startsAtDate);
 
     const courseOrInstrument =
       lesson.enrollment?.course?.title || lesson.instrument || "Class";

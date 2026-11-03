@@ -4,7 +4,7 @@ import { Role, LessonSource } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminLessonsManager, AdminLessonItem } from "./AdminLessonsManager";
-import { formatInViewerTimezone } from "@/lib/timezone";
+import { formatToIST } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
 
@@ -14,8 +14,8 @@ export const metadata = {
 };
 
 const getCachedAdminLessonsData = unstable_cache(
-  async (adminTimezone: string = "Asia/Kolkata") => {
-    return getResilientData(`admin-lessons-${adminTimezone}`, async () => {
+  async () => {
+    return getResilientData(`admin-lessons-ist`, async () => {
       const dbLessons = await db.lesson.findMany({
         include: {
           teacher: { select: { name: true, email: true } },
@@ -39,16 +39,8 @@ const getCachedAdminLessonsData = unstable_cache(
         trackingCode: getLessonTrackingId(l),
         startsAt: l.startsAt.toISOString(),
         createdAt: l.createdAt.toISOString(),
-        formattedTime: formatInViewerTimezone(
-          l.startsAt,
-          adminTimezone,
-          "MMM d, yyyy 'at' h:mm a zzz",
-        ),
-        formattedCreatedDate: formatInViewerTimezone(
-          l.createdAt,
-          adminTimezone,
-          "MMM d, yyyy",
-        ),
+        formattedTime: formatToIST(l.startsAt),
+        formattedCreatedDate: formatToIST(l.createdAt, "MMM d, yyyy"),
         durationMinutes: l.durationMinutes,
         instrument: l.instrument,
         courseTitle: l.enrollment?.course?.title || null,
@@ -62,23 +54,23 @@ const getCachedAdminLessonsData = unstable_cache(
       return formattedLessons;
     });
   },
-  ["admin-lessons-data-v3"],
+  ["admin-lessons-data-v4"],
   { revalidate: 30, tags: ["admin-lessons", "lessons"] }
 );
 
 export default async function AdminLessonsPage() {
-  const admin = await requireRole(Role.ADMIN);
-  const adminTimezone = admin.timezone || "Asia/Kolkata";
+  await requireRole(Role.ADMIN);
+  const adminTimezone = "Asia/Kolkata";
 
   let formattedLessons: AdminLessonItem[] = [];
   try {
-    formattedLessons = await getCachedAdminLessonsData(adminTimezone);
+    formattedLessons = await getCachedAdminLessonsData();
   } catch (err) {
     console.error("[AdminLessonsPage] Failed to load cached lessons data, using fallback:", err);
   }
 
   if (formattedLessons.length === 0) {
-    const fallback = getLastKnownGood<AdminLessonItem[]>(`admin-lessons-${adminTimezone}`);
+    const fallback = getLastKnownGood<AdminLessonItem[]>(`admin-lessons-ist`);
     if (fallback && fallback.length > 0) {
       formattedLessons = fallback;
     }
