@@ -132,8 +132,8 @@ export function NavbarWrapper({
         </div>
       </div>
 
-      {/* Unverified email warning banner */}
-      {user && !user.emailVerified && (
+      {/* Unverified email warning banner (hidden when already on /verify-email) */}
+      {user && !user.emailVerified && pathname !== "/verify-email" && (
         <div className="border-t border-accent/20 bg-accent-subtle px-4 py-2 text-center text-xs text-accent-dark font-medium">
           Your email is not verified yet. Please check your inbox or{" "}
           <Link

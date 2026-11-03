@@ -887,9 +887,10 @@ export async function verifyEmailAction(
       };
     }
 
-    const user = await db.user.findUnique({
-      where: { email },
-      select: { id: true, emailVerified: true, role: true },
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await db.user.findFirst({
+      where: { email: { equals: normalizedEmail, mode: "insensitive" } },
+      select: { id: true, email: true, emailVerified: true, role: true },
     });
 
     if (!user) {
@@ -901,18 +902,37 @@ export async function verifyEmailAction(
 
     if (!user.emailVerified) {
       await db.user.update({
-        where: { email },
+        where: { id: user.id },
         data: { emailVerified: new Date() },
       });
-      logger.info({ email }, "Email address verified successfully");
+      logger.info({ email: user.email }, "Email address verified successfully");
     } else {
-      logger.info({ email }, "Email address was already verified");
+      logger.info({ email: user.email }, "Email address was already verified");
     }
+
+    // Invalidate caches so Navbar and dashboards immediately see verified email status
+    try {
+      revalidateTag("user-session", "max");
+      revalidateTag("student-profile", "max");
+      revalidatePath("/", "layout");
+      revalidatePath("/verify-email");
+      revalidatePath("/dashboard");
+      revalidatePath("/student/dashboard");
+      revalidatePath("/teacher/dashboard");
+    } catch (revErr) {
+      logger.warn({ revErr }, "Cache revalidation note during email verification");
+    }
+
+    const roleMessage =
+      user.role === "TEACHER"
+        ? "Your email address has been verified successfully! You can now manage your studio and schedule lessons."
+        : user.role === "STUDENT"
+        ? "Your email address has been verified successfully! You are ready to book lessons and attend classes."
+        : "Your email address has been verified successfully!";
 
     return {
       success: true,
-      message:
-        "Your email address has been verified successfully! You are ready to book and teach.",
+      message: roleMessage,
       data: { emailVerified: true, role: user.role },
     };
   } catch (error) {

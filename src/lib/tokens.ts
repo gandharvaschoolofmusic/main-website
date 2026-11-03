@@ -15,23 +15,24 @@ export function generateSecureToken(bytes = 32): string {
 export async function createEmailVerificationToken(
   email: string,
 ): Promise<string> {
+  const normalizedEmail = email.trim().toLowerCase();
   const token = generateSecureToken();
   const expires = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
 
   // Delete any existing verification tokens for this email
   await db.verificationToken.deleteMany({
-    where: { identifier: email },
+    where: { identifier: normalizedEmail },
   });
 
   await db.verificationToken.create({
     data: {
-      identifier: email,
+      identifier: normalizedEmail,
       token,
       expires,
     },
   });
 
-  logger.info({ email }, "Created email verification token");
+  logger.info({ email: normalizedEmail }, "Created email verification token");
   return token;
 }
 
@@ -63,7 +64,7 @@ export async function consumeEmailVerificationToken(
   }
 
   // Token is valid; return the associated email address.
-  return record.identifier;
+  return record.identifier.trim().toLowerCase();
 }
 
 

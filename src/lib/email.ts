@@ -25,7 +25,10 @@ export async function sendVerificationEmail(
   email: string,
   token: string,
 ): Promise<{ success: boolean; previewUrl?: string }> {
-  const verifyUrl = `${appUrl}/verify-email?token=${encodeURIComponent(token)}`;
+  const cleanAppUrl = (
+    process.env.NEXTAUTH_URL || process.env.APP_URL || "https://www.gandharvaschoolofmusic.com"
+  ).replace(/\/+$/, "");
+  const verifyUrl = `${cleanAppUrl}/verify-email?token=${encodeURIComponent(token.trim())}`;
 
   // 1. Send via Resend if configured
   if (resend) {
