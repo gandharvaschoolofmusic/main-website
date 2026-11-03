@@ -264,7 +264,7 @@ function Navbar() {
             {/* Book a trial - Right Section */}
             <div className="flex-shrink-0">
               <Link
-                href="/book-your-free-trial/"
+                href="/book-trial"
                 aria-label="Book a Free Trial"
                 target="_blank"
                 className="inline-flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-base font-medium text-white bg-purple-600 hover:bg-purple-700"
@@ -696,7 +696,7 @@ function Navbar() {
           <div className="lg:hidden w-fit bg-[#9506EE] flex items-center justify-center rounded-md  ml-4 mt-12 ">
             <Link
               className="text-[13px] text-white font-bold px-3 py-3 "
-              href={"/book-your-free-trial/"}
+              href={"/book-trial"}
               aria-label="Book a Free Trial"
               onClick={() => setIsOpen(false)}
             >

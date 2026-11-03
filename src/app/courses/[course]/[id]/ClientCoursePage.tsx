@@ -377,7 +377,7 @@ useEffect(() => {
               </button>
               <Link
                 className=" py-2 rounded-md bg-[#9506EE] text-[17px] text-[#FFF] cursor-pointer"
-                href={"/book-your-free-trial"}
+                href={"/book-trial"}
                 aria-label="Book a Free Trial"
               >
                 <button
@@ -515,7 +515,7 @@ const CoursePackageCard: React.FC<Package> = ({
 
         {/* Buttons */}
         {/* <div className="mt-4 flex flex-col gap-2">
-          <Link href={"/book-your-free-trial"} aria-label="Book a Free Trial">
+          <Link href={"/book-trial"} aria-label="Book a Free Trial">
             <button
               className="bg-[#9506EE] text-white px-4 py-2 rounded-lg text-[14px] cursor-pointer"
               aria-label="Book a Free Trial"
@@ -575,7 +575,7 @@ const CoursePackageCard: React.FC<Package> = ({
 
       {/* Buttons Section */}
       <div className="flex flex-col gap-3 mt-6">
-        <Link href={"/book-your-free-trial"} className="w-full">
+        <Link href={"/book-trial"} className="w-full">
           <button
             className="w-full bg-[#9506EE] text-white border-2 border-[#9506EE] py-3 rounded-xl text-[16px] font-bold cursor-pointer 
             hover:bg-[#FFD700] hover:border-[#FFD700] hover:text-[#04002B] transition-all duration-300"

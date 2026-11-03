@@ -1741,7 +1741,7 @@ export const blogDetails: BlogDetails = {
 
   <span style="font-weight: 400; display: block;">
     So, why not 
-    <a href="https://gandharvaschoolofmusic.com/book-your-free-trial/" style="color: #007BFF; font-weight: bold;">
+    <a href="https://gandharvaschoolofmusic.com/book-trial" style="color: #007BFF; font-weight: bold;">
       start today
     </a>? 
     Put on your favorite song in a foreign language, sing along, and let the music guide your journey to fluency!
@@ -2188,7 +2188,7 @@ The beautiful thing about learning is that nobody can take it away from you
 
   <span style="font-weight: 400;">
     So, why wait?
-    <a href="https://gandharvaschoolofmusic.com/book-your-free-trial/"><span style="color: #007BFF; font-weight: bold;">Start your musical journey</span></a>
+    <a href="https://gandharvaschoolofmusic.com/book-trial"><span style="color: #007BFF; font-weight: bold;">Start your musical journey</span></a>
     today and discover the game-changing benefits of music! 🎸
   </span> 
   `,
@@ -5241,7 +5241,7 @@ Music gives a soul to the universe, wings to the mind, flight to the imagination
     Before committing, check for 
   </span>
   <span style="text-decoration: underline;">
-    <a href="https://gandharvaschoolofmusic.com/book-your-free-trial/">
+    <a href="https://gandharvaschoolofmusic.com/book-trial">
       <span style="color: #007BFF; font-weight: bold;">trial classes</span>
     </a>
   </span>

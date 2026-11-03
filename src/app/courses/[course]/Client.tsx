@@ -221,7 +221,7 @@ function CoursePage({ params }: { params: { courseData: CourseDataAllType } }) {
           className="flex items-center gap-4"
           style={{ fontFamily: "var(--font-dm-sans)", fontWeight: 300 }}
         >
-          <Link href={"/book-your-free-trial"} aria-label="Book a free trial">
+          <Link href={"/book-trial"} aria-label="Book a free trial">
             <button
               className="bg-[#9506EE]  text-white md:py-4 md:px-6 rounded-lg text-[15px] px-3 py-2 cursor-pointer"
               aria-label="Book a free trial"

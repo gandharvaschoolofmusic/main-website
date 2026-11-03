@@ -26,7 +26,7 @@ export default function SiteChrome({
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/verify-email") ||
     pathname.startsWith("/book-trial") ||
-    pathname.startsWith("/book-your-free-trial") ||
+
     pathname.startsWith("/thank-you");
 
   if (hideFooter) {

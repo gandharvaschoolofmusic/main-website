@@ -36,6 +36,20 @@ const nextConfig: NextConfig = {
       ],
     },
   },
+  async redirects() {
+    return [
+      {
+        source: "/book-your-free-trial",
+        destination: "/book-trial",
+        permanent: true,
+      },
+      {
+        source: "/book-your-free-trial/:path*",
+        destination: "/book-trial",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

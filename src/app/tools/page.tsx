@@ -171,7 +171,7 @@ function ToolsPage() {
           </div>
         </div>
         <Link
-          href={"/book-your-free-trial/"}
+          href={"/book-trial"}
           className="mt-10"
           aria-label="Book a free trial now"
         >

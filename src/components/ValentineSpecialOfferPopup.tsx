@@ -99,7 +99,7 @@ export default function ValentineSpecialOfferPopup({ onClose }: PopupProps) {
 
           
           <button
-            onClick={() => router.push("/book-your-free-trial")}
+            onClick={() => router.push("/book-trial")}
             className="mt-8 w-full bg-gradient-to-r from-rose-500 to-pink-600 hover:from-blue-500 hover:to-indigo-600 text-white py-3 rounded-2xl font-semibold shadow-lg transition-all duration-300 ease-in-out cursor-pointer"
           >
             Book Free Trial 💕

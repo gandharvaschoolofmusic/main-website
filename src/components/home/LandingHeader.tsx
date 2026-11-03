@@ -42,7 +42,7 @@ const DANCE_ITEMS = [
 
 export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) {
   const pathname = usePathname();
-  const isFormPage = ["/login", "/signup", "/book-trial", "/book-your-free-trial"].includes(pathname);
+  const isFormPage = ["/login", "/signup", "/book-trial"].includes(pathname);
   const [isScrolled, setIsScrolled] = useState(false);
   const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [mobileCoursesOpen, setMobileCoursesOpen] = useState(false);

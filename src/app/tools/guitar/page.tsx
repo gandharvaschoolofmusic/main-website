@@ -143,7 +143,7 @@ function ToolPage() {
             </p>
           </div>
         </div>
-        <Link href="/book-your-free-trial/" aria-label="Book a free trial now">
+        <Link href="/book-trial" aria-label="Book a free trial now">
           <button
             aria-label="Book a free trial now"
             className="bg-[#FF9E00] px-8 py-3 rounded-lg mt-3 md:mt-15 text-[16px] cursor-pointer hover:bg-[#e08b00] transition-colors"
