@@ -17,8 +17,45 @@ const fromEmail =
     ? `Gandharva School of Music <${process.env.SMTP_USER}>`
     : "Gandharva School of Music <notifications@gandharvaschoolofmusic.com>");
 
-const appUrl =
-  process.env.NEXTAUTH_URL || process.env.APP_URL || "https://www.gandharvaschoolofmusic.com";
+const appUrl = (
+  process.env.NEXTAUTH_URL || process.env.APP_URL || "https://www.gandharvaschoolofmusic.com"
+).replace(/\/+$/, "");
+
+export const EMAIL_FAVICON_URL = "https://www.gandharvaschoolofmusic.com/favicon.png";
+
+/**
+ * Renders consistent, brand-aligned email header with the official Gandharva favicon/logo.
+ */
+export function renderEmailHeader(
+  subtitle: string,
+  options?: {
+    subtitleColor?: string;
+    subtitleWeight?: string;
+    subtitleSize?: string;
+    brandColor?: string;
+  }
+): string {
+  const subtitleColor = options?.subtitleColor || "#78716c";
+  const subtitleWeight = options?.subtitleWeight || "500";
+  const subtitleSize = options?.subtitleSize || "14px";
+  const brandColor = options?.brandColor || "#3C096C";
+
+  return `
+    <div style="text-align: center; margin-bottom: 24px;">
+      <a href="${appUrl}" style="text-decoration: none; display: inline-block;" target="_blank">
+        <img
+          src="${EMAIL_FAVICON_URL}"
+          alt="Gandharva School of Music"
+          width="64"
+          height="64"
+          style="width: 64px; height: 64px; border-radius: 50%; display: block; margin: 0 auto 14px auto; border: 0; outline: none;"
+        />
+      </a>
+      <h1 style="color: ${brandColor}; font-size: 24px; font-weight: 800; margin: 0 0 6px 0; letter-spacing: -0.3px;">Gandharva School of Music</h1>
+      <p style="color: ${subtitleColor}; font-size: ${subtitleSize}; font-weight: ${subtitleWeight}; margin: 0;">${subtitle}</p>
+    </div>
+  `;
+}
 
 const firebaseApiKey =
   process.env.FIREBASE_API_KEY || process.env.NEXT_PUBLIC_FIREBASE_API_KEY;
@@ -123,10 +160,7 @@ export async function sendVerificationEmail(
 
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-        <p style="color: #78716c; font-size: 14px; margin: 0;">Account Verification</p>
-      </div>
+      ${renderEmailHeader("Account Verification")}
       <p style="font-size: 15px; line-height: 1.6; color: #374151;">
         Hello,
       </p>
@@ -219,10 +253,7 @@ export async function sendEmailUpdateVerificationEmail({
 
   const emailUpdateHtml = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 560px; margin: 0 auto; padding: 32px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #3C096C; font-size: 22px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-        <p style="color: #78716c; font-size: 13px; margin: 0;">Faculty Account Security</p>
-      </div>
+      ${renderEmailHeader("Faculty Account Security")}
       
       <p style="font-size: 14px; line-height: 1.6; color: #374151;">
         Hello ${userName || "Instructor"},
@@ -280,10 +311,7 @@ export async function sendPasswordResetEmail(
 
   const resetHtml = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; max-width: 600px; margin: 0 auto; padding: 32px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-      <div style="text-align: center; margin-bottom: 24px;">
-        <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-        <p style="color: #78716c; font-size: 14px; margin: 0;">Password Reset Request</p>
-      </div>
+      ${renderEmailHeader("Password Reset Request")}
       <p style="font-size: 15px; line-height: 1.6; color: #374151;">
         Hello,
       </p>
@@ -421,10 +449,11 @@ export async function sendBookingConfirmationEmails(
   try {
     const studentHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-          <p style="color: #FF7803; font-size: 15px; font-weight: 700; margin: 0;">Lesson Confirmed!</p>
-        </div>
+        ${renderEmailHeader("Lesson Confirmed!", {
+          subtitleColor: "#FF7803",
+          subtitleWeight: "700",
+          subtitleSize: "15px",
+        })}
         <p style="font-size: 15px; color: #374151;">Your 1-to-1 music lesson with <strong>${teacher.name}</strong> is confirmed.</p>
         <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px; margin: 20px 0;">
           <p style="margin: 6px 0; font-size: 14px;"><strong>Instrument:</strong> ${instrument}</p>
@@ -443,10 +472,11 @@ export async function sendBookingConfirmationEmails(
 
     const teacherHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-          <p style="color: #FF7803; font-size: 15px; font-weight: 700; margin: 0;">New Lesson Booked!</p>
-        </div>
+        ${renderEmailHeader("New Lesson Booked!", {
+          subtitleColor: "#FF7803",
+          subtitleWeight: "700",
+          subtitleSize: "15px",
+        })}
         <p style="font-size: 15px; color: #374151;"><strong>${student.name}</strong> has booked a lesson with your studio.</p>
         <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px; margin: 20px 0;">
           <p style="margin: 6px 0; font-size: 14px;"><strong>Instrument:</strong> ${instrument}</p>
@@ -545,10 +575,11 @@ export async function sendLessonCancellationEmail(
   try {
     const cancellationHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-          <p style="color: #ea580c; font-size: 15px; font-weight: 700; margin: 0;">Lesson Cancelled</p>
-        </div>
+        ${renderEmailHeader("Lesson Cancelled", {
+          subtitleColor: "#ea580c",
+          subtitleWeight: "700",
+          subtitleSize: "15px",
+        })}
         <p style="font-size: 15px; color: #374151;">Your upcoming ${instrument} lesson has been cancelled by <strong>${cancelledByName}</strong>.</p>
         <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px; margin: 20px 0;">
           <p style="margin: 6px 0; font-size: 14px;"><strong>Instrument:</strong> ${instrument}</p>
@@ -625,10 +656,11 @@ export async function sendCourseEnrollmentEmail({
   try {
     const enrollmentHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-          <p style="color: #FF7803; font-size: 15px; font-weight: 700; margin: 0;">Enrollment Confirmed!</p>
-        </div>
+        ${renderEmailHeader("Enrollment Confirmed!", {
+          subtitleColor: "#FF7803",
+          subtitleWeight: "700",
+          subtitleSize: "15px",
+        })}
         <p style="font-size: 15px; color: #374151;">Dear ${studentName},</p>
         <p style="font-size: 15px; color: #374151;">Thank you for your enrollment in <strong>${courseTitle}</strong> at Gandharva School of Music.</p>
         <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 16px; margin: 20px 0;">
@@ -693,10 +725,11 @@ export async function sendCertificateEmail({
   try {
     const certHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
-        <div style="text-align: center; margin-bottom: 20px;">
-          <h1 style="color: #3C096C; font-size: 24px; font-weight: 800; margin: 0 0 6px 0;">Gandharva School of Music</h1>
-          <p style="color: #FF7803; font-size: 16px; font-weight: 700; margin: 0;">Congratulations, ${studentName}! 🎓</p>
-        </div>
+        ${renderEmailHeader(`Congratulations, ${studentName}! 🎓`, {
+          subtitleColor: "#FF7803",
+          subtitleWeight: "700",
+          subtitleSize: "16px",
+        })}
         <p style="font-size: 15px; color: #374151;">You have successfully completed all sessions and coursework for <strong>${courseTitle}</strong>.</p>
         <div style="background-color: #fdfbf7; border: 2px solid #FF7803; border-radius: 12px; padding: 20px; margin: 20px 0; text-align: center;">
           <p style="font-size: 13px; color: #57534e; text-transform: uppercase; letter-spacing: 1px; margin: 0 0 8px 0; font-weight: 600;">Official Credential Issued</p>
@@ -779,9 +812,18 @@ export async function sendSupportTicketAdminEmail({
 
     const ticketHtml = `
       <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917; background-color: #ffffff; border: 1px solid #e7e5e4; border-radius: 12px;">
-        <div style="border-bottom: 2px solid #3C096C; padding-bottom: 12px; margin-bottom: 20px;">
-          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold; color: #3C096C;">Gandharva Support Desk</span>
-          <h1 style="color: #12072B; font-size: 20px; margin: 6px 0 0 0;">New Support Ticket Raised</h1>
+        <div style="border-bottom: 2px solid #3C096C; padding-bottom: 16px; margin-bottom: 20px; text-align: center;">
+          <a href="${appUrl}" style="text-decoration: none; display: inline-block;" target="_blank">
+            <img
+              src="${EMAIL_FAVICON_URL}"
+              alt="Gandharva School of Music"
+              width="52"
+              height="52"
+              style="width: 52px; height: 52px; border-radius: 50%; display: block; margin: 0 auto 10px auto; border: 0; outline: none;"
+            />
+          </a>
+          <span style="font-size: 11px; text-transform: uppercase; letter-spacing: 1.5px; font-weight: bold; color: #3C096C; display: block;">Gandharva Support Desk</span>
+          <h1 style="color: #12072B; font-size: 20px; margin: 4px 0 0 0;">New Support Ticket Raised</h1>
         </div>
         
         <div style="background-color: #f8f7fc; border-left: 4px solid #3C096C; border-radius: 6px; padding: 14px 18px; margin-bottom: 20px;">
