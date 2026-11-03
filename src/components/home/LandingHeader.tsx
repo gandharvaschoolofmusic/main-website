@@ -374,10 +374,10 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                         ? "/teacher/dashboard"
                         : "/student/dashboard"
                     }
-                    className="flex items-center gap-2 rounded-xl bg-white/15 hover:bg-white/25 pl-2 pr-3 py-1 sm:py-1.5 text-xs xl:text-sm font-semibold text-white transition-all btn-tactile whitespace-nowrap active:scale-95 border border-white/20"
+                    className="flex items-center gap-2 rounded-xl bg-white/15 hover:bg-white/25 pl-2 pr-3 py-1 sm:py-1.5 text-xs xl:text-sm font-semibold text-white transition-all btn-tactile whitespace-nowrap active:scale-95"
                   >
                     {user.image ? (
-                      <div className="relative w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden border border-white/40 shrink-0">
+                      <div className="relative w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden shrink-0">
                         <Image
                           src={user.image}
                           alt={user.name || "Profile"}
@@ -387,7 +387,7 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                         />
                       </div>
                     ) : (
-                      <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full bg-accent/30 text-accent font-bold text-[10px] flex items-center justify-center border border-white/20 shrink-0">
+                      <div className="w-5 h-5 xl:w-6 xl:h-6 rounded-full bg-accent/30 text-accent font-bold text-[10px] flex items-center justify-center shrink-0">
                         {user.name?.slice(0, 1).toUpperCase() || "U"}
                       </div>
                     )}
@@ -459,7 +459,7 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                       ? "/teacher/dashboard"
                       : "/student/dashboard"
                   }
-                  className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs border border-white/30 overflow-hidden"
+                  className="w-8 h-8 rounded-full bg-white/20 text-white flex items-center justify-center font-bold text-xs overflow-hidden"
                   aria-label="Dashboard"
                 >
                   {user.image ? (
