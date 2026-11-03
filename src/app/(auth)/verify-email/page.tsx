@@ -1,6 +1,7 @@
 import { Suspense } from "react";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { VerifyEmailClient } from "./VerifyEmailClient";
+import { verifyEmailAction } from "@/actions/auth";
 import { Loader2 } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -10,8 +11,35 @@ export const metadata = {
   description: "Confirm and activate your Gandharva School of Music account.",
 };
 
-export default async function VerifyEmailPage() {
-  const currentUser = await getCurrentUser();
+interface VerifyEmailPageProps {
+  searchParams?: Promise<{ [key: string]: string | string[] | undefined }>;
+}
+
+export default async function VerifyEmailPage({ searchParams }: VerifyEmailPageProps) {
+  const [currentUser, resolvedParams] = await Promise.all([
+    getCurrentUser(),
+    searchParams
+      ? searchParams
+      : Promise.resolve<{ [key: string]: string | string[] | undefined }>({}),
+  ]);
+
+  const rawToken =
+    (typeof resolvedParams.token === "string" ? resolvedParams.token : undefined) ||
+    (typeof resolvedParams.oobCode === "string" ? resolvedParams.oobCode : undefined) ||
+    (typeof resolvedParams.code === "string" ? resolvedParams.code : undefined);
+  const token = rawToken?.trim() || null;
+
+  // Server-side verification: If token is in the URL, verify immediately during SSR.
+  // This eliminates any flash of the "expired link" card when opening the link from an email.
+  let initialResult = null;
+  if (token) {
+    try {
+      initialResult = await verifyEmailAction(token);
+    } catch {
+      // Allow client-side fallback if server-side run experiences transient issues
+      initialResult = null;
+    }
+  }
 
   const userSummary = currentUser
     ? {
@@ -19,7 +47,8 @@ export default async function VerifyEmailPage() {
         name: currentUser.name,
         email: currentUser.email,
         role: currentUser.role,
-        emailVerified: currentUser.emailVerified,
+        emailVerified:
+          currentUser.emailVerified || (initialResult?.success ? new Date() : null),
       }
     : null;
 
@@ -34,7 +63,11 @@ export default async function VerifyEmailPage() {
         </div>
       }
     >
-      <VerifyEmailClient currentUser={userSummary} />
+      <VerifyEmailClient
+        currentUser={userSummary}
+        initialToken={token}
+        initialResult={initialResult}
+      />
     </Suspense>
   );
 }

@@ -17,15 +17,25 @@ export type CurrentUserSummary = {
 
 export function VerifyEmailClient({
   currentUser,
+  initialToken,
+  initialResult,
 }: {
   currentUser: CurrentUserSummary;
+  initialToken?: string | null;
+  initialResult?: {
+    success: boolean;
+    message?: string;
+    error?: string;
+    data?: { emailVerified: boolean; role?: string };
+  } | null;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
   const rawToken =
     searchParams.get("token") ||
     searchParams.get("oobCode") ||
-    searchParams.get("code");
+    searchParams.get("code") ||
+    initialToken;
   const token = rawToken?.trim() || null;
 
   const [isPending, startTransition] = useTransition();
@@ -34,7 +44,7 @@ export function VerifyEmailClient({
     message?: string;
     error?: string;
     data?: { emailVerified: boolean; role?: string };
-  } | null>(null);
+  } | null>(initialResult ?? null);
 
   // Resend state
   const [resendEmail, setResendEmail] = useState(currentUser?.email || "");
@@ -47,8 +57,9 @@ export function VerifyEmailClient({
     alreadyVerified?: boolean;
   } | null>(null);
 
-  // Ref to guarantee verification action runs only once even in React StrictMode
-  const hasTriggeredRef = useRef(false);
+  // Ref to guarantee verification action runs only once even in React StrictMode.
+  // If already verified on the server via initialResult, no need to trigger again!
+  const hasTriggeredRef = useRef(Boolean(initialResult));
 
   useEffect(() => {
     if (token && !hasTriggeredRef.current) {
@@ -103,7 +114,7 @@ export function VerifyEmailClient({
         {/* ── Case 1: Verification with Token in URL ── */}
         {token ? (
           <>
-            {isPending ? (
+            {isPending || result === null ? (
               <div className="space-y-4 py-8">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-cta/10 text-cta">
                   <Loader2 className="h-7 w-7 animate-spin" />
@@ -119,7 +130,7 @@ export function VerifyEmailClient({
                   Please wait a moment while we confirm your Gandharva account.
                 </p>
               </div>
-            ) : result?.success ? (
+            ) : result.success ? (
               <div className="space-y-5">
                 <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-success-muted text-success shadow-sm">
                   <CheckCircle2 className="h-8 w-8" />
