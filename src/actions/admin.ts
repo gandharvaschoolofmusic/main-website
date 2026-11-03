@@ -21,7 +21,8 @@ import {
   CoursePaymentPlan,
   CourseEmiStatus,
 } from "@prisma/client";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
+import { generateBackupCodes } from "@/lib/totp";
 import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
@@ -3313,6 +3314,91 @@ export async function deleteRecordingAdminAction(
     return {
       success: false,
       error: error instanceof Error ? error.message : "Failed to delete recording.",
+    };
+  }
+}
+
+/**
+ * Regenerate 8 fresh emergency backup recovery codes for the authenticated admin.
+ */
+export async function regenerateAdminBackupCodesAction(): Promise<{
+  success: boolean;
+  data?: { backupCodes: string[] };
+  error?: string;
+  message?: string;
+}> {
+  try {
+    const user = await requireRole(Role.ADMIN);
+    const backupCodes = generateBackupCodes(8);
+
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorBackupCodes: JSON.stringify(backupCodes),
+      },
+    });
+
+    revalidatePath("/admin/settings");
+    return {
+      success: true,
+      data: { backupCodes },
+      message: "8 new backup recovery codes generated successfully.",
+    };
+  } catch (error) {
+    logger.error({ error }, "Failed to regenerate backup codes");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to regenerate backup codes.",
+    };
+  }
+}
+
+/**
+ * Reset Google Authenticator 2-step verification for the authenticated admin.
+ * Requires confirming their current admin password.
+ */
+export async function resetAdminTwoFactorAction(currentPassword: string): Promise<{
+  success: boolean;
+  error?: string;
+  message?: string;
+}> {
+  try {
+    const user = await requireRole(Role.ADMIN);
+    const dbUser = await db.user.findUnique({
+      where: { id: user.id },
+      select: { passwordHash: true },
+    });
+
+    if (!dbUser?.passwordHash) {
+      return { success: false, error: "Authentication failed. Password not found." };
+    }
+
+    const isValid = await verifyPassword(dbUser.passwordHash, currentPassword);
+    if (!isValid) {
+      return { success: false, error: "Incorrect current password. Unable to reset 2FA." };
+    }
+
+    await db.user.update({
+      where: { id: user.id },
+      data: {
+        twoFactorEnabled: false,
+        twoFactorSecret: null,
+        twoFactorBackupCodes: null,
+        twoFactorVerifiedAt: null,
+      },
+    });
+
+    revalidatePath("/admin/settings");
+    return {
+      success: true,
+      message:
+        "Two-step verification has been reset. You will be prompted to set up Google Authenticator on your next login.",
+    };
+  } catch (error) {
+    logger.error({ error }, "Failed to reset 2FA");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to reset two-step verification.",
     };
   }
 }

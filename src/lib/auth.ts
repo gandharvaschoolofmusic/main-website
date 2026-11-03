@@ -9,6 +9,7 @@ import { LoginSchema } from "@/schemas/auth";
 import type { Provider } from "next-auth/providers";
 
 import { normalizePhoneNumber, validateAndConsumePhoneOtp } from "@/lib/phone";
+import { verifyTwoFactorChallenge } from "@/lib/two-factor-token";
 
 const providers: Provider[] = [
   Credentials({
@@ -21,8 +22,39 @@ const providers: Provider[] = [
       code: { label: "OTP Code", type: "text" },
       idToken: { label: "Firebase ID Token", type: "text" },
       authType: { label: "Auth Type", type: "text" },
+      twoFactorToken: { label: "2FA Token", type: "text" },
     },
     async authorize(credentials) {
+      // ─── 0. Two-Factor TOTP Authenticated Login (Admin 2FA) ──────
+      if (credentials?.authType === "2fa_verified") {
+        const twoFactorToken = (credentials?.twoFactorToken as string) || "";
+        const payload = verifyTwoFactorChallenge(twoFactorToken);
+        if (!payload || !payload.userId) {
+          return null;
+        }
+
+        const user = await db.user.findUnique({
+          where: { id: payload.userId },
+          include: {
+            teacherProfile: { select: { approvalStatus: true } },
+          },
+        });
+
+        if (!user || !user.isActive) {
+          return null;
+        }
+
+        return {
+          id: user.id,
+          email: user.email,
+          name: user.name,
+          image: user.image,
+          role: user.role,
+          emailVerified: user.emailVerified,
+          timezone: user.timezone,
+        };
+      }
+
       // ─── 1. OTP Authentication (Phone + 6-digit code or Firebase ID Token) ──────
       if (credentials?.authType === "otp") {
         const rawPhone = (credentials?.phone as string) || "";
@@ -107,6 +139,12 @@ const providers: Provider[] = [
 
       const isValid = await verifyPassword(user.passwordHash, password);
       if (!isValid) {
+        return null;
+      }
+
+      // If user is ADMIN and has 2FA enabled, direct password sign-in is blocked
+      // (They must verify via TOTP 2FA code)
+      if (user.role === "ADMIN" && user.twoFactorEnabled) {
         return null;
       }
 

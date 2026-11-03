@@ -4,7 +4,13 @@ import { useActionState, useState, useTransition, useEffect, useRef, startTransi
 import Link from "next/link";
 import { formatInternationalE164 } from "@/lib/phone-utils";
 import { FormShell } from "@/components/auth/FormShell";
-import { loginAction, sendPhoneOtpAction, verifyOtpAndLoginAction } from "@/actions/auth";
+import {
+  loginAction,
+  sendPhoneOtpAction,
+  verifyOtpAndLoginAction,
+  verifyAdminTwoFactorAction,
+  confirmAdminTwoFactorSetupAction,
+} from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
 import {
   isFirebaseConfigured,
@@ -27,6 +33,11 @@ import {
   ArrowRight,
   Eye,
   EyeOff,
+  ShieldCheck,
+  QrCode,
+  Copy,
+  Check,
+  ArrowLeft,
 } from "lucide-react";
 
 export default function LoginPage() {
@@ -37,6 +48,22 @@ export default function LoginPage() {
   const [pwdState, pwdFormAction, isPwdPending] = useActionState(loginAction, {
     success: false,
   });
+
+  // 2FA verification state (Admin Google Authenticator)
+  const [twoFactorState, twoFactorFormAction, isTwoFactorPending] = useActionState(
+    verifyAdminTwoFactorAction,
+    { success: false }
+  );
+
+  // 2FA setup state (Admin first-time configuration)
+  const [setupState, setupFormAction, isSetupPending] = useActionState(
+    confirmAdminTwoFactorSetupAction,
+    { success: false }
+  );
+
+  const [useBackupCode, setUseBackupCode] = useState(false);
+  const [copiedKey, setCopiedKey] = useState(false);
+  const [resetToPassword, setResetToPassword] = useState(false);
 
   // OTP state
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(SUPPORTED_COUNTRIES[0]); // India (+91)
@@ -277,13 +304,31 @@ export default function LoginPage() {
     }
   };
 
+  const is2FAActive = Boolean(
+    (pwdState?.data?.requires2FA || pwdState?.data?.requires2FASetup) && !resetToPassword
+  );
+
   return (
     <FormShell>
       <header className="entry-form-header">
-        <h1>Welcome back</h1>
-        <p>Sign in to continue your music journey.</p>
+        <h1>
+          {is2FAActive
+            ? pwdState?.data?.requires2FASetup
+              ? "Setup 2-Step Verification"
+              : "Two-Step Verification"
+            : "Welcome back"}
+        </h1>
+        <p>
+          {is2FAActive
+            ? pwdState?.data?.requires2FASetup
+              ? "Scan the QR code to secure your administrator account."
+              : "Enter your 6-digit Google Authenticator verification code."
+            : "Sign in to continue your music journey."}
+        </p>
       </header>
-        {/* Mode Toggle Switch */}
+
+      {/* Mode Toggle Switch (Hidden during 2FA) */}
+      {!is2FAActive && (
         <div className="entry-segmented" role="group" aria-label="Sign-in method">
           <button
             type="button"
@@ -309,10 +354,259 @@ export default function LoginPage() {
             <span>Phone OTP</span>
           </button>
         </div>
+      )}
 
-        {/* ─── TAB 1: PASSWORD LOGIN ────────────────────────────────────── */}
-        {loginMode === "PASSWORD" && (
-          <div className="space-y-5">
+      {/* ─── 2FA VERIFICATION (GOOGLE AUTHENTICATOR) ────────────────── */}
+      {pwdState?.data?.requires2FA && !resetToPassword && (
+        <div className="space-y-5 animate-fade-in">
+          {twoFactorState?.error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-xl border border-error/30 bg-error-muted/40 p-3.5 text-xs text-error font-medium animate-fade-in"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
+              <span>{twoFactorState.error}</span>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-border-default/80 bg-surface-subtle/50 p-4 text-center space-y-2">
+            <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-heading font-serif">Admin Two-Step Verification</h3>
+              <p className="text-xs text-body mt-0.5">
+                Enter the {useBackupCode ? "8-character emergency backup code" : "6-digit code from Google Authenticator"} for:
+              </p>
+              <span className="inline-block mt-1 px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-primary/10 text-primary">
+                {pwdState.data.email}
+              </span>
+            </div>
+          </div>
+
+          <form action={twoFactorFormAction} className="space-y-4">
+            <input type="hidden" name="twoFactorToken" value={pwdState.data.twoFactorToken} />
+
+            {!useBackupCode ? (
+              <div>
+                <label
+                  htmlFor="totp-code"
+                  className="block text-xs font-bold uppercase tracking-wider text-heading text-center mb-2"
+                >
+                  6-Digit Authenticator Code
+                </label>
+                <input
+                  id="totp-code"
+                  name="code"
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  maxLength={6}
+                  required
+                  autoFocus
+                  placeholder="000000"
+                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+                />
+                <p className="text-[11px] text-body-muted text-center mt-1.5">
+                  Open Google Authenticator on your phone to get your current 6-digit code.
+                </p>
+              </div>
+            ) : (
+              <div>
+                <label
+                  htmlFor="backup-code"
+                  className="block text-xs font-bold uppercase tracking-wider text-heading text-center mb-2"
+                >
+                  Emergency Backup Recovery Code
+                </label>
+                <input
+                  id="backup-code"
+                  name="code"
+                  type="text"
+                  autoComplete="off"
+                  required
+                  autoFocus
+                  placeholder="XXXX-XXXX"
+                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-lg font-bold tracking-widest font-mono uppercase text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+                />
+                <p className="text-[11px] text-body-muted text-center mt-1.5">
+                  Enter one of your 8-character single-use emergency backup codes.
+                </p>
+              </div>
+            )}
+
+            <button
+              type="submit"
+              disabled={isTwoFactorPending}
+              className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+            >
+              {isTwoFactorPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Verifying Code...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Verify &amp; Enter Admin Portal</span>
+                </>
+              )}
+            </button>
+
+            <div className="flex items-center justify-between text-xs pt-1">
+              <button
+                type="button"
+                onClick={() => setUseBackupCode(!useBackupCode)}
+                className="font-semibold text-cta hover:text-cta-hover transition-colors cursor-pointer"
+              >
+                {useBackupCode ? "Use Authenticator app code" : "Lost phone? Use backup recovery code"}
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setResetToPassword(true)}
+                className="font-medium text-body-muted hover:text-heading transition-colors cursor-pointer"
+              >
+                &larr; Back to login
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ─── 2FA SETUP (FIRST-TIME GOOGLE AUTHENTICATOR SETUP) ──────── */}
+      {pwdState?.data?.requires2FASetup && !resetToPassword && (
+        <div className="space-y-5 animate-fade-in">
+          {setupState?.error && (
+            <div
+              role="alert"
+              className="flex items-start gap-2.5 rounded-xl border border-error/30 bg-error-muted/40 p-3.5 text-xs text-error font-medium animate-fade-in"
+            >
+              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
+              <span>{setupState.error}</span>
+            </div>
+          )}
+
+          <div className="rounded-2xl border border-border-default/80 bg-surface-subtle/50 p-4 text-center space-y-1">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-accent-dark">
+              Security Activation Required
+            </span>
+            <h3 className="text-base font-bold text-heading font-serif">
+              Link Google Authenticator
+            </h3>
+            <p className="text-xs text-body leading-relaxed">
+              Scan this QR code with <strong>Google Authenticator</strong> (or Microsoft Authenticator / 1Password) on your mobile device.
+            </p>
+          </div>
+
+          {/* QR Code Card */}
+          <div className="p-4 bg-white rounded-2xl border border-border-default flex flex-col items-center justify-center shadow-xs">
+            {pwdState.data.qrCodeDataUrl ? (
+              <img
+                src={pwdState.data.qrCodeDataUrl}
+                alt="Google Authenticator QR Code"
+                width={180}
+                height={180}
+                className="rounded-xl border border-border-subtle shadow-2xs"
+              />
+            ) : (
+              <div className="w-[180px] h-[180px] bg-slate-100 rounded-xl flex items-center justify-center">
+                <Loader2 className="w-6 h-6 animate-spin text-primary" />
+              </div>
+            )}
+
+            <div className="mt-3 w-full">
+              <p className="text-[11px] text-body-muted text-center font-medium mb-1">
+                Or enter this setup key manually:
+              </p>
+              <div className="flex items-center justify-between p-2 rounded-xl bg-surface-subtle border border-border-subtle font-mono text-xs text-heading">
+                <span className="tracking-widest font-bold select-all text-[11px]">
+                  {pwdState.data.formattedSecret}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (pwdState.data?.formattedSecret) {
+                      navigator.clipboard.writeText(pwdState.data.formattedSecret.replace(/\s/g, ""));
+                      setCopiedKey(true);
+                      setTimeout(() => setCopiedKey(false), 2000);
+                    }
+                  }}
+                  className="p-1.5 rounded-lg hover:bg-white text-body hover:text-heading transition-colors cursor-pointer"
+                  title="Copy secret key"
+                >
+                  {copiedKey ? (
+                    <Check className="w-3.5 h-3.5 text-success" />
+                  ) : (
+                    <Copy className="w-3.5 h-3.5" />
+                  )}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          {/* Setup Confirmation Form */}
+          <form action={setupFormAction} className="space-y-4">
+            <input type="hidden" name="twoFactorToken" value={pwdState.data.twoFactorToken} />
+
+            <div>
+              <label
+                htmlFor="setup-code"
+                className="block text-xs font-bold uppercase tracking-wider text-heading text-center mb-1.5"
+              >
+                Enter 6-Digit Code Shown in App
+              </label>
+              <input
+                id="setup-code"
+                name="code"
+                type="text"
+                inputMode="numeric"
+                autoComplete="one-time-code"
+                maxLength={6}
+                required
+                autoFocus
+                placeholder="000000"
+                className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+              />
+              <p className="text-[11px] text-body-muted text-center mt-1">
+                Verify the code to link your authenticator app and enter the admin portal.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              disabled={isSetupPending}
+              className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
+            >
+              {isSetupPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 animate-spin text-white" />
+                  <span>Activating &amp; Entering...</span>
+                </>
+              ) : (
+                <>
+                  <ShieldCheck className="w-4 h-4" />
+                  <span>Activate 2FA &amp; Sign In</span>
+                </>
+              )}
+            </button>
+
+            <div className="text-center pt-1">
+              <button
+                type="button"
+                onClick={() => setResetToPassword(true)}
+                className="text-xs font-medium text-body-muted hover:text-heading transition-colors cursor-pointer"
+              >
+                &larr; Cancel and return to login
+              </button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {/* ─── TAB 1: PASSWORD LOGIN (Standard) ────────────────────────── */}
+      {loginMode === "PASSWORD" && !is2FAActive && (
+        <div className="space-y-5">
             {pwdState?.error && (
               <div
                 role="alert"
@@ -323,7 +617,7 @@ export default function LoginPage() {
               </div>
             )}
 
-            <form action={pwdFormAction} className="space-y-4">
+            <form action={pwdFormAction} onSubmit={() => setResetToPassword(false)} className="space-y-4">
               <div>
                 <label
                   htmlFor="identifier"

@@ -26,7 +26,26 @@ const getCachedAdminSettingsData = unstable_cache(
 );
 
 export default async function AdminSettingsPage() {
-  await requireRole(Role.ADMIN);
+  const adminUser = await requireRole(Role.ADMIN);
+
+  const currentAdmin = await db.user.findUnique({
+    where: { id: adminUser.id },
+    select: {
+      email: true,
+      twoFactorEnabled: true,
+      twoFactorVerifiedAt: true,
+      twoFactorBackupCodes: true,
+    },
+  });
+
+  const twoFactorData = {
+    enabled: currentAdmin?.twoFactorEnabled ?? false,
+    email: currentAdmin?.email || adminUser.email || "admin@gandharvaschoolofmusic.com",
+    verifiedAt: currentAdmin?.twoFactorVerifiedAt?.toISOString() ?? null,
+    backupCodesCount: currentAdmin?.twoFactorBackupCodes
+      ? (JSON.parse(currentAdmin.twoFactorBackupCodes) as string[]).length
+      : 0,
+  };
 
   let initialSettings = {
     freeTrialLessonCount: 2,
@@ -57,7 +76,7 @@ export default async function AdminSettingsPage() {
         </p>
       </div>
 
-      <AdminSettingsForm initialSettings={initialSettings} />
+      <AdminSettingsForm initialSettings={initialSettings} twoFactorData={twoFactorData} />
     </div>
   );
 }

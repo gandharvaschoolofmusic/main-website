@@ -19,6 +19,10 @@ model User {
   phoneVerified           DateTime?
   role                    Role                      @default(STUDENT)
   isActive                Boolean                   @default(true)
+  twoFactorEnabled        Boolean                   @default(false)
+  twoFactorSecret         String?
+  twoFactorBackupCodes    String?
+  twoFactorVerifiedAt     DateTime?
   createdAt               DateTime                  @default(now()) @db.Timestamptz(6)
   updatedAt               DateTime                  @updatedAt @db.Timestamptz(6)
   address                 String?

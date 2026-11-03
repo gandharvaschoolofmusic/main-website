@@ -2,8 +2,20 @@
 
 import { db } from "@/lib/db";
 import { revalidatePath, revalidateTag } from "next/cache";
-import { hashPassword } from "@/lib/password";
+import { hashPassword, verifyPassword } from "@/lib/password";
 import { AuthRateLimits } from "@/lib/rate-limit";
+import {
+  generateTotpSecret,
+  buildOtpAuthUrl,
+  generateQrCodeDataUrl,
+  verifyTotpCode,
+  generateBackupCodes,
+  formatSecretForDisplay,
+} from "@/lib/totp";
+import {
+  createTwoFactorChallenge,
+  verifyTwoFactorChallenge,
+} from "@/lib/two-factor-token";
 import {
   createEmailVerificationToken,
   consumeEmailVerificationToken,
@@ -432,10 +444,21 @@ export async function verifyPhoneOtpForSignupAction(
 /**
  * Handle password-based login using either email address OR mobile phone number.
  */
+export type LoginActionData = {
+  requires2FA?: boolean;
+  requires2FASetup?: boolean;
+  twoFactorToken?: string;
+  email?: string;
+  qrCodeDataUrl?: string;
+  formattedSecret?: string;
+  tempSecret?: string;
+  backupCodes?: string[];
+};
+
 export async function loginAction(
   prevState: unknown,
   formData: FormData,
-): Promise<ActionResponse> {
+): Promise<ActionResponse<LoginActionData>> {
   const rawIdentifier = (formData.get("identifier") || formData.get("email") || "") as string;
   const password = (formData.get("password") || "") as string;
 
@@ -458,8 +481,12 @@ export async function loginAction(
       user = await db.user.findUnique({
         where: { email: identifier.toLowerCase() },
         select: {
+          id: true,
+          email: true,
           role: true,
           isActive: true,
+          passwordHash: true,
+          twoFactorEnabled: true,
           teacherProfile: {
             select: { approvalStatus: true },
           },
@@ -470,8 +497,12 @@ export async function loginAction(
       user = await db.user.findFirst({
         where: { phone },
         select: {
+          id: true,
+          email: true,
           role: true,
           isActive: true,
+          passwordHash: true,
+          twoFactorEnabled: true,
           teacherProfile: {
             select: { approvalStatus: true },
           },
@@ -496,12 +527,72 @@ export async function loginAction(
           error: "contact adminstrastation",
         };
       }
+
+      // ─── ADMIN 2-STEP VERIFICATION (Google Authenticator TOTP) ───────
+      if (user.role === "ADMIN") {
+        if (!user.passwordHash) {
+          return {
+            success: false,
+            error: "Invalid email/phone or password. Please double-check your credentials.",
+          };
+        }
+
+        const isPwdValid = await verifyPassword(user.passwordHash, password);
+        if (!isPwdValid) {
+          return {
+            success: false,
+            error: "Invalid email/phone or password. Please double-check your credentials.",
+          };
+        }
+
+        if (user.twoFactorEnabled) {
+          const twoFactorToken = createTwoFactorChallenge({
+            userId: user.id,
+            email: user.email,
+            isSetup: false,
+          });
+
+          return {
+            success: true,
+            data: {
+              requires2FA: true,
+              twoFactorToken,
+              email: user.email,
+            },
+            message: "Please enter the 6-digit code from Google Authenticator.",
+          };
+        } else {
+          // First-time mandatory setup for Admin
+          const tempSecret = generateTotpSecret();
+          const otpAuthUrl = buildOtpAuthUrl({
+            accountName: user.email,
+            secret: tempSecret,
+          });
+          const qrCodeDataUrl = await generateQrCodeDataUrl(otpAuthUrl);
+          const twoFactorToken = createTwoFactorChallenge({
+            userId: user.id,
+            email: user.email,
+            isSetup: true,
+            tempSecret,
+          });
+
+          return {
+            success: true,
+            data: {
+              requires2FASetup: true,
+              twoFactorToken,
+              email: user.email,
+              qrCodeDataUrl,
+              formattedSecret: formatSecretForDisplay(tempSecret),
+            },
+            message: "Configure Google Authenticator to activate 2-step verification.",
+          };
+        }
+      }
     }
 
     const target =
-      user?.role === "ADMIN"
-        ? "/admin"
-        : user?.role === "TEACHER"
+      user?.role === "TEACHER"
         ? "/teacher/dashboard"
         : "/student/dashboard";
 
@@ -562,6 +653,201 @@ export async function loginAction(
     return {
       success: false,
       error: "An unexpected error occurred during login. Please try again.",
+    };
+  }
+}
+
+/**
+ * Verify 6-digit TOTP code (or 8-character backup recovery code) for Admin 2FA login.
+ */
+export async function verifyAdminTwoFactorAction(
+  prevState: unknown,
+  formData: FormData
+): Promise<ActionResponse> {
+  const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
+  const code = ((formData.get("code") as string) || "").trim();
+
+  if (!twoFactorToken || !code) {
+    return {
+      success: false,
+      error: "Please enter your 6-digit verification code.",
+    };
+  }
+
+  const payload = verifyTwoFactorChallenge(twoFactorToken);
+  if (!payload || !payload.userId) {
+    return {
+      success: false,
+      error: "Verification session expired. Please sign in with your password again.",
+    };
+  }
+
+  const user = await db.user.findUnique({
+    where: { id: payload.userId },
+    select: {
+      id: true,
+      email: true,
+      role: true,
+      isActive: true,
+      twoFactorEnabled: true,
+      twoFactorSecret: true,
+      twoFactorBackupCodes: true,
+    },
+  });
+
+  if (!user || user.role !== "ADMIN" || !user.isActive) {
+    return {
+      success: false,
+      error: "Unauthorized access.",
+    };
+  }
+
+  let isVerified = false;
+
+  // 1. Check TOTP 6-digit code
+  if (/^\d{6}$/.test(code) && user.twoFactorSecret) {
+    isVerified = verifyTotpCode(user.twoFactorSecret, code);
+  }
+
+  // 2. Fallback to single-use Backup Recovery Code
+  if (!isVerified && user.twoFactorBackupCodes) {
+    try {
+      const backupList: string[] = JSON.parse(user.twoFactorBackupCodes);
+      const normalizedInput = code.toUpperCase().replace(/\s/g, "");
+      const index = backupList.findIndex(
+        (b) => b.toUpperCase().replace(/\s/g, "") === normalizedInput
+      );
+      if (index !== -1) {
+        isVerified = true;
+        // Consume this single-use backup code
+        backupList.splice(index, 1);
+        await db.user.update({
+          where: { id: user.id },
+          data: {
+            twoFactorBackupCodes: JSON.stringify(backupList),
+            twoFactorVerifiedAt: new Date(),
+          },
+        });
+      }
+    } catch {}
+  }
+
+  if (!isVerified) {
+    return {
+      success: false,
+      error: "Invalid verification code. Please check Google Authenticator or your backup recovery code.",
+    };
+  }
+
+  // Generate verified token for NextAuth authorization
+  const verifiedToken = createTwoFactorChallenge({
+    userId: user.id,
+    email: user.email,
+  });
+
+  await db.user.update({
+    where: { id: user.id },
+    data: { twoFactorVerifiedAt: new Date() },
+  });
+
+  try {
+    await signIn("credentials", {
+      authType: "2fa_verified",
+      twoFactorToken: verifiedToken,
+      redirectTo: "/admin",
+    });
+
+    return {
+      success: true,
+      message: "Two-step verification successful! Redirecting...",
+    };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error) {
+      const digest = String((error as { digest: string }).digest);
+      if (digest.startsWith("NEXT_REDIRECT")) {
+        throw error;
+      }
+    }
+    return {
+      success: false,
+      error: "Session could not be established. Please try again.",
+    };
+  }
+}
+
+/**
+ * Confirm initial Google Authenticator setup by verifying the first 6-digit code.
+ * Activates 2FA and generates 8 emergency recovery backup codes.
+ */
+export async function confirmAdminTwoFactorSetupAction(
+  prevState: unknown,
+  formData: FormData
+): Promise<ActionResponse<{ backupCodes: string[] }>> {
+  const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
+  const code = ((formData.get("code") as string) || "").trim();
+
+  if (!twoFactorToken || !code) {
+    return {
+      success: false,
+      error: "Please enter the 6-digit code shown in Google Authenticator.",
+    };
+  }
+
+  const payload = verifyTwoFactorChallenge(twoFactorToken);
+  if (!payload || !payload.userId || !payload.tempSecret || !payload.isSetup) {
+    return {
+      success: false,
+      error: "Setup session expired. Please sign in with your password again to configure.",
+    };
+  }
+
+  const isValid = verifyTotpCode(payload.tempSecret, code);
+  if (!isValid) {
+    return {
+      success: false,
+      error: "Invalid code. Please ensure the time on your phone is accurate and try again.",
+    };
+  }
+
+  const backupCodes = generateBackupCodes(8);
+
+  await db.user.update({
+    where: { id: payload.userId },
+    data: {
+      twoFactorEnabled: true,
+      twoFactorSecret: payload.tempSecret,
+      twoFactorBackupCodes: JSON.stringify(backupCodes),
+      twoFactorVerifiedAt: new Date(),
+    },
+  });
+
+  const verifiedToken = createTwoFactorChallenge({
+    userId: payload.userId,
+    email: payload.email,
+  });
+
+  try {
+    await signIn("credentials", {
+      authType: "2fa_verified",
+      twoFactorToken: verifiedToken,
+      redirectTo: "/admin",
+    });
+
+    return {
+      success: true,
+      data: { backupCodes },
+      message: "Google Authenticator successfully configured!",
+    };
+  } catch (error) {
+    if (typeof error === "object" && error !== null && "digest" in error) {
+      const digest = String((error as { digest: string }).digest);
+      if (digest.startsWith("NEXT_REDIRECT")) {
+        throw error;
+      }
+    }
+    return {
+      success: false,
+      error: "Setup completed but sign-in redirection failed. Please log in.",
     };
   }
 }
