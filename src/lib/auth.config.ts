@@ -98,7 +98,7 @@ export const authConfig: NextAuthConfig = {
     },
 
     redirect({ url, baseUrl }) {
-      // 1. If it's a relative path (e.g. "/student/dashboard"), keep it relative
+      // 1. If it's a relative path (e.g. "/admin" or "/student/dashboard"), keep it relative
       // so the browser resolves it against the active domain on mobile / external devices!
       if (url.startsWith("/")) {
         return url;
@@ -106,18 +106,24 @@ export const authConfig: NextAuthConfig = {
 
       try {
         const parsed = new URL(url);
-        // If the redirect points to localhost, any vercel.app deployment, or cloudflare tunnel,
-        // convert to relative path so the user stays on whatever deployment URL they are currently browsing!
+        const base = new URL(baseUrl);
+
+        // Normalize hostnames (strip www and port differences)
+        const parsedHost = parsed.hostname.replace(/^www\./, "").toLowerCase();
+        const baseHost = base.hostname.replace(/^www\./, "").toLowerCase();
+
+        // If it's an internal redirect (same root host, localhost, Vercel preview, Cloudflare tunnel, or gandharvaschoolofmusic.com)
         if (
+          parsedHost === baseHost ||
           parsed.hostname === "localhost" ||
           parsed.hostname === "127.0.0.1" ||
           parsed.hostname.endsWith(".vercel.app") ||
-          parsed.hostname.endsWith(".trycloudflare.com")
+          parsed.hostname.endsWith(".trycloudflare.com") ||
+          parsed.hostname.endsWith("gandharvaschoolofmusic.com")
         ) {
           return parsed.pathname + parsed.search + parsed.hash;
         }
 
-        const base = new URL(baseUrl);
         if (parsed.origin === base.origin) {
           return url;
         }

@@ -14,10 +14,10 @@ export interface TwoFactorChallengePayload {
 }
 
 /**
- * Creates a signed 5-minute challenge token for 2FA verification.
+ * Creates a signed 10-minute challenge token for 2FA verification.
  */
 export function createTwoFactorChallenge(payload: Omit<TwoFactorChallengePayload, "exp"> & { expiresInMs?: number }): string {
-  const expiresInMs = payload.expiresInMs ?? 5 * 60 * 1000; // 5 minutes
+  const expiresInMs = payload.expiresInMs ?? 10 * 60 * 1000; // 10 minutes (generous window for user 2FA flow)
   const fullPayload: TwoFactorChallengePayload = {
     userId: payload.userId,
     email: payload.email,

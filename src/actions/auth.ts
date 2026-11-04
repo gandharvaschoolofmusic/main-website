@@ -663,103 +663,121 @@ export async function loginAction(
 export async function verifyAdminTwoFactorAction(
   prevState: unknown,
   formData: FormData
-): Promise<ActionResponse> {
-  const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
-  const code = ((formData.get("code") as string) || "").trim();
-
-  if (!twoFactorToken || !code) {
-    return {
-      success: false,
-      error: "Please enter your 6-digit verification code.",
-    };
-  }
-
-  const payload = verifyTwoFactorChallenge(twoFactorToken);
-  if (!payload || !payload.userId) {
-    return {
-      success: false,
-      error: "Verification session expired. Please sign in with your password again.",
-    };
-  }
-
-  const user = await db.user.findUnique({
-    where: { id: payload.userId },
-    select: {
-      id: true,
-      email: true,
-      role: true,
-      isActive: true,
-      twoFactorEnabled: true,
-      twoFactorSecret: true,
-      twoFactorBackupCodes: true,
-    },
-  });
-
-  if (!user || user.role !== "ADMIN" || !user.isActive) {
-    return {
-      success: false,
-      error: "Unauthorized access.",
-    };
-  }
-
-  let isVerified = false;
-
-  // 1. Check TOTP 6-digit code
-  if (/^\d{6}$/.test(code) && user.twoFactorSecret) {
-    isVerified = verifyTotpCode(user.twoFactorSecret, code);
-  }
-
-  // 2. Fallback to single-use Backup Recovery Code
-  if (!isVerified && user.twoFactorBackupCodes) {
-    try {
-      const backupList: string[] = JSON.parse(user.twoFactorBackupCodes);
-      const normalizedInput = code.toUpperCase().replace(/\s/g, "");
-      const index = backupList.findIndex(
-        (b) => b.toUpperCase().replace(/\s/g, "") === normalizedInput
-      );
-      if (index !== -1) {
-        isVerified = true;
-        // Consume this single-use backup code
-        backupList.splice(index, 1);
-        await db.user.update({
-          where: { id: user.id },
-          data: {
-            twoFactorBackupCodes: JSON.stringify(backupList),
-            twoFactorVerifiedAt: new Date(),
-          },
-        });
-      }
-    } catch {}
-  }
-
-  if (!isVerified) {
-    return {
-      success: false,
-      error: "Invalid verification code. Please check Google Authenticator or your backup recovery code.",
-    };
-  }
-
-  // Generate verified token for NextAuth authorization
-  const verifiedToken = createTwoFactorChallenge({
-    userId: user.id,
-    email: user.email,
-  });
-
-  await db.user.update({
-    where: { id: user.id },
-    data: { twoFactorVerifiedAt: new Date() },
-  });
-
+): Promise<ActionResponse<{ redirectTo?: string }>> {
   try {
-    await signIn("credentials", {
+    const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
+    const rawCode = ((formData.get("code") as string) || "").trim();
+    // Normalize code by removing spaces and dashes (e.g. "123 456" -> "123456", "XXXX-XXXX" -> "XXXXXXXX")
+    const code = rawCode.replace(/[\s-]/g, "");
+
+    if (!twoFactorToken || !code) {
+      return {
+        success: false,
+        error: "Please enter your 6-digit verification code.",
+      };
+    }
+
+    const payload = verifyTwoFactorChallenge(twoFactorToken);
+    if (!payload || !payload.userId) {
+      return {
+        success: false,
+        error: "Verification session expired. Please sign in with your password again.",
+      };
+    }
+
+    const user = await db.user.findUnique({
+      where: { id: payload.userId },
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        isActive: true,
+        twoFactorEnabled: true,
+        twoFactorSecret: true,
+        twoFactorBackupCodes: true,
+      },
+    });
+
+    if (!user || user.role !== "ADMIN" || !user.isActive) {
+      return {
+        success: false,
+        error: "Unauthorized access.",
+      };
+    }
+
+    let isVerified = false;
+
+    // 1. Check TOTP 6-digit code
+    if (/^\d{6}$/.test(code) && user.twoFactorSecret) {
+      isVerified = verifyTotpCode(user.twoFactorSecret, code);
+    }
+
+    // 2. Fallback to single-use Backup Recovery Code
+    if (!isVerified && user.twoFactorBackupCodes) {
+      try {
+        const backupList: string[] = JSON.parse(user.twoFactorBackupCodes);
+        const normalizedInput = code.toUpperCase();
+        const index = backupList.findIndex(
+          (b) => b.toUpperCase().replace(/[\s-]/g, "") === normalizedInput
+        );
+        if (index !== -1) {
+          isVerified = true;
+          // Consume this single-use backup code
+          backupList.splice(index, 1);
+          await db.user.update({
+            where: { id: user.id },
+            data: {
+              twoFactorBackupCodes: JSON.stringify(backupList),
+              twoFactorVerifiedAt: new Date(),
+            },
+          });
+        }
+      } catch (backupErr) {
+        logger.warn({ backupErr }, "Failed processing backup code in verifyAdminTwoFactorAction");
+      }
+    }
+
+    if (!isVerified) {
+      return {
+        success: false,
+        error: "Invalid verification code. Please check Google Authenticator or your backup recovery code.",
+      };
+    }
+
+    // Generate verified token for NextAuth authorization
+    const verifiedToken = createTwoFactorChallenge({
+      userId: user.id,
+      email: user.email,
+    });
+
+    try {
+      await db.user.update({
+        where: { id: user.id },
+        data: { twoFactorVerifiedAt: new Date() },
+      });
+    } catch (dbErr) {
+      logger.warn({ dbErr }, "Could not record twoFactorVerifiedAt timestamp");
+    }
+
+    // Authenticate session without throwing NEXT_REDIRECT in useActionState transition
+    const signInResult = await signIn("credentials", {
       authType: "2fa_verified",
       twoFactorToken: verifiedToken,
+      redirect: false,
       redirectTo: "/admin",
     });
 
+    if (typeof signInResult === "string" && signInResult.includes("error=")) {
+      return {
+        success: false,
+        error: "Session authorization failed. Please try signing in again.",
+      };
+    }
+
     return {
       success: true,
-      message: "Two-step verification successful! Redirecting...",
+      data: { redirectTo: "/admin" },
+      message: "Two-step verification successful! Entering Admin Portal...",
     };
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) {
@@ -768,9 +786,10 @@ export async function verifyAdminTwoFactorAction(
         throw error;
       }
     }
+    logger.error({ error }, "Unexpected error in verifyAdminTwoFactorAction");
     return {
       success: false,
-      error: "Session could not be established. Please try again.",
+      error: "An unexpected error occurred during verification. Please try again.",
     };
   }
 }
@@ -782,61 +801,70 @@ export async function verifyAdminTwoFactorAction(
 export async function confirmAdminTwoFactorSetupAction(
   prevState: unknown,
   formData: FormData
-): Promise<ActionResponse<{ backupCodes: string[] }>> {
-  const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
-  const code = ((formData.get("code") as string) || "").trim();
-
-  if (!twoFactorToken || !code) {
-    return {
-      success: false,
-      error: "Please enter the 6-digit code shown in Google Authenticator.",
-    };
-  }
-
-  const payload = verifyTwoFactorChallenge(twoFactorToken);
-  if (!payload || !payload.userId || !payload.tempSecret || !payload.isSetup) {
-    return {
-      success: false,
-      error: "Setup session expired. Please sign in with your password again to configure.",
-    };
-  }
-
-  const isValid = verifyTotpCode(payload.tempSecret, code);
-  if (!isValid) {
-    return {
-      success: false,
-      error: "Invalid code. Please ensure the time on your phone is accurate and try again.",
-    };
-  }
-
-  const backupCodes = generateBackupCodes(8);
-
-  await db.user.update({
-    where: { id: payload.userId },
-    data: {
-      twoFactorEnabled: true,
-      twoFactorSecret: payload.tempSecret,
-      twoFactorBackupCodes: JSON.stringify(backupCodes),
-      twoFactorVerifiedAt: new Date(),
-    },
-  });
-
-  const verifiedToken = createTwoFactorChallenge({
-    userId: payload.userId,
-    email: payload.email,
-  });
-
+): Promise<ActionResponse<{ backupCodes: string[]; redirectTo?: string }>> {
   try {
-    await signIn("credentials", {
+    const twoFactorToken = ((formData.get("twoFactorToken") as string) || "").trim();
+    const rawCode = ((formData.get("code") as string) || "").trim();
+    const code = rawCode.replace(/[\s-]/g, "");
+
+    if (!twoFactorToken || !code) {
+      return {
+        success: false,
+        error: "Please enter the 6-digit code shown in Google Authenticator.",
+      };
+    }
+
+    const payload = verifyTwoFactorChallenge(twoFactorToken);
+    if (!payload || !payload.userId || !payload.tempSecret || !payload.isSetup) {
+      return {
+        success: false,
+        error: "Setup session expired. Please sign in with your password again to configure.",
+      };
+    }
+
+    const isValid = verifyTotpCode(payload.tempSecret, code);
+    if (!isValid) {
+      return {
+        success: false,
+        error: "Invalid code. Please ensure the time on your phone is accurate and try again.",
+      };
+    }
+
+    const backupCodes = generateBackupCodes(8);
+
+    await db.user.update({
+      where: { id: payload.userId },
+      data: {
+        twoFactorEnabled: true,
+        twoFactorSecret: payload.tempSecret,
+        twoFactorBackupCodes: JSON.stringify(backupCodes),
+        twoFactorVerifiedAt: new Date(),
+      },
+    });
+
+    const verifiedToken = createTwoFactorChallenge({
+      userId: payload.userId,
+      email: payload.email,
+    });
+
+    const signInResult = await signIn("credentials", {
       authType: "2fa_verified",
       twoFactorToken: verifiedToken,
+      redirect: false,
       redirectTo: "/admin",
     });
 
+    if (typeof signInResult === "string" && signInResult.includes("error=")) {
+      return {
+        success: false,
+        error: "Setup completed but session initialization failed. Please log in.",
+      };
+    }
+
     return {
       success: true,
-      data: { backupCodes },
-      message: "Google Authenticator successfully configured!",
+      data: { backupCodes, redirectTo: "/admin" },
+      message: "Google Authenticator successfully configured! Entering Admin Portal...",
     };
   } catch (error) {
     if (typeof error === "object" && error !== null && "digest" in error) {
@@ -845,9 +873,10 @@ export async function confirmAdminTwoFactorSetupAction(
         throw error;
       }
     }
+    logger.error({ error }, "Unexpected error in confirmAdminTwoFactorSetupAction");
     return {
       success: false,
-      error: "Setup completed but sign-in redirection failed. Please log in.",
+      error: "Setup failed due to an unexpected error. Please try again.",
     };
   }
 }

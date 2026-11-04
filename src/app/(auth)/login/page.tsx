@@ -65,6 +65,22 @@ export default function LoginPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [resetToPassword, setResetToPassword] = useState(false);
 
+  // Redirect on successful Admin 2FA verification (hard navigation guarantees session cookies are committed)
+  useEffect(() => {
+    if (twoFactorState?.success) {
+      const target = (twoFactorState as any)?.data?.redirectTo || "/admin";
+      window.location.href = target;
+    }
+  }, [twoFactorState]);
+
+  // Redirect on successful Admin 2FA first-time setup
+  useEffect(() => {
+    if (setupState?.success) {
+      const target = (setupState as any)?.data?.redirectTo || "/admin";
+      window.location.href = target;
+    }
+  }, [setupState]);
+
   // OTP state
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(SUPPORTED_COUNTRIES[0]); // India (+91)
   const [otpPhone, setOtpPhone] = useState("");
@@ -369,6 +385,16 @@ export default function LoginPage() {
             </div>
           )}
 
+          {twoFactorState?.success && (
+            <div
+              role="status"
+              className="flex items-center justify-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-800 font-medium animate-fade-in"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              <span>{twoFactorState.message || "Two-step verification successful! Entering Admin Portal..."}</span>
+            </div>
+          )}
+
           <div className="rounded-2xl border border-border-default/80 bg-surface-subtle/50 p-4 text-center space-y-2">
             <div className="mx-auto w-12 h-12 rounded-2xl bg-primary/10 flex items-center justify-center text-primary">
               <ShieldCheck className="w-6 h-6" />
@@ -401,11 +427,12 @@ export default function LoginPage() {
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
-                  maxLength={6}
+                  maxLength={12}
                   required
                   autoFocus
+                  disabled={isTwoFactorPending || twoFactorState?.success}
                   placeholder="000000"
-                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60"
                 />
                 <p className="text-[11px] text-body-muted text-center mt-1.5">
                   Open Google Authenticator on your phone to get your current 6-digit code.
@@ -424,10 +451,12 @@ export default function LoginPage() {
                   name="code"
                   type="text"
                   autoComplete="off"
+                  maxLength={16}
                   required
                   autoFocus
+                  disabled={isTwoFactorPending || twoFactorState?.success}
                   placeholder="XXXX-XXXX"
-                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-lg font-bold tracking-widest font-mono uppercase text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+                  className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-lg font-bold tracking-widest font-mono uppercase text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60"
                 />
                 <p className="text-[11px] text-body-muted text-center mt-1.5">
                   Enter one of your 8-character single-use emergency backup codes.
@@ -437,13 +466,13 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isTwoFactorPending}
+              disabled={isTwoFactorPending || twoFactorState?.success}
               className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
             >
-              {isTwoFactorPending ? (
+              {isTwoFactorPending || twoFactorState?.success ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-white" />
-                  <span>Verifying Code...</span>
+                  <span>{twoFactorState?.success ? "Entering Admin Portal..." : "Verifying Code..."}</span>
                 </>
               ) : (
                 <>
@@ -457,7 +486,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setUseBackupCode(!useBackupCode)}
-                className="font-semibold text-cta hover:text-cta-hover transition-colors cursor-pointer"
+                disabled={isTwoFactorPending || twoFactorState?.success}
+                className="font-semibold text-cta hover:text-cta-hover transition-colors cursor-pointer disabled:opacity-50"
               >
                 {useBackupCode ? "Use Authenticator app code" : "Lost phone? Use backup recovery code"}
               </button>
@@ -465,7 +495,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setResetToPassword(true)}
-                className="font-medium text-body-muted hover:text-heading transition-colors cursor-pointer"
+                disabled={isTwoFactorPending || twoFactorState?.success}
+                className="font-medium text-body-muted hover:text-heading transition-colors cursor-pointer disabled:opacity-50"
               >
                 &larr; Back to login
               </button>
@@ -484,6 +515,16 @@ export default function LoginPage() {
             >
               <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-error" />
               <span>{setupState.error}</span>
+            </div>
+          )}
+
+          {setupState?.success && (
+            <div
+              role="status"
+              className="flex items-center justify-center gap-2.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 p-3.5 text-xs text-emerald-800 font-medium animate-fade-in"
+            >
+              <Loader2 className="h-4 w-4 animate-spin text-emerald-600" />
+              <span>{setupState.message || "Google Authenticator configured! Entering Admin Portal..."}</span>
             </div>
           )}
 
@@ -562,11 +603,12 @@ export default function LoginPage() {
                 type="text"
                 inputMode="numeric"
                 autoComplete="one-time-code"
-                maxLength={6}
+                maxLength={12}
                 required
                 autoFocus
+                disabled={isSetupPending || setupState?.success}
                 placeholder="000000"
-                className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15"
+                className="block w-full rounded-xl border border-surface-muted/90 bg-white py-3 text-center text-2xl font-bold tracking-[0.4em] font-mono text-heading shadow-xs transition-all focus:border-primary focus:outline-none focus:ring-4 focus:ring-primary/15 disabled:opacity-60"
               />
               <p className="text-[11px] text-body-muted text-center mt-1">
                 Verify the code to link your authenticator app and enter the admin portal.
@@ -575,13 +617,13 @@ export default function LoginPage() {
 
             <button
               type="submit"
-              disabled={isSetupPending}
+              disabled={isSetupPending || setupState?.success}
               className="btn-tactile flex w-full items-center justify-center gap-2 rounded-xl bg-primary py-3 text-sm font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-hover active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60 cursor-pointer"
             >
-              {isSetupPending ? (
+              {isSetupPending || setupState?.success ? (
                 <>
                   <Loader2 className="h-4 w-4 animate-spin text-white" />
-                  <span>Activating &amp; Entering...</span>
+                  <span>{setupState?.success ? "Entering Admin Portal..." : "Activating &amp; Entering..."}</span>
                 </>
               ) : (
                 <>
@@ -595,7 +637,8 @@ export default function LoginPage() {
               <button
                 type="button"
                 onClick={() => setResetToPassword(true)}
-                className="text-xs font-medium text-body-muted hover:text-heading transition-colors cursor-pointer"
+                disabled={isSetupPending || setupState?.success}
+                className="text-xs font-medium text-body-muted hover:text-heading transition-colors cursor-pointer disabled:opacity-50"
               >
                 &larr; Cancel and return to login
               </button>
