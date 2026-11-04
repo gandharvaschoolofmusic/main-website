@@ -85,6 +85,7 @@ export function LessonRoom(props: LessonRoomProps) {
         audio={false} // The microphone controller applies the pre-join choice after connection.
         video={false} // Managed explicitly after engine is connected
         className="w-full h-full flex flex-col"
+        onConnected={() => { void fetch(`/api/lessons/${lesson.id}/join`, { method: "POST" }).catch(() => {}); }}
         onDisconnected={handleDisconnected}
         onError={(err) => {
           // Ignore expected client-initiated disconnect cancellations when user exits

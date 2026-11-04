@@ -13,6 +13,7 @@ import { formatInViewerTimezone } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
 import { parseAttendanceLogs } from "@/lib/attendance";
+import { JOIN_WINDOW_MINUTES_AFTER } from "@/types";
 
 
 export const metadata = {
@@ -79,6 +80,8 @@ const getCachedCourseRecordingsData = unstable_cache(
           const att = parseAttendanceLogs(
             l.attendanceLogs,
             {
+              status: l.status,
+              roomClosesAt: new Date(l.startsAt.getTime() + (l.durationMinutes + JOIN_WINDOW_MINUTES_AFTER) * 60_000),
               teacherJoinedAt: l.teacherJoinedAt,
               teacherLeftAt: l.teacherLeftAt,
               studentJoinedAt: l.studentJoinedAt,
@@ -112,7 +115,7 @@ const getCachedCourseRecordingsData = unstable_cache(
               id: r.id,
               lessonId: r.lessonId,
               fileName: r.fileName,
-              fileUrl: r.fileUrl,
+              fileUrl: `/api/lessons/${r.lessonId}/playback?part=${r.id}`,
               fileId: r.fileId,
               fileSizeBytes: r.fileSizeBytes,
               durationSeconds: r.durationSeconds,
@@ -143,7 +146,7 @@ const getCachedCourseRecordingsData = unstable_cache(
                   id: `${l.id}-vault-recording`,
                   lessonId: l.id,
                   fileName: l.recordingUrl.split("/").pop() || `lesson-${l.id}-recording.webm`,
-                  fileUrl: l.recordingUrl,
+                  fileUrl: `/api/lessons/${l.id}/playback`,
                   fileId: l.recordingFileId,
                   fileSizeBytes: 0,
                   durationSeconds: l.recordingDurationSeconds || att.overlapDurationSeconds || att.totalTeacherDurationSeconds || null,
@@ -274,6 +277,8 @@ const getCachedCourseRecordingsData = unstable_cache(
         const att = parseAttendanceLogs(
           tl.attendanceLogs,
           {
+            status: tl.status,
+            roomClosesAt: new Date(tl.startsAt.getTime() + (tl.durationMinutes + JOIN_WINDOW_MINUTES_AFTER) * 60_000),
             teacherJoinedAt: tl.teacherJoinedAt,
             teacherLeftAt: tl.teacherLeftAt,
             studentJoinedAt: tl.studentJoinedAt,
@@ -307,7 +312,7 @@ const getCachedCourseRecordingsData = unstable_cache(
             id: r.id,
             lessonId: r.lessonId,
             fileName: r.fileName,
-            fileUrl: r.fileUrl,
+            fileUrl: `/api/lessons/${r.lessonId}/playback?part=${r.id}`,
             fileId: r.fileId,
             fileSizeBytes: r.fileSizeBytes,
             durationSeconds: r.durationSeconds,
@@ -338,7 +343,7 @@ const getCachedCourseRecordingsData = unstable_cache(
                 id: `${tl.id}-vault-recording`,
                 lessonId: tl.id,
                 fileName: tl.recordingUrl.split("/").pop() || `lesson-${tl.id}-recording.webm`,
-                fileUrl: tl.recordingUrl,
+                fileUrl: `/api/lessons/${tl.id}/playback`,
                 fileId: tl.recordingFileId,
                 fileSizeBytes: 0,
                 durationSeconds: tl.recordingDurationSeconds || att.overlapDurationSeconds || att.totalTeacherDurationSeconds || null,
@@ -434,7 +439,7 @@ const getCachedCourseRecordingsData = unstable_cache(
 
     return coursesList;
   },
-  ["admin-course-recordings-hierarchy-v4"],
+  ["admin-course-recordings-hierarchy-v5"],
   { revalidate: 30, tags: ["admin-recordings"] },
 );
 

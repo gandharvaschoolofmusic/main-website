@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
+import { RecordingDialog } from "./RecordingDialog";
 import Link from "next/link";
 import {
   Music,
@@ -21,9 +22,7 @@ import {
   Trash2,
   X,
   Search,
-  FileVideo,
   AlertCircle,
-  Sparkles,
   GraduationCap,
   User,
   Layers,
@@ -236,17 +235,6 @@ export function AdminRecordingsManager({
 
   const [isPending, startTransition] = useTransition();
 
-  // Escape key closes video modal
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && playingRecording) {
-        setPlayingRecording(null);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [playingRecording]);
-
   // Derived selected entities
   const selectedCourse = useMemo(() => {
     return courses.find((c) => c.id === selectedCourseId) || null;
@@ -365,7 +353,7 @@ export function AdminRecordingsManager({
                     ? {
                         ...r,
                         storageBackend: "SUPABASE",
-                        fileUrl: res.data!.fileUrl,
+                        fileUrl: r.fileUrl,
                         fileId: res.data!.fileId,
                       }
                     : r,
@@ -1075,7 +1063,7 @@ export function AdminRecordingsManager({
             <div className="text-right shrink-0">
               <div className="text-xs font-semibold text-heading">
                 {selectedSession.recordings.length}{" "}
-                {selectedSession.recordings.length === 1 ? "File Saved" : "Parts Saved"}
+                {selectedSession.recordings.length === 1 ? "Recording" : "Recording parts"}
               </div>
               <div className="text-[11px] text-body-muted">
                 Total duration:{" "}
@@ -1101,7 +1089,7 @@ export function AdminRecordingsManager({
                     Classroom Attendance &amp; Activity Timestamps
                   </h3>
                   <p className="text-xs text-body-muted">
-                    Exact LiveKit room entry and exit logs for this session
+                    Room visits and time spent together. Estimated exits are marked “Est.”.
                   </p>
                 </div>
               </div>
@@ -1203,7 +1191,7 @@ export function AdminRecordingsManager({
                         Left Room
                       </div>
                       <div className="font-mono text-xs font-bold text-rose-700">
-                        {formatPresence(selectedSession.teacherLeftAt, selectedSession.formattedTeacherLeft)}
+                        {selectedSession.teacherSessions?.[0]?.formattedLeft || formatPresence(selectedSession.teacherLeftAt, selectedSession.formattedTeacherLeft)}
                       </div>
                     </div>
                   </div>
@@ -1292,7 +1280,7 @@ export function AdminRecordingsManager({
                         Left Room
                       </div>
                       <div className="font-mono text-xs font-bold text-rose-700">
-                        {formatPresence(selectedSession.studentLeftAt, selectedSession.formattedStudentLeft)}
+                        {selectedSession.studentSessions?.[0]?.formattedLeft || formatPresence(selectedSession.studentLeftAt, selectedSession.formattedStudentLeft)}
                       </div>
                     </div>
                   </div>
@@ -1380,49 +1368,19 @@ export function AdminRecordingsManager({
                       {/* Left: Video Preview & Actions (lg:w-7/12) */}
                       <div className="lg:w-7/12 flex flex-col justify-between border-b lg:border-b-0 lg:border-r border-primary/10">
                         <div>
-                          {/* Video Preview Canvas Header */}
-                          <div className="relative aspect-video w-full bg-gradient-to-br from-[#160A29] to-[#0E0C18] flex items-center justify-center overflow-hidden border-b border-primary/5">
-                            {/* Part badge */}
-                            <div className="absolute top-2.5 left-3 flex items-center gap-1.5">
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-bold bg-black/70 text-amber-300 backdrop-blur-md border border-white/10">
-                                Part {recording.partNumber || idx + 1}
+                          <button type="button" onClick={() => setPlayingRecording(recording)}
+                            aria-label={`Play ${selectedSession.instrument}, part ${idx + 1}`}
+                            className="group/cover relative isolate flex aspect-video w-full items-end overflow-hidden bg-[#241437] p-5 text-left text-white focus-visible:outline-primary sm:p-7">
+                            <span aria-hidden="true" className="absolute inset-0 -z-10 bg-[url('/musical-background-with-piano-keys-space-text.webp')] bg-cover bg-center opacity-40"/>
+                            <span aria-hidden="true" className="absolute inset-0 -z-10 bg-linear-to-t from-[#21122f] via-[#21122f]/45 to-transparent"/>
+                            <span className="flex w-full items-end justify-between gap-3">
+                              <span><span className="mb-2 block text-xs font-medium text-purple-100">Lesson recording · Part {recording.partNumber || idx + 1}</span>
+                                <span className="block text-2xl font-semibold tracking-tight sm:text-3xl">{selectedSession.instrument}</span>
+                                <span className="mt-2 flex items-center gap-1.5 text-sm text-stone-200"><Clock size={14}/>{formatDuration(recording.durationSeconds)}</span>
                               </span>
-                              <span className="px-2.5 py-0.5 rounded-full text-[10px] font-mono font-semibold bg-black/50 text-stone-300 backdrop-blur-md border border-white/10">
-                                {selectedSession.instrument}
-                              </span>
-                            </div>
-
-                            {/* Duration Badge */}
-                            <div className="absolute bottom-2.5 right-3 px-2 py-0.5 rounded-lg text-[11px] font-mono font-bold bg-black/75 text-white backdrop-blur-md flex items-center gap-1">
-                              <Clock className="w-3 h-3 text-amber-400" />
-                              {formatDuration(recording.durationSeconds)}
-                            </div>
-
-                            {/* Storage Backend Badge */}
-                            <div className="absolute bottom-2.5 left-3">
-                              {isSupabaseCloud ? (
-                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-emerald-950/80 text-emerald-400 border border-emerald-500/30 backdrop-blur-md flex items-center gap-1">
-                                  <Cloud className="w-2.5 h-2.5" />
-                                  Supabase Cloud
-                                </span>
-                              ) : (
-                                <span className="px-2 py-0.5 rounded-lg text-[10px] font-semibold bg-amber-950/80 text-amber-400 border border-amber-500/30 backdrop-blur-md flex items-center gap-1">
-                                  <HardDrive className="w-2.5 h-2.5" />
-                                  Local Disk
-                                </span>
-                              )}
-                            </div>
-
-                            {/* Centered Play Button overlay */}
-                            <button
-                              type="button"
-                              onClick={() => setPlayingRecording(recording)}
-                              className="w-13 h-13 rounded-full bg-primary/85 hover:bg-primary text-white flex items-center justify-center shadow-lg transform transition-all group-hover:scale-110 active:scale-95 cursor-pointer"
-                              title="Play Recording"
-                            >
-                              <Play className="w-5 h-5 ml-0.5 fill-current" />
-                            </button>
-                          </div>
+                              <span className="grid size-12 shrink-0 place-items-center rounded-full bg-white text-primary transition-transform group-active/cover:scale-95 motion-reduce:transition-none"><Play size={19} className="ml-0.5 fill-current"/></span>
+                            </span>
+                          </button>
 
                           {/* Card metadata */}
                           <div className="p-4 space-y-2">
@@ -1464,12 +1422,12 @@ export function AdminRecordingsManager({
                                 title="Open in Supabase Cloud"
                               >
                                 <ExternalLink className="w-3 h-3" />
-                                Drive
+                                Open file
                               </a>
                             )}
 
                             {/* Sync to Drive button (if stored locally) */}
-                            {!isSupabaseCloud && (
+                            {recording.storageBackend === "LOCAL" && (
                               <button
                                 type="button"
                                 onClick={() => handleSyncToDrive(recording.id)}
@@ -1661,127 +1619,8 @@ export function AdminRecordingsManager({
         </div>
       )}
 
-      {/* ─── Apple Design: Video Player Modal ────────────────────────────── */}
-      {playingRecording && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-[#0E0C18]/85 backdrop-blur-2xl transition-all duration-300"
-          onClick={() => setPlayingRecording(null)}
-        >
-          <div
-            className="relative w-full max-w-4xl bg-[#161226] border border-white/10 rounded-3xl overflow-hidden shadow-2xl flex flex-col max-h-[92vh] animate-in fade-in zoom-in-95 duration-200"
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Modal Header */}
-            <div className="flex items-center justify-between px-6 py-4 border-b border-white/10 bg-[#120E20]">
-              <div className="flex items-center gap-3">
-                <div className="w-9 h-9 rounded-xl bg-[#3C096C] text-white flex items-center justify-center">
-                  <Play className="w-4 h-4 fill-current ml-0.5" />
-                </div>
-                <div>
-                  <h3 className="font-serif text-base font-bold text-white flex items-center gap-2">
-                    {selectedSession?.instrument || "Music"} Session Recording
-                    <span className="text-[11px] font-mono text-amber-300 bg-white/5 px-2 py-0.5 rounded-full border border-white/10">
-                      Part {playingRecording.partNumber || 1}
-                    </span>
-                  </h3>
-                  <p className="text-xs text-stone-400">
-                    Student:{" "}
-                    <span className="text-stone-200 font-medium">
-                      {selectedStudent?.name}
-                    </span>{" "}
-                    • Instructor:{" "}
-                    <span className="text-stone-200 font-medium">
-                      {selectedSession?.teacherName}
-                    </span>
-                  </p>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {playingRecording.fileUrl && (
-                  <a
-                    href={playingRecording.fileUrl}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="hidden sm:inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/15 text-stone-200 text-xs font-semibold transition-all active:scale-95"
-                  >
-                    <ExternalLink className="w-3.5 h-3.5" />
-                    Open Source
-                  </a>
-                )}
-                <button
-                  type="button"
-                  onClick={() => setPlayingRecording(null)}
-                  className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-stone-200 flex items-center justify-center transition-all cursor-pointer"
-                >
-                  <X className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Video Canvas Container */}
-            <div className="relative bg-black flex items-center justify-center aspect-video w-full">
-              <video
-                src={playingRecording.fileUrl}
-                controls
-                autoPlay
-                className="w-full h-full object-contain"
-                playsInline
-              >
-                Your browser does not support HTML5 video playback.
-              </video>
-            </div>
-
-            {/* Modal Room Timestamps Bar */}
-            <div className="px-6 py-2.5 bg-[#0D0A17] border-t border-white/5 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-300 font-mono">
-              <div className="flex items-center gap-3 flex-wrap">
-                <span className="text-[10px] text-amber-300 uppercase tracking-wider font-semibold font-mono">
-                  Room Presence:
-                </span>
-                <span className="inline-flex items-center gap-1.5 text-stone-200">
-                  <span className="w-2 h-2 rounded-full bg-emerald-400"></span>
-                  Teacher: {formatPresence(playingRecording.teacherJoinedAt || selectedSession?.teacherJoinedAt, playingRecording.formattedTeacherJoined || selectedSession?.formattedTeacherJoined, "—")} → {formatPresence(playingRecording.teacherLeftAt || selectedSession?.teacherLeftAt, playingRecording.formattedTeacherLeft || selectedSession?.formattedTeacherLeft, "—")}
-                </span>
-                <span>•</span>
-                <span className="inline-flex items-center gap-1.5 text-stone-200">
-                  <span className="w-2 h-2 rounded-full bg-accent"></span>
-                  Student: {formatPresence(playingRecording.studentJoinedAt || selectedSession?.studentJoinedAt, playingRecording.formattedStudentJoined || selectedSession?.formattedStudentJoined, "—")} → {formatPresence(playingRecording.studentLeftAt || selectedSession?.studentLeftAt, playingRecording.formattedStudentLeft || selectedSession?.formattedStudentLeft, "—")}
-                </span>
-              </div>
-              {(playingRecording.overlapDurationSeconds || selectedSession?.overlapDurationSeconds) && (
-                <span className="text-[11px] text-emerald-400 font-medium">
-                  Mutual Session Time: {formatSecondsToCompact(playingRecording.overlapDurationSeconds || selectedSession?.overlapDurationSeconds)}
-                </span>
-              )}
-            </div>
-
-            {/* Modal Footer info */}
-            <div className="px-6 py-3.5 bg-[#120E20] border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-stone-400">
-              <div className="flex items-center gap-3">
-                <span>Date: {playingRecording.formattedDate}</span>
-                <span>•</span>
-                <span>Duration: {formatDuration(playingRecording.durationSeconds)}</span>
-                <span>•</span>
-                <span>Size: {formatBytes(playingRecording.fileSizeBytes)}</span>
-              </div>
-
-              <div className="flex items-center gap-2">
-                {playingRecording.storageBackend === "SUPABASE" || playingRecording.storageBackend === "GOOGLE_DRIVE" ? (
-                  <span className="inline-flex items-center gap-1 text-emerald-400 font-medium text-[11px]">
-                    <Cloud className="w-3 h-3" />
-                    Stored in Supabase Cloud Storage
-                  </span>
-                ) : (
-                  <span className="inline-flex items-center gap-1 text-amber-400 font-medium text-[11px]">
-                    <HardDrive className="w-3 h-3" />
-                    Stored on Local Server
-                  </span>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
+      {playingRecording && <RecordingDialog recording={playingRecording} instrument={selectedSession?.instrument || "Lesson recording"}
+        onClose={() => setPlayingRecording(null)}/>}
     </div>
   );
 }

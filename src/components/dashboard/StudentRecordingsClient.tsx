@@ -1,5 +1,7 @@
 "use client";
 
+import { RecordingVideo } from "@/components/recordings/RecordingVideo";
+
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -499,19 +501,7 @@ export function StudentRecordingsClient({
               </button>
             </div>
 
-            {/* Video Canvas Container */}
-            <div className="relative bg-black flex items-center justify-center aspect-video w-full">
-              <video
-                key={currentPlayingUrl}
-                src={currentPlayingUrl}
-                controls
-                autoPlay
-                playsInline
-                className="w-full h-full object-contain"
-              >
-                Your browser does not support HTML5 video playback.
-              </video>
-            </div>
+            <RecordingVideo key={currentPlayingUrl} source={currentPlayingUrl} title={activeLecture.courseTitle}/>
 
             {/* Multi-part tabs if session was reconnected */}
             {activeLecture.recordings && activeLecture.recordings.length > 1 && (

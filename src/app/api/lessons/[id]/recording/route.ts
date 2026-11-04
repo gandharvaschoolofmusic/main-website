@@ -93,8 +93,9 @@ export async function POST(
     const dateStamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
     const partSuffix = existingCount > 0 ? `_Part${existingCount + 1}` : "";
-    const fileName = `Gandharva_${safeInstrument}_${safeStudent}_${safeTeacher}_${dateStamp}_${timeStamp}${partSuffix}.webm`;
     const mimeType = file.type || "video/webm";
+    const extension = mimeType.split(";")[0].toLowerCase() === "video/mp4" ? "mp4" : "webm";
+    const fileName = `Gandharva_${safeInstrument}_${safeStudent}_${safeTeacher}_${dateStamp}_${timeStamp}${partSuffix}.${extension}`;
 
     let fileUrl = "";
     let fileId: string | null = null;

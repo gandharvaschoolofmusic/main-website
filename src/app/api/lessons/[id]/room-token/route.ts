@@ -1,10 +1,8 @@
 import { NextResponse } from "next/server";
-import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { requireLessonParticipant } from "@/lib/auth-helpers";
 import { generateLessonRoomToken } from "@/lib/livekit";
-import { recordParticipantJoin } from "@/lib/attendance";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import {
   isAppError,
@@ -35,7 +33,6 @@ interface RouteParams {
  * 4. Refuses tokens more than 10 minutes before lesson start (`LESSON_TOO_EARLY`).
  * 5. Refuses tokens more than 15 minutes after lesson end (`LESSON_EXPIRED`).
  * 6. Rate limits token generation per user/IP.
- * 7. Records participant entry timestamp (`teacherJoinedAt` / `studentJoinedAt`).
  */
 export async function GET(request: Request, { params }: RouteParams) {
   try {
@@ -90,17 +87,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       throw new LessonExpiredError();
     }
 
-    // 5. Record server-side entry attendance timestamps & session logs
-    if (callerRole === "TEACHER" || callerRole === "STUDENT") {
-      await recordParticipantJoin({
-        lessonId: lesson.id,
-        userId: session.user.id,
-        userRole: callerRole,
-        userName: session.user.name || undefined,
-      });
-    }
-
-    // 6. Mint LiveKit access token
+    // Mint the token. Attendance begins after the participant connects.
     const requestHost =
       request.headers.get("x-forwarded-host") ||
       request.headers.get("host") ||

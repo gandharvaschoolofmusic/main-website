@@ -140,7 +140,7 @@ export default async function StudentRecordingsPage() {
     // Gather recording parts
     const parts: StudentRecordingPart[] = (l.recordings || []).map((r: any) => ({
       id: r.id,
-      fileUrl: r.fileUrl,
+      fileUrl: `/api/lessons/${l.id}/playback?part=${r.id}`,
       fileId: r.fileId,
       fileName: r.fileName,
       fileSizeBytes: r.fileSizeBytes || 0,
@@ -152,7 +152,7 @@ export default async function StudentRecordingsPage() {
     if (parts.length === 0 && l.recordingUrl) {
       parts.push({
         id: `legacy-${l.id}`,
-        fileUrl: l.recordingUrl,
+        fileUrl: `/api/lessons/${l.id}/playback`,
         fileId: l.recordingFileId || null,
         fileName: `${trackingCode}.mp4`,
         fileSizeBytes: 0,

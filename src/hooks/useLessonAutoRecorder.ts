@@ -104,7 +104,7 @@ export function useLessonAutoRecorder({
       formData.append(
         "file",
         blob,
-        `lesson_${lessonId}_${Date.now()}.webm`,
+        `lesson_${lessonId}_${Date.now()}.${mimeType.startsWith("video/mp4") ? "mp4" : "webm"}`,
       );
       formData.append("durationSeconds", String(durationSeconds));
 

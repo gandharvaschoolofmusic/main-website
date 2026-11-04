@@ -1,11 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { revalidateTag } from "next/cache";
-import { WebhookReceiver } from "livekit-server-sdk";
+import { WebhookReceiver, EgressStatus } from "livekit-server-sdk";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import { startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
 import { recordParticipantJoin, recordParticipantLeave } from "@/lib/attendance";
+import { recordingPlaybackUrl } from "@/lib/supabase-storage";
 
 const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
 const apiSecret =
@@ -119,44 +120,24 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
  * Converts any raw storage location (Supabase S3, AWS S3, Cloudflare R2, or custom bucket URL)
  * into a valid, browser-playable public HTTPS video URL.
  */
-function resolvePublicRecordingUrl(rawLocation: string, cleanFileName: string): string {
-  const supabaseUrl =
-    process.env.NEXT_PUBLIC_SUPABASE_URL ||
-    process.env.SUPABASE_URL ||
-    "https://xopunboicdymbwdmxvnu.supabase.co";
-
-  if (!rawLocation) {
-    return `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
-  }
-
-  // Case A: S3 URI scheme (e.g. s3://bucket/path/file.mp4)
-  if (rawLocation.startsWith("s3://")) {
-    const withoutPrefix = rawLocation.slice(5);
-    const slashIdx = withoutPrefix.indexOf("/");
-    const bucket = slashIdx !== -1 ? withoutPrefix.slice(0, slashIdx) : withoutPrefix;
-    const rawKey = slashIdx !== -1 ? withoutPrefix.slice(slashIdx + 1) : cleanFileName;
-    const key = rawKey.replace(/^recordings\//, "");
-
-    // If bucket is Supabase recordings bucket
-    if (bucket === "recordings" || bucket.includes("supabase")) {
-      return `${supabaseUrl}/storage/v1/object/public/recordings/${key}`;
+function resolvePublicRecordingUrl(location: string): string | null {
+  if (!location) return null;
+  const project = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
+  const endpoint = process.env.LIVEKIT_S3_ENDPOINT || process.env.S3_ENDPOINT;
+  if (location.startsWith("s3://")) {
+    const { hostname: bucket, pathname } = new URL(location);
+    if (project && (!endpoint || new URL(endpoint).pathname.includes("/storage/v1/s3"))) {
+      return new URL(`/storage/v1/object/public/${bucket}${pathname}`, project).href;
     }
-    // AWS S3 standard public URL
-    return `https://${bucket}.s3.amazonaws.com/${rawKey}`;
+    if (endpoint) return new URL(`${bucket}${pathname}`, endpoint.replace(/\/?$/, "/")).href;
+    return `https://${bucket}.s3.amazonaws.com${pathname}`;
   }
-
-  // Case B: HTTP / HTTPS URL
-  if (rawLocation.startsWith("http://") || rawLocation.startsWith("https://")) {
-    // If LiveKit was configured with a Supabase S3 endpoint (/storage/v1/s3/<bucket>/<key>)
-    // Convert to public object URL so web browsers and HTML5 video can stream it without S3 signatures
-    if (rawLocation.includes("/storage/v1/s3/")) {
-      return rawLocation.replace("/storage/v1/s3/", "/storage/v1/object/public/");
-    }
-    return rawLocation;
+  if (!/^https?:\/\//i.test(location)) return null;
+  const url = new URL(location);
+  if (project && (url.hostname === new URL(project).hostname || url.hostname === new URL(project).hostname.replace(".supabase.co", ".storage.supabase.co")) && url.pathname.includes("/storage/v1/s3/")) {
+    return new URL(url.pathname.replace("/storage/v1/s3/", "/storage/v1/object/public/"), project).href;
   }
-
-  // Case C: Relative path or filename fallback
-  return `${supabaseUrl}/storage/v1/object/public/recordings/${cleanFileName}`;
+  return location;
 }
 
 /**
@@ -269,7 +250,7 @@ async function handleIndividualRoom(event: any, lessonId: string) {
 
     case "egress_ended": {
       const egressInfo = event.egressInfo;
-      if (!egressInfo) break;
+      if (!egressInfo || egressInfo.status !== EgressStatus.EGRESS_COMPLETE) break;
 
       const fileResults = egressInfo.fileResults || [];
       if (fileResults.length === 0) {
@@ -281,7 +262,7 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       }
 
       const primaryFile = fileResults[0];
-      const rawLocation = primaryFile.location || primaryFile.filename || "";
+      const rawLocation = primaryFile.location || "";
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;
@@ -289,7 +270,15 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       const rawFileName = primaryFile.filename || `lesson_${lessonId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      const fileUrl = resolvePublicRecordingUrl(rawLocation, cleanFileName);
+      const fileUrl = resolvePublicRecordingUrl(rawLocation);
+      if (!fileUrl || fileSizeBytes <= 0) {
+        logger.warn({ egressId: egressInfo.egressId }, "Recording ended without a delivered file");
+        break;
+      }
+      if (!await recordingPlaybackUrl(fileUrl)) {
+        // A retry can succeed if the storage catalog has not caught up with delivery.
+        throw new Error("Delivered recording is missing from object storage");
+      }
 
       const lesson = await db.lesson.findUnique({
         where: { id: lessonId },
@@ -513,7 +502,7 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
 
     case "egress_ended": {
       const egressInfo = event.egressInfo;
-      if (!egressInfo) break;
+      if (!egressInfo || egressInfo.status !== EgressStatus.EGRESS_COMPLETE) break;
 
       const fileResults = egressInfo.fileResults || [];
       if (fileResults.length === 0) {
@@ -525,7 +514,7 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       }
 
       const primaryFile = fileResults[0];
-      const rawLocation = primaryFile.location || primaryFile.filename || "";
+      const rawLocation = primaryFile.location || "";
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;
@@ -533,7 +522,15 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       const rawFileName = primaryFile.filename || `group_${groupRoomId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      const fileUrl = resolvePublicRecordingUrl(rawLocation, cleanFileName);
+      const fileUrl = resolvePublicRecordingUrl(rawLocation);
+      if (!fileUrl || fileSizeBytes <= 0) {
+        logger.warn({ egressId: egressInfo.egressId }, "Recording ended without a delivered file");
+        break;
+      }
+      if (!await recordingPlaybackUrl(fileUrl)) {
+        // A retry can succeed if the storage catalog has not caught up with delivery.
+        throw new Error("Delivered recording is missing from object storage");
+      }
 
       const groupLessons = await db.lesson.findMany({
         where: { groupRoomId },
