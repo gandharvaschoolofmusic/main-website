@@ -4,8 +4,10 @@ import {
   EncodedFileOutput,
   EncodedFileType,
   EncodingOptionsPreset,
-  S3Upload,
+  EgressStatus,
 } from "livekit-server-sdk";
+import { getS3UploadConfig, recordingS3Object } from "./recording-s3";
+export { getS3UploadConfig } from "./recording-s3";
 import { logger } from "@/lib/logger";
 
 export interface GenerateLessonTokenParams {
@@ -57,6 +59,13 @@ export async function generateLessonRoomToken(
     process.env.NEXT_PUBLIC_LIVEKIT_URL ||
     process.env.LIVEKIT_URL ||
     "ws://localhost:7880";
+  // A stale public build variable must not send participants to one Cloud
+  // project while the recorder uses another. Keep self-hosted LAN routing.
+  const recordingServer = process.env.LIVEKIT_URL;
+  if (recordingServer && new URL(recordingServer).hostname.endsWith(".livekit.cloud") &&
+      new URL(serverUrl).hostname.endsWith(".livekit.cloud")) {
+    serverUrl = recordingServer.replace(/^https:/, "wss:").replace(/^http:/, "ws:");
+  }
 
   // If serverUrl is still pointing to localhost, check if incoming request is from a LAN IP
   if (
@@ -165,62 +174,6 @@ export function getEgressClient(): EgressClient | null {
 }
 
 /**
- * Constructs an S3Upload configuration for LiveKit Egress if storage credentials are configured.
- * Supports AWS S3, Supabase S3, Cloudflare R2, MinIO, or custom S3-compatible backends.
- * If credentials are not set in environment, returns undefined (LiveKit Cloud uses default project storage).
- */
-export function getS3UploadConfig(): S3Upload | undefined {
-  const accessKey =
-    process.env.LIVEKIT_S3_KEY_ID ||
-    process.env.SUPABASE_S3_ACCESS_KEY_ID ||
-    process.env.AWS_ACCESS_KEY_ID ||
-    process.env.S3_ACCESS_KEY_ID;
-
-  const secret =
-    process.env.LIVEKIT_S3_SECRET ||
-    process.env.SUPABASE_S3_SECRET_ACCESS_KEY ||
-    process.env.AWS_SECRET_ACCESS_KEY ||
-    process.env.S3_SECRET_ACCESS_KEY;
-
-  if (!accessKey || !secret) {
-    // If not supplied in env, LiveKit Cloud automatically uses the default bucket
-    // configured in the LiveKit Cloud Project Settings -> Egress dashboard.
-    return undefined;
-  }
-
-  // Automatic Supabase S3 endpoint resolution if NEXT_PUBLIC_SUPABASE_URL is provided
-  let endpoint = process.env.LIVEKIT_S3_ENDPOINT || process.env.S3_ENDPOINT;
-  if (!endpoint && process.env.NEXT_PUBLIC_SUPABASE_URL) {
-    try {
-      const supaUrl = new URL(process.env.NEXT_PUBLIC_SUPABASE_URL);
-      endpoint = `${supaUrl.origin}/storage/v1/s3`;
-    } catch {}
-  }
-
-  const bucket =
-    process.env.LIVEKIT_S3_BUCKET ||
-    process.env.S3_BUCKET ||
-    "recordings";
-
-  const region =
-    process.env.LIVEKIT_S3_REGION ||
-    process.env.AWS_REGION ||
-    "auto";
-
-  const forcePathStyle =
-    process.env.LIVEKIT_S3_FORCE_PATH_STYLE !== "false";
-
-  return new S3Upload({
-    accessKey,
-    secret,
-    endpoint: endpoint || undefined,
-    bucket,
-    region,
-    forcePathStyle,
-  });
-}
-
-/**
  * Starts a server-side Room Composite Egress recording for a live lesson.
  * This runs completely server-side in LiveKit Cloud without consuming any client CPU or upload bandwidth.
  * Idempotent: checks if recording is already active for this room before initiating a new one.
@@ -237,14 +190,38 @@ export async function startLessonRoomEgress(params: {
   }
 
   try {
+    // An unrelated active job cannot guarantee delivery to this archive.
+    const s3 = getS3UploadConfig();
+    if (!s3) {
+      logger.info(
+        { roomName },
+        "S3 storage credentials not configured in env; skipping server egress so client recorder archives session to Supabase directly",
+      );
+      return { success: false, error: "S3_NOT_CONFIGURED" };
+    }
+
+    const target = recordingS3Object(s3.bucket, "");
+    if (target) {
+      const bucket = await target.client.fetch(target.url.href.replace(/\/$/, ""), {
+        method: "HEAD", signal: AbortSignal.timeout(8000), cache: "no-store",
+      });
+      if (!bucket.ok) {
+        logger.warn({ roomName, status: bucket.status }, "Recording bucket check failed; using the browser recorder");
+        return { success: false, error: "S3_DESTINATION_UNAVAILABLE" };
+      }
+    }
+
     // 1. Idempotency check: don't start multiple recordings for the same room
     const activeEgresses = await egressClient.listEgress({
       roomName,
       active: true,
     });
 
-    if (activeEgresses && activeEgresses.length > 0) {
-      const existing = activeEgresses[0];
+    const existing = activeEgresses.find(job =>
+      (job.status === EgressStatus.EGRESS_ACTIVE || job.status === EgressStatus.EGRESS_STARTING) &&
+      job.request.case === "roomComposite" && job.request.value.fileOutputs.some(file =>
+        file.output.case === "s3" && file.output.value.bucket === s3.bucket));
+    if (existing) {
       logger.info(
         { roomName, egressId: existing.egressId, status: existing.status },
         "LiveKit Room Composite Egress is already active for this room",
@@ -257,18 +234,8 @@ export async function startLessonRoomEgress(params: {
     const dateStamp = now.toISOString().slice(0, 10);
     const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
     const identifier = lessonId || groupRoomId || roomName.replace(/[^a-zA-Z0-9]/g, "_");
-    const fileName = `Gandharva_Lesson_${identifier}_${dateStamp}_${timeStamp}.mp4`;
+    const fileName = `Gandharva_Lesson_${identifier}_${dateStamp}_${timeStamp}_${crypto.randomUUID()}.mp4`;
     const filepath = fileName;
-
-    // 3. Configure file output with optional S3 credentials
-    const s3 = getS3UploadConfig();
-    if (!s3) {
-      logger.info(
-        { roomName },
-        "S3 storage credentials not configured in env; skipping server egress so client recorder archives session to Supabase directly",
-      );
-      return { success: false, error: "S3_NOT_CONFIGURED" };
-    }
 
     const fileOutput = new EncodedFileOutput({
       fileType: EncodedFileType.MP4,

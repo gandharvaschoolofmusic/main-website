@@ -4,8 +4,7 @@ import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { uploadToSupabase } from "@/lib/supabase-storage";
 import { logger } from "@/lib/logger";
-import fs from "fs";
-import path from "path";
+import { createHash, randomUUID } from "node:crypto";
 
 /**
  * POST /api/lessons/[id]/recording
@@ -15,7 +14,7 @@ import path from "path";
  *
  * 1. Authenticates session (Teacher, Student, or Admin).
  * 2. Uploads to Supabase storage / database.
- * 3. Gracefully falls back to local server storage if database is unreachable.
+ * 3. Atomically saves media bytes in Postgres if object storage is unavailable.
  * 4. Persists the recording metadata to Lesson and LessonRecording models.
  */
 export async function POST(
@@ -68,20 +67,23 @@ export async function POST(
       ? parseInt(durationSecondsRaw, 10)
       : null;
 
-    if (!file) {
+    if (!(file instanceof File) || !file.size || file.size > 32 * 1024 * 1024) {
       return Response.json(
-        { error: "No recording file provided in request." },
+        { error: "A nonempty recording of up to 32 MB is required." },
         { status: 400 },
       );
     }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    // 4. Construct human-readable recording file name
-    const existingCount = await db.lessonRecording.count({
-      where: { lessonId },
-    });
+    const segment = formData.get("segmentId");
+    const recordingId = typeof segment === "string" && /^[a-f0-9-]{36}$/i.test(segment)
+      ? createHash("sha256").update(`${lessonId}/${userId}/${segment}`).digest("hex")
+      : randomUUID();
+    const existing = await db.lessonRecording.findUnique({ where: { id: recordingId } });
+    if (existing) return Response.json({ success: true, recordingId, fileUrl: existing.fileUrl, storageBackend: existing.storageBackend });
+    const buffer = Buffer.from(await file.arrayBuffer());
+    const isWebm = buffer.readUIntBE(0, Math.min(4, buffer.length)) === 0x1a45dfa3;
+    const isMp4 = buffer.toString("ascii", 4, 8) === "ftyp";
+    if (!isWebm && !isMp4) return Response.json({ error: "Invalid recording file" }, { status: 422 });
 
     const sanitize = (val: string) =>
       val.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").trim();
@@ -92,14 +94,14 @@ export async function POST(
     const now = new Date();
     const dateStamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
     const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
-    const partSuffix = existingCount > 0 ? `_Part${existingCount + 1}` : "";
-    const mimeType = file.type || "video/webm";
+    const partSuffix = `_${recordingId}`;
+    const mimeType = isMp4 ? "video/mp4" : "video/webm";
     const extension = mimeType.split(";")[0].toLowerCase() === "video/mp4" ? "mp4" : "webm";
     const fileName = `Gandharva_${safeInstrument}_${safeStudent}_${safeTeacher}_${dateStamp}_${timeStamp}${partSuffix}.${extension}`;
 
     let fileUrl = "";
     let fileId: string | null = null;
-    let storageBackend: "SUPABASE" | "LOCAL" = "LOCAL";
+    let storageBackend: "SUPABASE" | "DATABASE" = "DATABASE";
 
     // 5. Upload to Supabase storage / database
     let uploadError: string | null = null;
@@ -119,26 +121,12 @@ export async function POST(
       uploadError = err instanceof Error ? err.message : String(err);
       logger.warn(
         { error: uploadError, lessonId },
-        "Supabase recording upload encountered an error. Falling back to local disk storage...",
+        "Object storage rejected the recording. Saving the media in the lesson database.",
       );
     }
 
-    // 6. Fallback to local disk storage if Supabase failed
-    if (storageBackend !== "SUPABASE") {
-      const recordingsDir = path.join(process.cwd(), "public", "recordings");
-      if (!fs.existsSync(recordingsDir)) {
-        fs.mkdirSync(recordingsDir, { recursive: true });
-      }
-
-      const localFilePath = path.join(recordingsDir, fileName);
-      fs.writeFileSync(localFilePath, buffer);
-      fileUrl = `/recordings/${fileName}`;
-      storageBackend = "LOCAL";
-
-      logger.info(
-        { lessonId, localFilePath, fileName },
-        "Lesson recording safely saved to local disk storage",
-      );
+    if (storageBackend === "DATABASE") {
+      fileUrl = `/api/lessons/${lessonId}/playback?part=${recordingId}`;
     }
 
     // 7. Determine participant join/leave timestamps for this recording snapshot
@@ -167,53 +155,26 @@ export async function POST(
       ? now
       : lesson.studentLeftAt;
 
-    // Persist to database (each rejoin creates a new LessonRecording entry)
-    const recordingRecord = await db.lessonRecording.create({
-      data: {
-        lessonId,
-        fileUrl,
-        fileId,
-        fileName,
-        fileSizeBytes: buffer.length,
-        durationSeconds,
-        storageBackend,
-        teacherJoinedAt,
-        teacherLeftAt,
-        studentJoinedAt,
-        studentLeftAt,
-      },
-    });
-
-    // Calculate total cumulative duration for the lesson across all parts
-    const sumAgg = await db.lessonRecording.aggregate({
-      where: { lessonId },
-      _sum: { durationSeconds: true },
-    });
-    const cumulativeDuration = sumAgg._sum.durationSeconds || durationSeconds;
-
-    await db.lesson.update({
-      where: { id: lessonId },
-      data: {
-        recordingUrl: fileUrl,
-        recordingFileId: fileId,
-        recordingDurationSeconds: cumulativeDuration,
-        ...(teacherJoinedAt && !lesson.teacherJoinedAt ? { teacherJoinedAt } : {}),
-        ...(teacherLeftAt ? { teacherLeftAt } : {}),
-        ...(studentJoinedAt && !lesson.studentJoinedAt ? { studentJoinedAt } : {}),
-        ...(studentLeftAt ? { studentLeftAt } : {}),
-      },
-    });
-
-    if (lesson.groupRoomId) {
-      await db.lesson.updateMany({
-        where: { groupRoomId: lesson.groupRoomId },
-        data: {
-          recordingUrl: fileUrl,
-          recordingFileId: fileId,
-          recordingDurationSeconds: cumulativeDuration,
-        },
+    // Commit the file reference, fallback bytes and archive summary together.
+    const recordingRecord = await db.$transaction(async tx => {
+      await tx.$queryRaw`SELECT id FROM "Lesson" WHERE id = ${lessonId} FOR UPDATE`;
+      const saved = await tx.lessonRecording.findUnique({ where: { id: recordingId } });
+      if (saved) return saved;
+      const record = await tx.lessonRecording.create({ data: {
+        id: recordingId, lessonId, fileUrl, fileId, fileName, fileSizeBytes: buffer.length,
+        durationSeconds, storageBackend, teacherJoinedAt, teacherLeftAt, studentJoinedAt, studentLeftAt,
+      } });
+      if (storageBackend === "DATABASE") {
+        await tx.$executeRaw`INSERT INTO "LessonRecordingMedia" ("recordingId", "mimeType", "bytes")
+          VALUES (${record.id}, ${mimeType}, ${buffer})`;
+      }
+      const sum = await tx.lessonRecording.aggregate({ where: { lessonId }, _sum: { durationSeconds: true } });
+      await tx.lesson.updateMany({
+        where: lesson.groupRoomId ? { groupRoomId: lesson.groupRoomId } : { id: lessonId },
+        data: { recordingUrl: fileUrl, recordingFileId: fileId, recordingDurationSeconds: sum._sum.durationSeconds },
       });
-    }
+      return record;
+    }, { timeout: 30000 });
 
     try {
       revalidateTag("admin-recordings", "max");
@@ -227,10 +188,9 @@ export async function POST(
     return Response.json({
       success: true,
       recordingId: recordingRecord.id,
-      fileUrl,
-      fileId,
-      storageBackend,
-      uploadError: uploadError ? uploadError : undefined,
+      fileUrl: recordingRecord.fileUrl,
+      fileId: recordingRecord.fileId,
+      storageBackend: recordingRecord.storageBackend,
     });
   } catch (error) {
     logger.error({ error }, "Failed to process lesson recording upload");

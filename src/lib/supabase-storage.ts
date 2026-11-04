@@ -1,5 +1,6 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
+import { recordingS3Object } from "@/lib/recording-s3";
 
 export type StorageBucket = "chat-attachments" | "resources" | "recordings";
 
@@ -35,6 +36,16 @@ function getSupabaseClient(): SupabaseClient | null {
   }
 
   try {
+    // Legacy JWT keys identify their issuing project. Never send another
+    // project's service credential to this endpoint. Opaque keys are checked by Storage.
+    if (key.startsWith("eyJ")) {
+      const { ref } = JSON.parse(Buffer.from(key.split(".")[1], "base64url").toString());
+      const host = new URL(url).hostname;
+      if (ref && host.endsWith(".supabase.co") && host !== `${ref}.supabase.co`) {
+        logger.warn("Supabase Storage key and URL belong to different projects");
+        return null;
+      }
+    }
     cachedSupabase = createClient(url, key, {
       auth: { persistSession: false },
     });
@@ -56,6 +67,16 @@ export async function recordingPlaybackUrl(stored: string) {
   if (!object) return stored;
   const bucket = decodeURIComponent(object[1]);
   const path = decodeURIComponent(object[2]);
+  const s3 = recordingS3Object(bucket, path);
+  if (s3) {
+    const head = await s3.client.fetch(s3.url, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(8000) });
+    if (head.ok && Number(head.headers.get("content-length")) > 0) {
+      s3.url.searchParams.set("X-Amz-Expires", "7200");
+      return (await s3.client.sign(s3.url, { aws: { signQuery: true } })).url;
+    }
+    if (head.status === 404 || head.ok) return null;
+    if (head.status !== 401 && head.status !== 403) throw new Error("Recording storage could not be reached");
+  }
   const client = getSupabaseClient();
   const signed = await client?.storage.from(bucket).createSignedUrl(path, 7200);
   if (signed?.data?.signedUrl) return signed.data.signedUrl;
@@ -96,6 +117,17 @@ export async function uploadToSupabase(
     ? sanitized
     : `${Date.now()}_${sanitized}`;
 
+  if (bucket === "recordings") {
+    const s3 = recordingS3Object(bucket, finalName);
+    if (s3) {
+      const upload = await s3.client.fetch(s3.url, { method: "PUT", body: new Uint8Array(fileBuffer),
+        headers: { "Content-Type": mimeType }, signal: AbortSignal.timeout(30000) });
+      if (!upload.ok) throw new Error(`Recording storage rejected the upload (HTTP ${upload.status}).`);
+      return { fileId: `${bucket}:${finalName}`, fileName: finalName, fileUrl: s3.reference,
+        fileSizeBytes: fileBuffer.length, mimeType, storageBackend: "SUPABASE_STORAGE" };
+    }
+  }
+
   const client = getSupabaseClient();
   if (!client) {
     throw new Error(
@@ -112,7 +144,7 @@ export async function uploadToSupabase(
     });
 
   // If Bucket not found, attempt auto-creation or fallback to available bucket
-  if (error && (error.message?.toLowerCase().includes("bucket not found") || (error as any).statusCode === "404" || (error as any).statusCode === 404)) {
+  if (bucket !== "recordings" && error && (error.message?.toLowerCase().includes("bucket not found") || (error as any).statusCode === "404" || (error as any).statusCode === 404)) {
     logger.warn({ bucket, error: error.message }, "Target bucket not found, attempting auto-creation");
 
     try {

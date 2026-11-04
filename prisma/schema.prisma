@@ -245,7 +245,8 @@ model LessonRecording {
   fileUrl         String
   fileId          String?
   fileName        String
-  fileSizeBytes   Int
+  /// Exact whole-byte counts up to JavaScript's safe integer limit, including multi-GB MP4s.
+  fileSizeBytes   Float    @db.DoublePrecision
   durationSeconds Int?
   storageBackend  String   @default("SUPABASE")
   teacherJoinedAt DateTime? @db.Timestamptz(6)
@@ -254,8 +255,17 @@ model LessonRecording {
   studentLeftAt   DateTime? @db.Timestamptz(6)
   createdAt       DateTime @default(now()) @db.Timestamptz(6)
   lesson          Lesson   @relation(fields: [lessonId], references: [id], onDelete: Cascade)
+  media            LessonRecordingMedia?
 
   @@index([lessonId])
+}
+
+// Used only when object storage cannot accept a classroom recording.
+model LessonRecordingMedia {
+  recordingId String          @id
+  mimeType    String
+  bytes       Bytes
+  recording   LessonRecording @relation(fields: [recordingId], references: [id], onDelete: Cascade)
 }
 
 model Course {

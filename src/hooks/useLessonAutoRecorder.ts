@@ -13,14 +13,17 @@ interface UseLessonAutoRecorderProps {
   enabled?: boolean;
 }
 
-function startSegment(stream: MediaStream, mimeType: string, chunks: Blob[]) {
+function startSegment(stream: MediaStream, mimeType: string, chunks: Blob[], rotate: () => void) {
   const recorder = new MediaRecorder(stream, {
     mimeType: mimeType || undefined,
     videoBitsPerSecond: 450_000,
     audioBitsPerSecond: 64_000,
   });
+  let bytes = 0;
   recorder.ondataavailable = ({ data }) => {
     if (data.size) chunks.push(data);
+    bytes += data.size;
+    if (bytes >= 2_500_000 && recorder.state === "recording") rotate();
   };
   recorder.start(2000);
   return recorder;
@@ -107,41 +110,45 @@ export function useLessonAutoRecorder({
         `lesson_${lessonId}_${Date.now()}.${mimeType.startsWith("video/mp4") ? "mp4" : "webm"}`,
       );
       formData.append("durationSeconds", String(durationSeconds));
+      formData.append("segmentId", crypto.randomUUID());
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60s max timeout for upload
+      for (let attempt = 0; ; attempt++) {
+        try {
+          const res = await fetch(`/api/lessons/${lessonId}/recording`, {
+            method: "POST",
+            body: formData,
+            signal: AbortSignal.timeout(60000),
+          });
+          if (!res.ok) {
+            const errData = await res.json().catch(() => ({}));
+            if (res.status >= 400 && res.status < 500 && res.status !== 429) {
+              return { success: false, error: errData.error || "Recording upload was rejected." };
+            }
+            throw new Error(errData.error || `Server responded with status ${res.status}`);
+          }
 
-      try {
-        const res = await fetch(`/api/lessons/${lessonId}/recording`, {
-          method: "POST",
-          body: formData,
-          signal: controller.signal,
-        });
-        clearTimeout(timeoutId);
-
-        if (!res.ok) {
-          const errData = await res.json().catch(() => ({}));
-          throw new Error(errData.error || `Server responded with status ${res.status}`);
+          const data = await res.json();
+          return {
+            success: true,
+            fileUrl: data.fileUrl,
+            storageBackend: data.storageBackend,
+          };
+        } catch (err) {
+          if (attempt < 2) {
+            await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+            continue;
+          }
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn("[AutoRecorder] Segment upload failed:", msg);
+          return { success: false, error: msg };
         }
-
-        const data = await res.json();
-        return {
-          success: true,
-          fileUrl: data.fileUrl,
-          storageBackend: data.storageBackend,
-        };
-      } catch (err) {
-        clearTimeout(timeoutId);
-        const msg = err instanceof Error ? err.message : String(err);
-        console.warn("[AutoRecorder] Segment upload failed:", msg);
-        return { success: false, error: msg };
       }
     },
     [lessonId],
   );
 
   // Rolling segment cycler: every 4 minutes, closes current part and uploads to Supabase in background
-  const cycleRecordingSegment = useCallback(async () => {
+  const cycleRecordingSegment = useCallback(function rotate() {
     if (!isRecordingRef.current || !mediaRecorderRef.current) return;
     const oldRecorder = mediaRecorderRef.current;
     if (oldRecorder.state !== "recording" || !combinedStreamRef.current) return;
@@ -156,7 +163,7 @@ export function useLessonAutoRecorder({
       oldRecorder.stop();
 
       const chunks: Blob[] = [];
-      mediaRecorderRef.current = startSegment(combinedStreamRef.current, selectedMimeRef.current, chunks);
+      mediaRecorderRef.current = startSegment(combinedStreamRef.current, selectedMimeRef.current, chunks, rotate);
       recordedChunksRef.current = chunks;
       recordingStartTimeRef.current = Date.now();
     } catch (err) {
@@ -596,7 +603,7 @@ export function useLessonAutoRecorder({
       try {
         const chunks: Blob[] = [];
         recordedChunksRef.current = chunks;
-        mediaRecorderRef.current = startSegment(combinedStream, selectedMime, chunks);
+        mediaRecorderRef.current = startSegment(combinedStream, selectedMime, chunks, cycleRecordingSegment);
         isRecordingRef.current = true;
         setIsRecording(true);
         recordingStartTimeRef.current = Date.now();

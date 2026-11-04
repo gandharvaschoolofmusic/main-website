@@ -238,7 +238,7 @@ function LessonRoomContent({
     callerRole: lesson.callerRole,
     partnerName: lesson.partnerName,
     instrument: lesson.instrument,
-    enabled: recordingMode === "CLIENT_RECORDER",
+    enabled: recordingMode === "CLIENT_RECORDER" && lesson.isTeacher,
   });
 
   // Lesson timer
@@ -466,10 +466,12 @@ function LessonRoomContent({
 
   // Ensure recording is active when room is connected (prefer server egress; fallback to client recorder)
   useEffect(() => {
-    if (!room) return;
+    if (!room || !lesson.isTeacher) return;
+    let cancelled = false;
     const triggerRecording = async () => {
       try {
         const res = await fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" });
+        if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
           if (data.mode === "SERVER_EGRESS" && data.success) {
@@ -479,16 +481,17 @@ function LessonRoomContent({
         }
         setRecordingMode("CLIENT_RECORDER");
       } catch {
-        setRecordingMode("CLIENT_RECORDER");
+        if (!cancelled) setRecordingMode("CLIENT_RECORDER");
       }
     };
 
     if (room.state === "connected") {
       void triggerRecording();
     } else {
-      room.once(RoomEvent.Connected, () => void triggerRecording());
+      room.once(RoomEvent.Connected, triggerRecording);
     }
-  }, [room, lesson.id]);
+    return () => { cancelled = true; room.off(RoomEvent.Connected, triggerRecording); };
+  }, [room, lesson.id, lesson.isTeacher]);
 
   const handleLeaveRoom = async () => {
     try {

@@ -1,0 +1,2 @@
+ALTER TABLE "LessonRecording"
+    ALTER COLUMN "fileSizeBytes" TYPE DOUBLE PRECISION;

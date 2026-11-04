@@ -6,6 +6,7 @@ import { logger } from "@/lib/logger";
 import { AuthRateLimits } from "@/lib/rate-limit";
 import { startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
 import { recordParticipantJoin, recordParticipantLeave } from "@/lib/attendance";
+import { recordingS3Object } from "@/lib/recording-s3";
 import { recordingPlaybackUrl } from "@/lib/supabase-storage";
 
 const apiKey = process.env.LIVEKIT_API_KEY || "devkey";
@@ -123,7 +124,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 function resolvePublicRecordingUrl(location: string): string | null {
   if (!location) return null;
   const project = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  const endpoint = process.env.LIVEKIT_S3_ENDPOINT || process.env.S3_ENDPOINT;
+  const endpoint = process.env.LIVEKIT_S3_ENDPOINT || process.env.SUPABASE_S3_ENDPOINT || process.env.S3_ENDPOINT;
   if (location.startsWith("s3://")) {
     const { hostname: bucket, pathname } = new URL(location);
     if (project && (!endpoint || new URL(endpoint).pathname.includes("/storage/v1/s3"))) {
@@ -138,6 +139,45 @@ function resolvePublicRecordingUrl(location: string): string | null {
     return new URL(url.pathname.replace("/storage/v1/s3/", "/storage/v1/object/public/"), project).href;
   }
   return location;
+}
+
+async function saveDeliveredRecording(lessonId: string, jobId: string, file: {
+  fileUrl: string; fileName: string; fileSizeBytes: number; durationSeconds: number | null;
+}) {
+  return db.$transaction(async tx => {
+    await tx.$queryRaw`SELECT id FROM "Lesson" WHERE id = ${lessonId} FOR UPDATE`;
+    const lesson = await tx.lesson.findUniqueOrThrow({ where: { id: lessonId } });
+    const previous = await tx.lessonRecording.findFirst({ where: { lessonId, fileId: jobId } });
+    const record = await tx.lessonRecording.upsert({
+      where: { id: previous?.id || `egress_${lessonId}_${jobId}` }, update: file,
+      create: { ...file, lessonId, fileId: jobId, storageBackend: "LIVEKIT_EGRESS",
+        teacherJoinedAt: lesson.teacherJoinedAt, teacherLeftAt: lesson.teacherLeftAt,
+        studentJoinedAt: lesson.studentJoinedAt, studentLeftAt: lesson.studentLeftAt,
+        id: `egress_${lessonId}_${jobId}` },
+    });
+    const sum = await tx.lessonRecording.aggregate({ where: { lessonId }, _sum: { durationSeconds: true } });
+    await tx.lesson.update({ where: { id: lessonId }, data: { recordingUrl: file.fileUrl,
+      recordingFileId: jobId, recordingDurationSeconds: sum._sum.durationSeconds } });
+    return record;
+  });
+}
+
+async function deliveredRecording(file: { filename: string; location: string; size: bigint }) {
+  // For our S3 uploads the filename is the object key. Verify the object even
+  // if LiveKit reports a provider URL that requires signing or omits its size.
+  const bucket = process.env.LIVEKIT_S3_BUCKET || process.env.SUPABASE_S3_BUCKET || process.env.S3_BUCKET || "recordings";
+  const target = file.filename && recordingS3Object(bucket, file.filename);
+  if (target) {
+    const response = await target.client.fetch(target.url, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(8000) });
+    const bytes = Number(response.headers.get("content-length"));
+    if (!response.ok || !Number.isSafeInteger(bytes) || bytes <= 0) throw new Error("Recording object could not be verified");
+    return { fileUrl: target.reference, fileSizeBytes: bytes };
+  }
+  const fileUrl = resolvePublicRecordingUrl(file.location);
+  const fileSizeBytes = Number(file.size);
+  if (!fileUrl || !Number.isSafeInteger(fileSizeBytes) || fileSizeBytes <= 0) return null;
+  if (!await recordingPlaybackUrl(fileUrl)) throw new Error("Delivered recording is missing from storage");
+  return { fileUrl, fileSizeBytes };
 }
 
 /**
@@ -262,23 +302,18 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       }
 
       const primaryFile = fileResults[0];
-      const rawLocation = primaryFile.location || "";
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;
-      const fileSizeBytes = primaryFile.size ? Number(primaryFile.size) : 0;
       const rawFileName = primaryFile.filename || `lesson_${lessonId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      const fileUrl = resolvePublicRecordingUrl(rawLocation);
-      if (!fileUrl || fileSizeBytes <= 0) {
+      const delivered = await deliveredRecording(primaryFile);
+      if (!delivered) {
         logger.warn({ egressId: egressInfo.egressId }, "Recording ended without a delivered file");
         break;
       }
-      if (!await recordingPlaybackUrl(fileUrl)) {
-        // A retry can succeed if the storage catalog has not caught up with delivery.
-        throw new Error("Delivered recording is missing from object storage");
-      }
+      const { fileUrl, fileSizeBytes } = delivered;
 
       const lesson = await db.lesson.findUnique({
         where: { id: lessonId },
@@ -289,36 +324,8 @@ async function handleIndividualRoom(event: any, lessonId: string) {
         break;
       }
 
-      const recordingRecord = await db.lessonRecording.create({
-        data: {
-          lessonId,
-          fileUrl,
-          fileId: egressInfo.egressId || null,
-          fileName: cleanFileName,
-          fileSizeBytes,
-          durationSeconds,
-          storageBackend: "LIVEKIT_EGRESS",
-          teacherJoinedAt: lesson.teacherJoinedAt,
-          teacherLeftAt: lesson.teacherLeftAt,
-          studentJoinedAt: lesson.studentJoinedAt,
-          studentLeftAt: lesson.studentLeftAt,
-        },
-      });
-
-      // Sum all recording parts for cumulative duration
-      const sumAgg = await db.lessonRecording.aggregate({
-        where: { lessonId },
-        _sum: { durationSeconds: true },
-      });
-      const cumulativeDuration = sumAgg._sum.durationSeconds || durationSeconds;
-
-      await db.lesson.update({
-        where: { id: lessonId },
-        data: {
-          recordingUrl: fileUrl,
-          recordingFileId: egressInfo.egressId || null,
-          recordingDurationSeconds: cumulativeDuration,
-        },
+      const recordingRecord = await saveDeliveredRecording(lessonId, egressInfo.egressId, {
+        fileUrl, fileName: cleanFileName, fileSizeBytes, durationSeconds,
       });
 
       logger.info(
@@ -514,54 +521,28 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       }
 
       const primaryFile = fileResults[0];
-      const rawLocation = primaryFile.location || "";
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;
-      const fileSizeBytes = primaryFile.size ? Number(primaryFile.size) : 0;
       const rawFileName = primaryFile.filename || `group_${groupRoomId}_${Date.now()}.mp4`;
       const cleanFileName = rawFileName.split("/").pop() || rawFileName;
 
-      const fileUrl = resolvePublicRecordingUrl(rawLocation);
-      if (!fileUrl || fileSizeBytes <= 0) {
+      const delivered = await deliveredRecording(primaryFile);
+      if (!delivered) {
         logger.warn({ egressId: egressInfo.egressId }, "Recording ended without a delivered file");
         break;
       }
-      if (!await recordingPlaybackUrl(fileUrl)) {
-        // A retry can succeed if the storage catalog has not caught up with delivery.
-        throw new Error("Delivered recording is missing from object storage");
-      }
+      const { fileUrl, fileSizeBytes } = delivered;
 
       const groupLessons = await db.lesson.findMany({
         where: { groupRoomId },
       });
 
       for (const l of groupLessons) {
-        await db.lessonRecording.create({
-          data: {
-            lessonId: l.id,
-            fileUrl,
-            fileId: egressInfo.egressId || null,
-            fileName: cleanFileName,
-            fileSizeBytes,
-            durationSeconds,
-            storageBackend: "LIVEKIT_EGRESS",
-            teacherJoinedAt: l.teacherJoinedAt,
-            teacherLeftAt: l.teacherLeftAt,
-            studentJoinedAt: l.studentJoinedAt,
-            studentLeftAt: l.studentLeftAt,
-          },
+        await saveDeliveredRecording(l.id, egressInfo.egressId, {
+          fileUrl, fileName: cleanFileName, fileSizeBytes, durationSeconds,
         });
       }
-
-      await db.lesson.updateMany({
-        where: { groupRoomId },
-        data: {
-          recordingUrl: fileUrl,
-          recordingFileId: egressInfo.egressId || null,
-          ...(durationSeconds ? { recordingDurationSeconds: durationSeconds } : {}),
-        },
-      });
 
       logger.info(
         { groupRoomId, fileUrl, lessonCount: groupLessons.length, durationSeconds, fileSizeBytes },
