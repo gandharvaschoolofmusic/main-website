@@ -54,7 +54,7 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
           },
         },
       },
-      orderBy: { startsAt: "desc" },
+      orderBy: { startsAt: "asc" },
     });
 
     const formattedSessions: AdminSessionPayoutItem[] = lessons.map((l) => {

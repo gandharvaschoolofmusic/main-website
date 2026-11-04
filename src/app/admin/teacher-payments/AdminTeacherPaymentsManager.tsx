@@ -170,9 +170,11 @@ export function AdminTeacherPaymentsManager({
     document.body.removeChild(link);
   };
 
-  // Completed sessions base list
+  // Completed sessions base list (sorted ascending by session date/time)
   const completedSessions = useMemo(() => {
-    return sessions.filter((s) => s.lessonStatus === "COMPLETED");
+    return sessions
+      .filter((s) => s.lessonStatus === "COMPLETED")
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }, [sessions]);
 
   // Unique list of teachers for dropdown filter
@@ -463,29 +465,31 @@ export function AdminTeacherPaymentsManager({
     });
   }, [completedSessions, activeWeekInterval]);
 
-  // Filtered rows (strictly completed sessions only, filtered by week, status, teacher, and search)
+  // Filtered rows (strictly completed sessions only, filtered by week, status, teacher, and search, sorted ascending)
   const filteredSessions = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
-    return weekFilteredSessions.filter((s) => {
-      // Status filter
-      if (statusFilter !== "ALL" && s.payoutStatus !== statusFilter) {
-        return false;
-      }
-      // Teacher filter
-      if (teacherFilter !== "ALL" && s.teacherId !== teacherFilter) {
-        return false;
-      }
-      // Search
-      if (q) {
-        const matchTracking = s.trackingCode.toLowerCase().includes(q);
-        const matchTeacher = s.teacherName.toLowerCase().includes(q);
-        const matchStudent = s.studentName.toLowerCase().includes(q);
-        const matchCourse = s.courseTitle.toLowerCase().includes(q);
-        const matchRef = s.payoutTransactionId?.toLowerCase().includes(q) || false;
-        return matchTracking || matchTeacher || matchStudent || matchCourse || matchRef;
-      }
-      return true;
-    });
+    return weekFilteredSessions
+      .filter((s) => {
+        // Status filter
+        if (statusFilter !== "ALL" && s.payoutStatus !== statusFilter) {
+          return false;
+        }
+        // Teacher filter
+        if (teacherFilter !== "ALL" && s.teacherId !== teacherFilter) {
+          return false;
+        }
+        // Search
+        if (q) {
+          const matchTracking = s.trackingCode.toLowerCase().includes(q);
+          const matchTeacher = s.teacherName.toLowerCase().includes(q);
+          const matchStudent = s.studentName.toLowerCase().includes(q);
+          const matchCourse = s.courseTitle.toLowerCase().includes(q);
+          const matchRef = s.payoutTransactionId?.toLowerCase().includes(q) || false;
+          return matchTracking || matchTeacher || matchStudent || matchCourse || matchRef;
+        }
+        return true;
+      })
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }, [weekFilteredSessions, searchQuery, statusFilter, teacherFilter]);
 
   // Aggregate metrics (dynamically reflect the active week)

@@ -128,7 +128,12 @@ export function AdminLessonsManager({
 
   const filteredLessons = lessons
     .filter((l) => {
-      const matchesStatus = statusFilter === "ALL" || l.status === statusFilter;
+      // "ALL" filter shows scheduled, rescheduled, and cancelled classes, excluding completed classes.
+      // Completed classes only show when the "Completed" filter tab is explicitly selected.
+      const matchesStatus =
+        statusFilter === "ALL"
+          ? l.status !== LessonStatus.COMPLETED
+          : l.status === statusFilter;
       const matchesSource = sourceFilter === "ALL" || l.lessonSource === sourceFilter;
       const matchesSearch =
         l.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
