@@ -6,7 +6,7 @@ import { Role, PaymentStatus, EnrollmentStatus, LessonStatus, LessonSource, Noti
 import { hashPassword } from "@/lib/password";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
-import { generateNextStudentId } from "@/lib/id-generator";
+import { generateNextStudentId, generateNextPaymentReceiptId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 
@@ -122,10 +122,11 @@ export async function recordStudentPaymentAction(input: {
 
     const receiptRef =
       input.referenceId?.trim() ||
-      `MANUAL-${Date.now().toString().slice(-6)}`;
+      (await generateNextPaymentReceiptId(db));
 
     await db.payment.create({
       data: {
+        customId: receiptRef.startsWith("PAYID") ? receiptRef : await generateNextPaymentReceiptId(db),
         studentId: student.id,
         enrollmentId: enrollmentId || undefined,
         amountMinorUnits,

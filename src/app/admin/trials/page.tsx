@@ -95,6 +95,7 @@ const getCachedAdminTrialsData = unstable_cache(
 
       return {
         id: r.id,
+        customId: r.customId || null,
         studentId: r.studentId,
         studentName: r.studentName || r.student?.name || "Candidate",
         studentEmail: r.studentEmail || r.student?.email || "",

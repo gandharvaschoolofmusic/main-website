@@ -6,6 +6,7 @@ import { isAppError } from "@/lib/errors";
 import { sendCourseEnrollmentEmail } from "@/lib/email";
 import { generateUniqueLessonTrackingCode } from "@/lib/lesson-tracking";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
+import { generateNextPaymentReceiptId } from "@/lib/id-generator";
 
 export type PaymentOrderStudent = {
   id: string;
@@ -80,8 +81,10 @@ export async function createCourseOrderCore(
     });
 
     // Create Payment record with CREATED status
+    const paymentReceiptId = await generateNextPaymentReceiptId(db);
     const payment = await db.payment.create({
       data: {
+        customId: paymentReceiptId,
         studentId: student.id,
         amountMinorUnits: course.priceMinorUnits,
         currency: course.currency,
@@ -240,11 +243,13 @@ export async function processSuccessfulPaymentWebhook(params: {
         }
 
         // Update Payment status to PAID
+        const receiptId = (payment as any).customId || (await generateNextPaymentReceiptId(tx));
         await tx.payment.update({
           where: { id: payment.id },
           data: {
             status: PaymentStatus.PAID,
             gatewayPaymentId,
+            customId: receiptId,
           },
         });
 
@@ -677,8 +682,10 @@ export async function enrollCourseDirectCore(
   const result = await db.$transaction(
     async (tx) => {
       // 1. Create Payment
+      const directReceiptId = await generateNextPaymentReceiptId(tx);
       const payment = await tx.payment.create({
         data: {
+          customId: directReceiptId,
           studentId: student.id,
           amountMinorUnits: course.priceMinorUnits,
           currency: course.currency,

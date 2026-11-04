@@ -165,3 +165,100 @@ export function getTeacherDisplayId(user?: {
   return user?.customId || "T0001";
 }
 
+/**
+ * Generates the next sequential Trial ID: TL00001, TL00002, TL00003...
+ */
+export async function generateNextTrialId(
+  client: Prisma.TransactionClient | typeof db = db
+): Promise<string> {
+  const trials = await client.trialRequest.findMany({
+    where: {
+      customId: { startsWith: "TL" },
+    },
+    select: { customId: true },
+  });
+
+  let maxNum = 0;
+  for (const t of trials) {
+    if (t.customId) {
+      const match = t.customId.match(/^TL(\d+)$/i);
+      if (match) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > maxNum) {
+          maxNum = val;
+        }
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  const padding = nextNum > 99999 ? String(nextNum).length : 5;
+  return `TL${padNumber(nextNum, padding)}`;
+}
+
+/**
+ * Generates the next sequential Payment Receipt ID: PAYID000001, PAYID000002, PAYID000003...
+ */
+export async function generateNextPaymentReceiptId(
+  client: Prisma.TransactionClient | typeof db = db
+): Promise<string> {
+  const payments = await client.payment.findMany({
+    where: {
+      OR: [
+        { customId: { startsWith: "PAYID" } },
+        { gatewayPaymentId: { startsWith: "PAYID" } },
+      ],
+    },
+    select: { customId: true, gatewayPaymentId: true },
+  });
+
+  let maxNum = 0;
+  for (const p of payments) {
+    const code = p.customId || p.gatewayPaymentId;
+    if (code) {
+      const match = code.match(/^PAYID(\d+)$/i);
+      if (match) {
+        const val = parseInt(match[1], 10);
+        if (!isNaN(val) && val > maxNum) {
+          maxNum = val;
+        }
+      }
+    }
+  }
+
+  const nextNum = maxNum + 1;
+  const padding = nextNum > 999999 ? String(nextNum).length : 6;
+  return `PAYID${padNumber(nextNum, padding)}`;
+}
+
+/**
+ * Returns formatted display Trial ID (e.g. TL00001).
+ */
+export function getTrialDisplayId(trial?: {
+  customId?: string | null;
+  id?: string;
+} | null): string {
+  if (trial?.customId && trial.customId.startsWith("TL")) {
+    return trial.customId;
+  }
+  return trial?.customId || "TL00001";
+}
+
+/**
+ * Returns formatted display Payment Receipt ID (e.g. PAYID000001).
+ */
+export function getPaymentReceiptDisplayId(payment?: {
+  customId?: string | null;
+  gatewayPaymentId?: string | null;
+  id?: string;
+} | null): string {
+  if (payment?.customId && payment.customId.startsWith("PAYID")) {
+    return payment.customId;
+  }
+  if (payment?.gatewayPaymentId && payment.gatewayPaymentId.startsWith("PAYID")) {
+    return payment.gatewayPaymentId;
+  }
+  return payment?.customId || payment?.gatewayPaymentId || "PAYID000001";
+}
+
+

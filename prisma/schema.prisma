@@ -359,6 +359,7 @@ model Enrollment {
 
 model Payment {
   id               String        @id @default(cuid())
+  customId         String?       @unique // e.g. PAYID000001
   studentId        String
   enrollmentId     String?
   amountMinorUnits Int
@@ -449,6 +450,7 @@ model TicketMessage {
 
 model TrialRequest {
   id                String             @id @default(cuid())
+  customId          String?            @unique // e.g. TL00001
   studentId         String
   category          String
   instrument        String

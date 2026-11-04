@@ -51,6 +51,7 @@ import {
 
 export interface FormattedPaymentItem {
   id: string;
+  customId?: string | null;
   createdAt: string; // ISO string
   createdAtFormatted: string;
   dateKey: string; // YYYY-MM-DD
@@ -637,8 +638,9 @@ export function OverallPaymentsManager({
           const matchEmail = p.student.email.toLowerCase().includes(q);
           const matchOrder = p.gatewayOrderId.toLowerCase().includes(q);
           const matchPayment = p.gatewayPaymentId?.toLowerCase().includes(q) || false;
+          const matchReceipt = p.customId?.toLowerCase().includes(q) || false;
           const matchCourse = p.course.title.toLowerCase().includes(q);
-          return matchStudent || matchEmail || matchOrder || matchPayment || matchCourse;
+          return matchStudent || matchEmail || matchOrder || matchPayment || matchReceipt || matchCourse;
         }
 
         return true;
@@ -681,6 +683,7 @@ export function OverallPaymentsManager({
 
     const rows = displayPayments.map((p) => [
       p.id,
+      p.customId || p.gatewayPaymentId || "N/A",
       p.gatewayOrderId,
       p.gatewayPaymentId || "N/A",
       p.createdAtFormatted,
@@ -1320,20 +1323,18 @@ export function OverallPaymentsManager({
                       {/* Gateway Reference */}
                       <td className="py-3.5 px-4 whitespace-nowrap">
                         <div className="flex items-center gap-1.5 font-mono text-[11px] text-body">
-                          <span>
-                            {p.gatewayPaymentId
-                              ? p.gatewayPaymentId
-                              : p.gatewayOrderId}
+                          <span className={p.customId ? "font-bold text-primary" : ""}>
+                            {p.customId || p.gatewayPaymentId || p.gatewayOrderId}
                           </span>
                           <button
                             onClick={() =>
                               handleCopy(
-                                p.gatewayPaymentId || p.gatewayOrderId,
+                                p.customId || p.gatewayPaymentId || p.gatewayOrderId,
                                 p.id,
                               )
                             }
                             className="p-1 rounded hover:bg-gray-100 text-body/60 hover:text-heading transition-all"
-                            title="Copy transaction ID"
+                            title="Copy receipt / transaction ID"
                           >
                             {copiedId === p.id ? (
                               <Check className="w-3 h-3 text-emerald-600" />
@@ -1473,6 +1474,13 @@ export function OverallPaymentsManager({
                 <span className="text-body">Transaction Timestamp</span>
                 <span className="text-heading">
                   {activeModalPayment.createdAtFormatted}
+                </span>
+              </div>
+
+              <div className="flex justify-between py-1.5 border-b border-gray-50">
+                <span className="text-body font-medium">Receipt ID</span>
+                <span className="font-mono text-xs font-bold text-primary">
+                  {activeModalPayment.customId || activeModalPayment.gatewayPaymentId || "PAYID000001"}
                 </span>
               </div>
 

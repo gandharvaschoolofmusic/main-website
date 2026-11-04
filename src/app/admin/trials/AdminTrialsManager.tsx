@@ -44,6 +44,7 @@ import {
 
 export interface AdminTrialRequestItem {
   id: string;
+  customId?: string | null;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -541,12 +542,16 @@ export function AdminTrialsManager({
         const matchesInst = r.instrument.toLowerCase().includes(q);
         const matchesTeacher =
           r.allottedTeacherName?.toLowerCase().includes(q) ?? false;
+        const matchesId =
+          (r.customId?.toLowerCase().includes(q) ?? false) ||
+          r.id.toLowerCase().includes(q);
         if (
           !matchesName &&
           !matchesEmail &&
           !matchesPhone &&
           !matchesInst &&
-          !matchesTeacher
+          !matchesTeacher &&
+          !matchesId
         ) {
           return false;
         }
@@ -1269,6 +1274,7 @@ export function AdminTrialsManager({
       if (res.success) {
         const newLeadItem: AdminTrialRequestItem = {
           id: res.data?.trialRequestId || `trl-${Date.now()}`,
+          customId: res.data?.customId || null,
           studentId: `usr-${Date.now()}`,
           studentName: newLeadName,
           studentEmail: newLeadEmail,
@@ -1888,8 +1894,13 @@ export function AdminTrialsManager({
                               {getInitials(req.studentName)}
                             </div>
                             <div>
-                              <div className="font-bold text-heading text-xs">
-                                {req.studentName}
+                              <div className="flex items-center gap-1.5">
+                                <span className="font-bold text-heading text-xs">
+                                  {req.studentName}
+                                </span>
+                                <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
+                                  {req.customId || "TL00001"}
+                                </span>
                               </div>
                               <div className="text-[11px] text-body/60 mt-0.5">
                                 {req.studentEmail}
@@ -1982,8 +1993,11 @@ export function AdminTrialsManager({
                   <h3 className="font-serif text-xl font-bold text-heading">
                     {selectedLead.studentName}
                   </h3>
-                  <div className="text-xs text-body/70 mt-0.5">
-                    {selectedLead.instrument} · {selectedLead.category}
+                  <div className="text-xs text-body/70 mt-0.5 flex items-center gap-1.5">
+                    <span className="font-mono text-[10px] font-bold text-primary bg-primary/10 px-1.5 py-0.2 rounded">
+                      {selectedLead.customId || "TL00001"}
+                    </span>
+                    <span>· {selectedLead.instrument} · {selectedLead.category}</span>
                   </div>
                 </div>
                 {renderStatusBadge(selectedLead)}
@@ -2169,8 +2183,8 @@ export function AdminTrialsManager({
                     </h2>
                     {renderStatusBadge(drawerLead)}
                   </div>
-                  <p className="text-[10px] text-body/60 font-mono">
-                    REF: #{drawerLead.id.slice(-6).toUpperCase()}
+                  <p className="text-[10px] text-body/60 font-mono font-medium">
+                    REF: {drawerLead.customId || "TL00001"}
                   </p>
                 </div>
               </div>

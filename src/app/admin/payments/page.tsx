@@ -92,6 +92,7 @@ const getCachedAdminPaymentsData = unstable_cache(
 
       return {
         id: p.id,
+        customId: p.customId || null,
         createdAt: p.createdAt.toISOString(),
         createdAtFormatted: formatInViewerTimezone(
           p.createdAt,

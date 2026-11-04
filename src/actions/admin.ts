@@ -27,7 +27,7 @@ import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
-import { generateNextStudentId } from "@/lib/id-generator";
+import { generateNextStudentId, generateNextTrialId, generateNextPaymentReceiptId } from "@/lib/id-generator";
 import { createNotification } from "@/actions/notifications";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 import { formatToIST, formatInViewerTimezone } from "@/lib/timezone";
@@ -2384,7 +2384,7 @@ export async function adminApproveAndAllotCourseAction(input: {
   paymentPlan?: CoursePaymentPlan;
   adminNotes?: string | null;
   slots?: Array<{ startsAt: string; durationMinutes?: number }>;
-}): Promise<AdminActionResponse<{ enrollmentId: string; scheduledCount?: number; newLessons?: any[] }>> {
+}): Promise<AdminActionResponse<{ enrollmentId: string; scheduledCount?: number; newLessons?: any[]; paymentReceiptCode?: string | null }>> {
   try {
     await requireRole(Role.ADMIN);
 
@@ -2419,6 +2419,7 @@ export async function adminApproveAndAllotCourseAction(input: {
     const paymentPlan = input.paymentPlan || CoursePaymentPlan.FULL_PAYMENT;
 
     // Run transaction
+    let paymentReceiptCode: string | null = null;
     const enrollment = await db.$transaction(async (tx) => {
       // 1. Create active enrollment
       const enr = await tx.enrollment.create({
@@ -2440,9 +2441,11 @@ export async function adminApproveAndAllotCourseAction(input: {
 
       // 2. If student paid any amount, record Payment
       if (input.paidRupees > 0) {
-        const receiptCode = `RCPT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const receiptCode = await generateNextPaymentReceiptId(tx);
+        paymentReceiptCode = receiptCode;
         const pmt = await tx.payment.create({
           data: {
+            customId: receiptCode,
             studentId: student.id,
             enrollmentId: enr.id,
             amountMinorUnits: Math.round(input.paidRupees * 100),
@@ -2591,7 +2594,7 @@ export async function adminApproveAndAllotCourseAction(input: {
     return {
       success: true,
       message: `Course "${course.title}" approved and allotted to ${student.name}!`,
-      data: { enrollmentId: enrollment.id, scheduledCount, newLessons },
+      data: { enrollmentId: enrollment.id, scheduledCount, newLessons, paymentReceiptCode },
     };
   } catch (error: any) {
     logger.error({ error }, "Error approving and allotting course");
@@ -2618,7 +2621,7 @@ export async function createAdminTrialLeadAction(input: {
   leadIntent?: string;
   leadOwner?: string;
   studentNotes?: string;
-}): Promise<AdminActionResponse<{ trialRequestId: string }>> {
+}): Promise<AdminActionResponse<{ trialRequestId: string; customId?: string | null }>> {
   try {
     await requireRole(Role.ADMIN);
 
@@ -2667,8 +2670,11 @@ export async function createAdminTrialLeadAction(input: {
     const startsAt = new Date(input.requestedStartsAt);
     const validStartsAt = !isNaN(startsAt.getTime()) ? startsAt : new Date();
 
+    const trialCustomId = await generateNextTrialId(db);
+
     const trial = await db.trialRequest.create({
       data: {
+        customId: trialCustomId,
         studentId: student.id,
         studentName: input.studentName.trim(),
         studentEmail: email,
@@ -2688,7 +2694,7 @@ export async function createAdminTrialLeadAction(input: {
     });
 
     revalidatePath("/admin/trials");
-    return { success: true, data: { trialRequestId: trial.id } };
+    return { success: true, data: { trialRequestId: trial.id, customId: trial.customId } };
   } catch (error) {
     logger.error({ error }, "Error creating admin trial lead");
     return { success: false, error: "Failed to create trial lead." };
@@ -2970,12 +2976,13 @@ export async function adminRecordEnrollmentPaymentAction(input: {
 
     const receiptCode =
       input.referenceCode?.trim() ||
-      `RCPT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+      (await generateNextPaymentReceiptId(db));
     const gateway = input.paymentMethod?.trim() || "UPI";
     const amountMinorUnits = Math.round(input.amountRupees * 100);
 
     const payment = await db.payment.create({
       data: {
+        customId: receiptCode.startsWith("PAYID") ? receiptCode : await generateNextPaymentReceiptId(db),
         studentId: enrollment.student.id,
         enrollmentId: enrollment.id,
         amountMinorUnits,

@@ -81,6 +81,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
           where: { isConverted: true },
           select: {
             id: true,
+            customId: true,
             studentId: true,
             studentName: true,
             studentEmail: true,
@@ -137,6 +138,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
             payment: {
               select: {
                 id: true,
+                customId: true,
                 amountMinorUnits: true,
                 status: true,
                 gatewayPaymentId: true,
@@ -146,6 +148,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
               orderBy: { createdAt: "asc" },
               select: {
                 id: true,
+                customId: true,
                 amountMinorUnits: true,
                 currency: true,
                 gateway: true,
@@ -237,10 +240,17 @@ const getCachedAdminEnrollmentsData = unstable_cache(
         teacherName: (l.teacherId ? teacherMap.get(l.teacherId)?.name : null) || assignedFaculty?.name || "Assigned Faculty",
         payoutRupees: (l.teacherId ? teacherMap.get(l.teacherId)?.payoutRupees : null) || assignedFaculty?.payoutRupees || 800,
       })),
-      payment: e.payment,
+      payment: e.payment ? {
+        id: e.payment.id,
+        customId: e.payment.customId || null,
+        amountMinorUnits: e.payment.amountMinorUnits,
+        status: e.payment.status,
+        gatewayPaymentId: e.payment.gatewayPaymentId,
+      } : null,
       payments: (e.payments && e.payments.length > 0)
         ? e.payments.map((p: any) => ({
             id: p.id,
+            customId: p.customId || null,
             amountMinorUnits: p.amountMinorUnits,
             currency: p.currency,
             gateway: p.gateway,
@@ -254,10 +264,11 @@ const getCachedAdminEnrollmentsData = unstable_cache(
         ? [
             {
               id: e.payment.id,
+              customId: e.payment.customId || null,
               amountMinorUnits: e.payment.amountMinorUnits,
               currency: "INR",
               gateway: "manual",
-              gatewayPaymentId: e.payment.gatewayPaymentId || `RCPT-INIT-${e.id.slice(-4)}`,
+              gatewayPaymentId: e.payment.gatewayPaymentId || e.payment.customId || "PAYID000001",
               gatewayOrderId: null,
               status: e.payment.status,
               notes: "Initial admission payment tranche",
@@ -300,6 +311,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
 
   const formattedTrialLeads: TrialLeadOption[] = dbTrialLeads.map((t) => ({
     id: t.id,
+    customId: t.customId || null,
     studentId: t.studentId,
     studentName: t.studentName,
     studentEmail: t.studentEmail,

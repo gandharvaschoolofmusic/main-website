@@ -2802,7 +2802,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 <input
                   type="text"
                   name="reference"
-                  placeholder="RCPT-8621"
+                  placeholder="e.g. PAYID000001 or Cheque/UTR (auto-generated if empty)"
                   className="w-full px-3 py-2 rounded-xl border border-neutral-200 text-heading focus:outline-none focus:border-[#3C096C]"
                 />
               </div>

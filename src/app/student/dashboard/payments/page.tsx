@@ -91,6 +91,7 @@ export default async function StudentPaymentsPage() {
 
     return {
       id: p.id,
+      customId: p.customId || null,
       gatewayPaymentId: p.gatewayPaymentId,
       gatewayOrderId: p.gatewayOrderId,
       amountMinorUnits: p.amountMinorUnits,

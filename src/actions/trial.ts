@@ -9,7 +9,7 @@ import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
 import { normalizePhoneNumber, isValidPhoneNumber, validateAndConsumePhoneOtp } from "@/lib/phone";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
-import { generateNextStudentId } from "@/lib/id-generator";
+import { generateNextStudentId, generateNextTrialId } from "@/lib/id-generator";
 
 const CreateTrialRequestSchema = z.object({
   category: z.string().min(1, "Category is required"),
@@ -340,8 +340,11 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
       validated.timezone
     );
 
+    const trialCustomId = await generateNextTrialId(db);
+
     const trialRequest = await db.trialRequest.create({
       data: {
+        customId: trialCustomId,
         studentId: studentUserId,
         category: validated.category,
         instrument: validated.instrument,
@@ -362,14 +365,14 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
       await notifyAdmins({
         type: NotificationType.NEW_TRIAL_REQUEST,
         title: "New Trial Request",
-        body: `${validated.studentName} requested a 1:1 trial session for ${validated.instrument} (${validated.timeSlot}).`,
+        body: `${validated.studentName} requested a 1:1 trial session for ${validated.instrument} (${trialCustomId}).`,
         link: "/admin/trials",
       });
       await createNotification({
         userId: studentUserId,
         type: NotificationType.NEW_TRIAL_REQUEST,
         title: "Trial Request Received",
-        body: `Your trial request for ${validated.instrument} has been received. Our team is assigning a maestro.`,
+        body: `Your trial request for ${validated.instrument} (${trialCustomId}) has been received. Our team is assigning a maestro.`,
         link: "/student/dashboard",
       });
     } catch {

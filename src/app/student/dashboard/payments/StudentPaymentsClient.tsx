@@ -16,6 +16,7 @@ import Link from "next/link";
 
 export interface StudentPaymentRecord {
   id: string;
+  customId?: string | null;
   gatewayPaymentId: string | null;
   gatewayOrderId: string;
   amountMinorUnits: number;
@@ -87,7 +88,7 @@ export function StudentPaymentsClient({
               <tr>
                 <th className="py-3.5 px-4">Date & Time</th>
                 <th className="py-3.5 px-4">Course / Program</th>
-                <th className="py-3.5 px-4">Razorpay Reference</th>
+                <th className="py-3.5 px-4">Receipt / Reference</th>
                 <th className="py-3.5 px-4 text-right">Amount Paid</th>
                 <th className="py-3.5 px-4 text-center">Status</th>
                 <th className="py-3.5 px-4 text-right">Receipt</th>
@@ -138,12 +139,15 @@ export function StudentPaymentsClient({
                     </td>
 
                     <td className="py-3.5 px-4 font-mono text-[11px]">
+                      <div className="font-bold text-heading">
+                        {p.customId || "PAYID000001"}
+                      </div>
                       {p.gatewayPaymentId ? (
-                        <div className="text-primary font-medium">
-                          {p.gatewayPaymentId}
+                        <div className="text-[10px] text-primary font-medium">
+                          Ref: {p.gatewayPaymentId}
                         </div>
                       ) : (
-                        <div className="text-body-muted">Order: {p.gatewayOrderId}</div>
+                        <div className="text-[10px] text-body-muted">Order: {p.gatewayOrderId}</div>
                       )}
                     </td>
 
@@ -234,8 +238,8 @@ export function StudentPaymentsClient({
                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase bg-emerald-50 text-emerald-700 border border-emerald-200">
                     <CheckCircle2 className="w-3 h-3" /> Paid & Verified
                   </span>
-                  <p className="font-mono text-[10px] text-body-muted mt-1">
-                    RCPT-{selectedReceipt.id.slice(-8).toUpperCase()}
+                  <p className="font-mono text-xs font-bold text-primary mt-1">
+                    Receipt No: {selectedReceipt.customId || selectedReceipt.gatewayPaymentId || "PAYID000001"}
                   </p>
                 </div>
               </div>
@@ -313,6 +317,12 @@ export function StudentPaymentsClient({
 
               {/* Total & Payment Gateway Breakdown */}
               <div className="p-4 rounded-2xl bg-bg-alt/30 border border-border-subtle space-y-2">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-body-muted">Receipt Number:</span>
+                  <span className="font-mono font-bold text-heading">
+                    {selectedReceipt.customId || selectedReceipt.gatewayPaymentId || "PAYID000001"}
+                  </span>
+                </div>
                 <div className="flex justify-between items-center text-xs">
                   <span className="text-body-muted">Payment Gateway:</span>
                   <span className="font-semibold text-heading">

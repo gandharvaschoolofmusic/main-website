@@ -79,6 +79,7 @@ export interface ScheduledLessonData {
 
 export interface EnrollmentPaymentItem {
   id: string;
+  customId?: string | null;
   amountMinorUnits: number;
   currency: string;
   gateway: string;
@@ -119,6 +120,7 @@ export interface EnrollmentRecord {
   lessons: ScheduledLessonData[];
   payment?: {
     id: string;
+    customId?: string | null;
     amountMinorUnits: number;
     status: PaymentStatus;
     gatewayPaymentId: string | null;
@@ -158,6 +160,7 @@ export interface StudentOption {
 
 export interface TrialLeadOption {
   id: string;
+  customId?: string | null;
   studentId: string;
   studentName: string;
   studentEmail: string;
@@ -578,10 +581,11 @@ export function AdminEnrollmentsManager({
       return [
         {
           id: activeEnrollment.payment.id,
+          customId: activeEnrollment.payment.customId || null,
           amountMinorUnits: activeEnrollment.payment.amountMinorUnits,
           currency: "INR",
           gateway: "manual",
-          gatewayPaymentId: activeEnrollment.payment.gatewayPaymentId || `RCPT-INIT-${activeEnrollment.id.slice(-4)}`,
+          gatewayPaymentId: activeEnrollment.payment.gatewayPaymentId || activeEnrollment.payment.customId || "PAYID000001",
           gatewayOrderId: null,
           status: activeEnrollment.payment.status,
           notes: "Initial admission payment tranche",
@@ -935,9 +939,10 @@ export function AdminEnrollmentsManager({
         }
 
         const teacherObj = teachers.find((t) => t.id === ctx.teacherId);
-        const initialReceipt = `RCPT-${new Date().getFullYear()}-${Math.floor(1000 + Math.random() * 9000)}`;
+        const initialReceipt = (res.data as any)?.paymentReceiptCode || "PAYID000001";
         const initialPaymentItem: EnrollmentPaymentItem = {
           id: `pmt_${res.data.enrollmentId}`,
+          customId: initialReceipt,
           amountMinorUnits: Math.round(ctx.paidRupees * 100),
           currency: "INR",
           gateway: "UPI",
@@ -1435,7 +1440,9 @@ export function AdminEnrollmentsManager({
           <div className="min-w-0">
             <div className="text-xs font-bold text-heading">Trial</div>
             <div className="text-[11px] text-body/60 truncate font-numeric">
-              {linkedTrialId ? `TRL-${linkedTrialId.slice(-6)} · Complete` : "TRL-2026-1048 · Complete"}
+              {linkedTrialId
+                ? `${trialLeads.find((t) => t.id === linkedTrialId)?.customId || "TL00001"} · Complete`
+                : "TL00001 · Complete"}
             </div>
           </div>
         </div>
@@ -3409,7 +3416,7 @@ export function AdminEnrollmentsManager({
                     const isAdmission = idx === 0 || pmt.notes?.toLowerCase().includes("initial") || pmt.notes?.toLowerCase().includes("admission");
                     const trancheLabel = isAdmission && idx === 0 ? "1st · Admission" : `${idx + 1}${idx === 1 ? "nd" : idx === 2 ? "rd" : "th"} · Installment`;
                     const amt = Math.round(pmt.amountMinorUnits / 100);
-                    const rcpt = pmt.gatewayPaymentId || `RCPT-${pmt.id.slice(-6)}`;
+                    const rcpt = pmt.customId || pmt.gatewayPaymentId || "PAYID000001";
 
                     return (
                       <div
