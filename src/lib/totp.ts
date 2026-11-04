@@ -171,3 +171,4 @@ export function formatSecretForDisplay(secret: string): string {
   const clean = secret.replace(/[\s-]/g, "").toUpperCase();
   return clean.match(/.{1,4}/g)?.join(" ") || clean;
 }
+

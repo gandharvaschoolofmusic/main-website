@@ -161,7 +161,7 @@ export function cleanDeviceLabel(label: string, kind: MediaDeviceKind): string |
   }
 
   // 2. Strip Windows virtual alias prefixes, hardware hex codes, and audio mode suffixes
-  let s = label
+  const s = label
     .replace(/^(Default|Communications)\s*-\s*/i, "")
     .replace(/\s*\([0-9a-fA-F]{4}:[0-9a-fA-F]{4}\)/g, "")
     .replace(/\s*(Hands-Free AG Audio|Hands-Free Audio|Hands-Free)\s*/gi, " ")
@@ -224,7 +224,7 @@ export function getCleanDeviceList(
   const defaultEntry = devices.find(
     (d) =>
       d.kind === kind &&
-      (d.deviceId === "default" || /^(Default|Communications)\s*-/i.test(d.label)),
+      (d.deviceId === "default" || /^Default\s*-/i.test(d.label)),
   );
   const detectedDefaultLabel = defaultEntry
     ? cleanDeviceLabel(defaultEntry.label, kind)
@@ -242,11 +242,11 @@ export function getCleanDeviceList(
     },
   ];
 
-  const seenLabels = new Set<string>();
+  const labelCounts = new Map<string, number>();
   const seenIds = new Set<string>();
 
   for (const device of devices) {
-    if (device.kind !== kind) continue;
+    if (device.kind !== kind || !device.deviceId || seenIds.has(device.deviceId)) continue;
 
     // Skip virtual duplicate aliases ("default" and "communications")
     if (device.deviceId === "default" || device.deviceId === "communications") {
@@ -260,15 +260,13 @@ export function getCleanDeviceList(
     if (!cleaned) continue; // Loopback or invalid
 
     const normalizedKey = cleaned.toLowerCase();
-    if (seenLabels.has(normalizedKey) || seenIds.has(device.deviceId)) {
-      continue;
-    }
-    seenLabels.add(normalizedKey);
+    const count = (labelCounts.get(normalizedKey) ?? 0) + 1;
+    labelCounts.set(normalizedKey, count);
     seenIds.add(device.deviceId);
 
     result.push({
       deviceId: device.deviceId,
-      label: cleaned,
+      label: count === 1 ? cleaned : `${cleaned} (${count})`,
     });
   }
 

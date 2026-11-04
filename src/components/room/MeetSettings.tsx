@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { useRoomContext } from "@livekit/components-react";
+import { RoomEvent } from "livekit-client";
 import { Mic, Video, Settings, Captions, Smile, Volume2 } from "lucide-react";
 import type { AudioMode } from "@/lib/audio-engine";
 import { getCleanDeviceList } from "@/lib/media-devices";
@@ -60,6 +61,14 @@ export function MeetSettings({
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
+    const activeChanged = (kind: MediaDeviceKind, id: string) => {
+      if (kind === "audiooutput") setSpeaker(id);
+    };
+    room.on(RoomEvent.ActiveDeviceChanged, activeChanged);
+    return () => { room.off(RoomEvent.ActiveDeviceChanged, activeChanged); };
+  }, [room]);
+
+  useEffect(() => {
     let active = true;
     const update = () =>
       navigator.mediaDevices
@@ -106,7 +115,7 @@ export function MeetSettings({
         <select
           aria-label={label}
           value={normalizedValue}
-          disabled={busy}
+          disabled={busy || (kind === "audioinput" && switchingAudio)}
           onChange={(event) => void run(() => onChange(event.target.value))}
         >
           {cleanList.map((device) => (
@@ -121,18 +130,20 @@ export function MeetSettings({
 
   async function testSpeaker() {
     const context = new AudioContext();
+    const output = new Audio();
+    const destination = context.createMediaStreamDestination();
     try {
-      if ("setSinkId" in context) {
-        await (context as AudioContext & { setSinkId: (id: string) => Promise<void> }).setSinkId(
-          speaker === "default" || speaker === "" ? "" : speaker,
-        );
+      output.srcObject = destination.stream;
+      if (speaker && speaker !== "default") {
+        if (typeof output.setSinkId !== "function") throw new Error("This browser can only test the system speaker.");
+        await output.setSinkId(speaker);
       }
-      await context.resume();
+      await Promise.all([context.resume(), output.play()]);
       const oscillator = context.createOscillator();
       const gain = context.createGain();
       oscillator.frequency.value = 440;
       gain.gain.value = 0.07;
-      oscillator.connect(gain).connect(context.destination);
+      oscillator.connect(gain).connect(destination);
       oscillator.start();
       gain.gain.exponentialRampToValueAtTime(0.001, context.currentTime + 0.6);
       await new Promise<void>((resolve) => {
@@ -140,6 +151,9 @@ export function MeetSettings({
         oscillator.stop(context.currentTime + 0.7);
       });
     } finally {
+      output.pause();
+      output.srcObject = null;
+      destination.stream.getTracks().forEach(track => track.stop());
       await context.close();
     }
   }
@@ -172,7 +186,9 @@ export function MeetSettings({
               {selectDevice("audioinput", "Microphone", audioDeviceId, onAudioDevice)}
               <div className="meet-speaker-field">
                 {selectDevice("audiooutput", "Speaker", speaker, async (id) => {
-                  await room.switchActiveDevice("audiooutput", id || "default");
+                  if (!await room.switchActiveDevice("audiooutput", id || "default")) {
+                    throw new Error("Could not switch to the selected speaker.");
+                  }
                   setSpeaker(id || "default");
                 })}
                 <button

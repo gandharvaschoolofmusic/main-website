@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 
-import { AudioMode } from "@/lib/audio-engine";
+import type { AudioMode } from "@/lib/audio-engine";
+import { microphoneOptions } from "@/lib/lesson-microphone";
 import { getCleanDeviceList, CleanedDeviceOption } from "@/lib/media-devices";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Music, ArrowLeft } from "lucide-react";
@@ -47,161 +48,96 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
 
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
-  // Load saved audio mode preference from localStorage and clear legacy persistent mute flags
-  useEffect(() => {
-    try {
-      const savedMode = localStorage.getItem("toneroom_audio_mode") as AudioMode;
-      // Restore the existing saved audio preference after hydration; never change it during a UI redesign.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      if (savedMode === "TALKING" || savedMode === "PLAYING") setAudioMode(savedMode);
+  const previewRequest = useRef(0);
+  const [changingPreview, setChangingPreview] = useState(false);
+  const releasePreview = useCallback(() => {
+    previewRequest.current++;
+    streamRef.current?.getTracks().forEach(track => track.stop());
+    streamRef.current = null;
+  }, []);
 
-      // Clean up legacy persistent mute keys so microphone is never trapped muted
+  const refreshDevices = useCallback(async () => {
+    try {
+      const devices = await navigator.mediaDevices.enumerateDevices();
+      setAudioDevices(getCleanDeviceList(devices, "audioinput", "Default microphone"));
+      setVideoDevices(getCleanDeviceList(devices, "videoinput", "Default camera"));
+    } catch { /* Capture can still work when device enumeration is unavailable. */ }
+  }, []);
+
+  const openPreview = useCallback(async (micId: string, camId: string, mode: AudioMode, restore = false, keepCamera = false) => {
+    const request = ++previewRequest.current;
+    setChangingPreview(!restore);
+    const input = (id: string) => id ? { deviceId: restore ? { ideal: id } : { exact: id } } : true;
+    const audio = microphoneOptions({ deviceId: micId, mode });
+    if (restore && micId) audio.deviceId = { ideal: micId };
+    let acquired: MediaStream | undefined;
+    try {
+      const previousCamera = keepCamera ? streamRef.current?.getVideoTracks().find(track => track.readyState === "live") : undefined;
+      try {
+        acquired = await navigator.mediaDevices.getUserMedia({ audio, video: previousCamera ? false : input(camId) });
+      } catch (error) {
+        if (request !== previewRequest.current) return;
+        if (previousCamera) throw error;
+        try {
+          acquired = await navigator.mediaDevices.getUserMedia({ audio });
+        } catch (micError) {
+          if (!restore || request !== previewRequest.current) throw micError;
+          acquired = await navigator.mediaDevices.getUserMedia({ video: input(camId) });
+        }
+      }
+      if (request !== previewRequest.current) return;
+      if (previousCamera) acquired.addTrack(previousCamera);
+      const cameraUnavailable = !acquired.getVideoTracks().length;
+      void refreshDevices();
+      const actualMic = acquired.getAudioTracks()[0]?.getSettings().deviceId;
+      const actualCam = acquired.getVideoTracks()[0]?.getSettings().deviceId;
+      setSelectedAudioDevice(micId && actualMic === micId ? micId : "");
+      setSelectedVideoDevice(camId && actualCam === camId ? camId : "");
+      if (cameraUnavailable) setIsVideoMuted(true);
+      const micUnavailable = !acquired.getAudioTracks().length;
+      setDeviceError(micUnavailable ? "Microphone unavailable. Check permissions or choose another microphone." :
+        cameraUnavailable ? "Camera unavailable. Your microphone is ready." : null);
+      streamRef.current?.getTracks().forEach(track => { if (track !== previousCamera) track.stop(); });
+      streamRef.current = acquired;
+      setAudioMode(mode);
+      setStream(acquired);
+      if (videoRef.current) videoRef.current.srcObject = acquired;
+    } catch {
+      if (request !== previewRequest.current) return;
+      setDeviceError("Could not open the microphone. Check browser permissions or select another input.");
+    } finally {
+      if (acquired && acquired !== streamRef.current) acquired.getTracks().forEach(track => track.stop());
+      if (request === previewRequest.current) setChangingPreview(false);
+    }
+  }, [refreshDevices]);
+
+  useEffect(() => {
+    let mic = "";
+    let cam = "";
+    let mode: AudioMode = "TALKING";
+    try {
+      mic = localStorage.getItem("toneroom_mic_id") || "";
+      cam = localStorage.getItem("toneroom_cam_id") || "";
+      if (localStorage.getItem("toneroom_audio_mode") === "PLAYING") mode = "PLAYING";
       localStorage.removeItem("toneroom_mic_muted");
       localStorage.removeItem("toneroom_cam_muted");
-    } catch {
-      // Ignore localStorage errors
-    }
-  }, []);
-
-  // Request media permissions and enumerate devices
-  useEffect(() => {
-    let active = true;
-
-    async function setupDevices() {
-      try {
-        setDeviceError(null);
-        // Initial permission request: try video and audio together, fallback to audio-only if camera is busy or unavailable
-        let initialStream: MediaStream;
-        try {
-          initialStream = await navigator.mediaDevices.getUserMedia({
-            video: true,
-            audio: true,
-          });
-        } catch (mediaErr: unknown) {
-          console.warn("Could not acquire both video and audio, trying audio only:", mediaErr);
-          try {
-            initialStream = await navigator.mediaDevices.getUserMedia({
-              audio: true,
-            });
-            setIsVideoMuted(true);
-            setDeviceError(
-              "Camera is currently unavailable (it may be in use by another browser tab or app). Audio is ready.",
-            );
-          } catch {
-            throw mediaErr;
-          }
-        }
-
-        if (!active) {
-          initialStream.getTracks().forEach((t) => t.stop());
-          return;
-        }
-
-        streamRef.current = initialStream;
-        setStream(initialStream);
-
-        if (videoRef.current) {
-          videoRef.current.srcObject = initialStream;
-        }
-
-        // Enumerate devices with clean, deduplicated, and friendly labels
-        const rawDevices = await navigator.mediaDevices.enumerateDevices();
-        const mics = getCleanDeviceList(rawDevices, "audioinput", "Default microphone");
-        const cams = getCleanDeviceList(rawDevices, "videoinput", "Default camera");
-
-        setAudioDevices(mics);
-        setVideoDevices(cams);
-
-        let savedMic: string | null = null;
-        let savedCam: string | null = null;
-        try {
-          savedMic = localStorage.getItem("toneroom_mic_id");
-          savedCam = localStorage.getItem("toneroom_cam_id");
-        } catch {
-          // Ignore
-        }
-
-        // Match saved mic or default to first available
-        const matchedMic = mics.find((m) => m.deviceId === savedMic);
-        if (matchedMic) {
-          setSelectedAudioDevice(matchedMic.deviceId);
-        } else if (mics[0]) {
-          setSelectedAudioDevice(mics[0].deviceId);
-        }
-
-        // Match saved cam or default to first available
-        const matchedCam = cams.find((c) => c.deviceId === savedCam);
-        if (matchedCam) {
-          setSelectedVideoDevice(matchedCam.deviceId);
-        } else if (cams[0]) {
-          setSelectedVideoDevice(cams[0].deviceId);
-        }
-      } catch (err: unknown) {
-        const error = err as Error;
-        setDeviceError(
-          error.message ||
-            "Please grant microphone and camera permissions to join the lesson room.",
-        );
-      }
-    }
-
-    setupDevices();
-
-    const handleBeforeUnload = () => {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-    };
-    window.addEventListener("beforeunload", handleBeforeUnload);
-    window.addEventListener("pagehide", handleBeforeUnload);
-
+    } catch { /* Storage is optional. */ }
+    setAudioMode(mode);
+    void refreshDevices();
+    navigator.mediaDevices?.addEventListener("devicechange", refreshDevices);
+    void openPreview(mic, cam, mode, true);
+    window.addEventListener("pagehide", releasePreview);
     return () => {
-      active = false;
-      window.removeEventListener("beforeunload", handleBeforeUnload);
-      window.removeEventListener("pagehide", handleBeforeUnload);
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
+      window.removeEventListener("pagehide", releasePreview);
+      navigator.mediaDevices?.removeEventListener("devicechange", refreshDevices);
+      releasePreview();
     };
-  }, []);
+  }, [openPreview, releasePreview, refreshDevices]);
 
-  // Handle camera / mic device change in preview
-  const handleDeviceChange = async (newMicId: string, newCamId: string) => {
-    try {
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach((t) => t.stop());
-        streamRef.current = null;
-      }
-
-      let newStream: MediaStream;
-      try {
-        newStream = await navigator.mediaDevices.getUserMedia({
-          audio: newMicId ? { deviceId: { ideal: newMicId } } : true,
-          video: newCamId ? { deviceId: { ideal: newCamId } } : true,
-        });
-      } catch (devErr) {
-        console.warn("Could not switch to ideal device, falling back to default media:", devErr);
-        newStream = await navigator.mediaDevices.getUserMedia({
-          audio: true,
-          video: true,
-        });
-      }
-
-      streamRef.current = newStream;
-      setStream(newStream);
-      if (videoRef.current) {
-        videoRef.current.srcObject = newStream;
-      }
-
-      // Sync mute states
-      newStream.getVideoTracks().forEach((t) => (t.enabled = !isVideoMuted));
-      newStream.getAudioTracks().forEach((t) => (t.enabled = !isAudioMuted));
-    } catch (err) {
-      console.warn("Failed to switch preview device", err);
-    }
-  };
+  useEffect(() => {
+    stream?.getAudioTracks().forEach(track => { track.enabled = !isAudioMuted; });
+    stream?.getVideoTracks().forEach(track => { track.enabled = !isVideoMuted; });
+  }, [stream, isAudioMuted, isVideoMuted]);
 
   const toggleVideo = () => {
     const nextState = !isVideoMuted;
@@ -229,15 +165,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       // Ignore
     }
 
-    // Explicitly and synchronously stop local preview tracks before handoff to LiveKit
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      setStream(null);
-    }
+    releasePreview();
 
     onJoin({
       audioDeviceId: selectedAudioDevice,
@@ -249,18 +177,15 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   };
 
   const handleCancel = () => {
-    if (streamRef.current) {
-      streamRef.current.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    }
-    if (stream) {
-      stream.getTracks().forEach((t) => t.stop());
-      setStream(null);
-    }
+    releasePreview();
     onCancel?.();
   };
 
-  const canJoin = audioMode === "TALKING" || headphonesAcknowledged;
+  const canJoin = !changingPreview && (audioMode === "TALKING" || headphonesAcknowledged);
+  const changeMode = (mode: AudioMode) => {
+    if (!streamRef.current?.getAudioTracks().length) setAudioMode(mode);
+    void openPreview(selectedAudioDevice, selectedVideoDevice, mode, false, true);
+  };
 
   return (
     <div className="meet-prejoin">
@@ -280,8 +205,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
                 aria-label="Microphone"
                 value={selectedAudioDevice}
                 onChange={(event) => {
-                  setSelectedAudioDevice(event.target.value);
-                  void handleDeviceChange(event.target.value, selectedVideoDevice);
+                  void openPreview(event.target.value, selectedVideoDevice, audioMode, false, true);
                 }}
               >
                 {audioDevices.map((device) => (
@@ -297,8 +221,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
                 aria-label="Camera"
                 value={selectedVideoDevice}
                 onChange={(event) => {
-                  setSelectedVideoDevice(event.target.value);
-                  void handleDeviceChange(selectedAudioDevice, event.target.value);
+                  void openPreview(selectedAudioDevice, event.target.value, audioMode);
                 }}
               >
                 {videoDevices.map((device) => (
@@ -313,7 +236,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
           {deviceError && <p className="meet-chat-warning mt-4" role="alert">{deviceError}</p>}
         </section>
         <section className="meet-ready"><h1>Ready to join?</h1><p>{lesson.instrument} with {lesson.partnerName}</p><p>Your lesson is ready when you are.</p><button type="button" className="meet-primary-button" disabled={!canJoin} onClick={handleJoin}>Join now</button>
-          <div className="meet-prejoin-audio"><label><span><Music size={16} className="inline mr-2"/>Audio mode</span><select aria-label="Audio mode" value={audioMode} onChange={(event) => setAudioMode(event.target.value as AudioMode)}><option value="TALKING">Talking Mode</option><option value="PLAYING">Instrument Mode</option></select></label>{audioMode === "PLAYING" && <label className="meet-headphone-check"><input type="checkbox" checked={headphonesAcknowledged} onChange={(event) => setHeadphonesAcknowledged(event.target.checked)}/><span>I’m wearing headphones to prevent echo in Instrument Mode.</span></label>}</div>
+          <div className="meet-prejoin-audio"><label><span><Music size={16} className="inline mr-2"/>Audio mode</span><select aria-label="Audio mode" value={audioMode} onChange={(event) => changeMode(event.target.value as AudioMode)}><option value="TALKING">Talking Mode</option><option value="PLAYING">Instrument Mode</option></select></label>{audioMode === "PLAYING" && <label className="meet-headphone-check"><input type="checkbox" checked={headphonesAcknowledged} onChange={(event) => setHeadphonesAcknowledged(event.target.checked)}/><span>I’m wearing headphones to prevent echo in Instrument Mode.</span></label>}</div>
           <button type="button" className="meet-text-button" onClick={handleCancel}><ArrowLeft size={16}/>Back to dashboard</button>
         </section>
       </main>

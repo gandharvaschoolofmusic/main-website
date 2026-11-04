@@ -22,6 +22,7 @@ interface Props {
   activeFloorState: TurnTakingState; onFloorChange: (value: TurnTakingState) => void;
   connectionQuality: ConnectionQuality; isReconnecting: boolean; timeFormatted: string;
   availableCameras: MediaDeviceInfo[]; selectedCameraId: string; audioDeviceId: string; multiCam: MultiCameraState;
+  microphoneError: string; onAudioDeviceSwitch: (id: string) => Promise<void>;
   onToggleMic: () => Promise<void>; onToggleVideo: () => Promise<void>; onToggleScreenShare: () => Promise<void>;
   onSwitchAudioMode: (mode: AudioMode) => Promise<void>; onCameraDeviceSwitch: (id: string) => Promise<void>;
   onOpenMultiCam: () => void; onLeave: () => void; children: ReactNode;
@@ -50,7 +51,6 @@ export function MeetRoomUI(props: Props) {
   const [toolsTab, setToolsTab] = useState<"tools" | "addons">("tools");
   const [notice, setNotice] = useState("");
   const [clock, setClock] = useState("");
-  const [audioDevice, setAudioDevice] = useState(props.audioDeviceId);
   const popoverRef = useRef<HTMLDivElement>(null);
   const noticeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const handlers = useRef({ mic: props.onToggleMic, video: props.onToggleVideo });
@@ -95,13 +95,17 @@ export function MeetRoomUI(props: Props) {
     <header className="meet-topbar"><div className="meet-room-heading"><time suppressHydrationWarning>{clock || "--:--"}</time><span className="meet-divider"/><h1>{props.lesson.instrument} lesson</h1><RoomIconButton label="Meeting details" active={panel === "details"} onClick={() => togglePanel("details")}><Info size={17}/></RoomIconButton></div>
       <div className="meet-top-actions"><button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} title="Audio mode"><Mic size={14}/>{props.audioMode === "TALKING" ? "Talking mode" : "Instrument mode"}</button><button type="button" className="meet-people-pill" aria-label={`People (${participants.length})`} aria-expanded={panel === "people"} onClick={() => togglePanel("people")}><span className="meet-mini-avatar">{(room.localParticipant.name || "Y")[0]}</span><Users size={16}/><span>{participants.length}</span></button></div>
     </header>
+    {props.microphoneError && <div className="meet-call-banner" role="alert">
+      <span>{props.microphoneError}</span>
+      <button type="button" onClick={() => openSettings("Audio")}>Audio settings</button>
+    </div>}
     {!canPlayAudio && (
       <div className="meet-call-banner bg-amber-600/90 text-white font-medium flex items-center justify-center gap-2.5 py-2 px-4 shadow-lg" role="alert">
         <VolumeX size={18} />
         <span>Incoming sound is blocked by your browser.</span>
         <button
           type="button"
-          onClick={() => void startAudio()}
+          onClick={() => void run(startAudio)}
           className="ml-2 px-3 py-1 bg-white text-stone-900 rounded-lg text-xs font-bold hover:bg-stone-100 transition-colors shadow-sm cursor-pointer"
         >
           Enable Audio
@@ -138,7 +142,7 @@ export function MeetRoomUI(props: Props) {
       <RoomControls isMuted={props.isMuted} isVideoOff={props.isVideoOff} isScreenSharing={props.isScreenSharing} handRaised={false} captionsOpen={modal === "captions"} reactionsOpen={reactionsOpen} moreOpen={moreOpen} onToggleMic={() => void run(props.onToggleMic)} onToggleVideo={() => void run(props.onToggleVideo)} onToggleScreenShare={() => void run(props.onToggleScreenShare)} onToggleHand={() => setModal("hand")} onToggleCaptions={() => setModal("captions")} onToggleReactions={() => { setReactionsOpen(!reactionsOpen); setMoreOpen(false); }} onToggleMore={() => { setMoreOpen(!moreOpen); setReactionsOpen(false); }} onSettings={openSettings} onLeave={props.onLeave}/>
     </div><nav className="meet-side-dock" aria-label="Meeting panels"><RoomIconButton label="Chat with everyone" active={panel === "chat"} onClick={() => togglePanel("chat")}><MessageSquare/>{unread > 0 && panel !== "chat" && <span className="meet-unread">{unread > 9 ? "9+" : unread}</span>}</RoomIconButton><RoomIconButton label="Meeting tools" active={panel === "tools"} onClick={() => togglePanel("tools")}><Grid3X3/></RoomIconButton><RoomIconButton label="Host controls" active={panel === "host"} onClick={() => togglePanel("host")}><ShieldCheck/></RoomIconButton></nav></footer>
     {notice && <div className="meet-toast" role="status"><span>{notice}</span><RoomIconButton label="Dismiss notification" onClick={() => setNotice("")}><X size={18}/></RoomIconButton></div>}
-    {modal === "settings" && <MeetSettings tab={settingsTab} setTab={setSettingsTab} onClose={() => setModal(null)} audioMode={props.audioMode} switchingAudio={props.isSwitchingAudioMode} onAudioMode={props.onSwitchAudioMode} audioDeviceId={audioDevice} videoDeviceId={props.selectedCameraId} onAudioDevice={async (id) => { await room.switchActiveDevice("audioinput", id); setAudioDevice(id); }} onVideoDevice={props.onCameraDeviceSwitch} mirror={mirror} setMirror={setMirror} showSelf={showSelf} setShowSelf={setShowSelf} reactionsEnabled={reactionsEnabled} setReactionsEnabled={setReactionsEnabled} onEffects={() => { setModal(null); setPanel("effects"); }}/>}
+    {modal === "settings" && <MeetSettings tab={settingsTab} setTab={setSettingsTab} onClose={() => setModal(null)} audioMode={props.audioMode} switchingAudio={props.isSwitchingAudioMode} onAudioMode={props.onSwitchAudioMode} audioDeviceId={props.audioDeviceId} videoDeviceId={props.selectedCameraId} onAudioDevice={props.onAudioDeviceSwitch} onVideoDevice={props.onCameraDeviceSwitch} mirror={mirror} setMirror={setMirror} showSelf={showSelf} setShowSelf={setShowSelf} reactionsEnabled={reactionsEnabled} setReactionsEnabled={setReactionsEnabled} onEffects={() => { setModal(null); setPanel("effects"); }}/>}
     {modal === "layout" && <RoomDialog title="Adjust view" onClose={() => setModal(null)}><div className="meet-dialog-content"><p className="meet-muted">Choose how you see people in this call.</p>{layouts.map((item) => <label className="meet-layout-option" key={item.id}><input type="radio" name="layout" value={item.id} checked={layout === item.id} onChange={() => setLayout(item.id)}/><span><strong>{item.title}</strong><small>{item.description}</small></span><span className={`meet-layout-preview preview-${item.id}`} aria-hidden="true"><i/><i/><i/><i/></span></label>)}<div className="meet-dialog-actions"><button type="button" className="meet-text-button" onClick={() => setModal(null)}>Done</button></div></div></RoomDialog>}
     {modal === "captions" && <RoomDialog title="Captions" onClose={() => setModal(null)}><div className="meet-dialog-content"><Captions size={32}/><h3>Live captions aren’t available yet</h3><p className="meet-muted">You can use in-call messages during your lesson. Audio remains in {props.audioMode === "TALKING" ? "Talking Mode" : "Instrument Mode"}.</p><div className="meet-dialog-actions"><button type="button" className="meet-text-button" onClick={() => { setModal(null); setPanel("chat"); }}>Open messages</button></div></div></RoomDialog>}
     {modal === "hand" && <RoomDialog title="Lesson participation" onClose={() => setModal(null)}><div className="meet-dialog-content"><Hand size={32}/><h3>{props.lesson.isTeacher ? "Guide your lesson" : "Ready to play?"}</h3><p className="meet-muted">Use the lesson’s turn-taking controls to request a turn or return to discussion.</p>{floorControls}<div className="meet-dialog-actions"><button type="button" className="meet-text-button" onClick={() => setModal(null)}>Done</button></div></div></RoomDialog>}

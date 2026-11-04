@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
-import { Room, RoomEvent, Track, RemoteTrack, RemoteParticipant, LocalTrackPublication } from "livekit-client";
+import { Room, RoomEvent, TrackEvent, LocalAudioTrack, Track, RemoteTrack, RemoteTrackPublication, LocalTrackPublication } from "livekit-client";
 
 interface UseLessonAutoRecorderProps {
   room: Room | undefined | null;
@@ -11,6 +11,19 @@ interface UseLessonAutoRecorderProps {
   partnerName: string;
   instrument: string;
   enabled?: boolean;
+}
+
+function startSegment(stream: MediaStream, mimeType: string, chunks: Blob[]) {
+  const recorder = new MediaRecorder(stream, {
+    mimeType: mimeType || undefined,
+    videoBitsPerSecond: 450_000,
+    audioBitsPerSecond: 64_000,
+  });
+  recorder.ondataavailable = ({ data }) => {
+    if (data.size) chunks.push(data);
+  };
+  recorder.start(2000);
+  return recorder;
 }
 
 /**
@@ -49,13 +62,9 @@ export function useLessonAutoRecorder({
   const recordedChunksRef = useRef<Blob[]>([]);
   const isRecordingRef = useRef(false);
   const recordingStartTimeRef = useRef<number>(0);
-  const audioContextRef = useRef<AudioContext | null>(null);
-  const audioDestinationRef = useRef<MediaStreamAudioDestinationNode | null>(null);
   const animationFrameIdRef = useRef<number | null>(null);
-  const hasUploadedRef = useRef(false);
   const combinedStreamRef = useRef<MediaStream | null>(null);
   const selectedMimeRef = useRef<string>("");
-  const isRollingRef = useRef(false);
   const segmentIntervalRef = useRef<NodeJS.Timeout | null>(null);
 
   // Hidden DOM video elements to capture live video frames for canvas compositing
@@ -63,9 +72,6 @@ export function useLessonAutoRecorder({
   const remoteVideoRef = useRef<HTMLVideoElement | null>(null);
   const screenShareVideoRef = useRef<HTMLVideoElement | null>(null);
 
-  // Audio track sources and cloned streams map
-  const audioSourcesMapRef = useRef<Map<string, MediaStreamAudioSourceNode>>(new Map());
-  const clonedAudioTracksRef = useRef<Map<string, { track: MediaStreamTrack; stream: MediaStream; isCloned: boolean }>>(new Map());
 
   // Upload a completed segment blob to the backend (Supabase storage)
   const uploadSegmentBlob = useCallback(
@@ -136,59 +142,27 @@ export function useLessonAutoRecorder({
 
   // Rolling segment cycler: every 4 minutes, closes current part and uploads to Supabase in background
   const cycleRecordingSegment = useCallback(async () => {
-    if (!isRecordingRef.current || !mediaRecorderRef.current || isRollingRef.current) return;
+    if (!isRecordingRef.current || !mediaRecorderRef.current) return;
     const oldRecorder = mediaRecorderRef.current;
-    if (oldRecorder.state !== "recording") return;
+    if (oldRecorder.state !== "recording" || !combinedStreamRef.current) return;
 
-    isRollingRef.current = true;
     const segStartTime = recordingStartTimeRef.current || Date.now();
-    recordingStartTimeRef.current = Date.now();
 
     try {
-      if (typeof oldRecorder.requestData === "function") {
-        try {
-          oldRecorder.requestData();
-        } catch {}
-      }
-
-      await new Promise((r) => setTimeout(r, 100));
-
-      try {
-        oldRecorder.stop();
-      } catch {}
-
-      const chunksToUpload = [...recordedChunksRef.current];
-      recordedChunksRef.current = [];
-
-      // Immediately start new MediaRecorder on the existing combinedStream
-      if (combinedStreamRef.current && isRecordingRef.current) {
-        try {
-          const newRecorder = new MediaRecorder(combinedStreamRef.current, {
-            mimeType: selectedMimeRef.current || undefined,
-            videoBitsPerSecond: 450_000,
-            audioBitsPerSecond: 64_000,
-          });
-
-          newRecorder.ondataavailable = (event) => {
-            if (event.data && event.data.size > 0) {
-              recordedChunksRef.current.push(event.data);
-            }
-          };
-
-          newRecorder.start(2000);
-          mediaRecorderRef.current = newRecorder;
-        } catch (recErr) {
-          console.warn("[AutoRecorder] Error restarting segment recorder:", recErr);
-        }
-      }
-
-      if (chunksToUpload.length > 0) {
+      const chunksToUpload = recordedChunksRef.current;
+      oldRecorder.addEventListener("stop", () => {
         void uploadSegmentBlob(chunksToUpload, segStartTime);
-      }
+      }, { once: true });
+      oldRecorder.stop();
+
+      const chunks: Blob[] = [];
+      mediaRecorderRef.current = startSegment(combinedStreamRef.current, selectedMimeRef.current, chunks);
+      recordedChunksRef.current = chunks;
+      recordingStartTimeRef.current = Date.now();
     } catch (err) {
+      isRecordingRef.current = false;
+      setIsRecording(false);
       console.warn("[AutoRecorder] Error during rolling segment cycle:", err);
-    } finally {
-      isRollingRef.current = false;
     }
   }, [uploadSegmentBlob]);
 
@@ -198,11 +172,13 @@ export function useLessonAutoRecorder({
     fileUrl?: string;
     error?: string;
   }> => {
-    if (!isRecordingRef.current && recordedChunksRef.current.length === 0) {
+    if (!isRecordingRef.current) {
       return { success: true };
     }
 
     isRecordingRef.current = false;
+    const finalChunks = recordedChunksRef.current;
+    const finalStart = recordingStartTimeRef.current || Date.now();
     setIsRecording(false);
 
     if (segmentIntervalRef.current) {
@@ -244,21 +220,6 @@ export function useLessonAutoRecorder({
       });
     }
 
-    // Clean up audio context
-    try {
-      audioSourcesMapRef.current.forEach((src) => {
-        try {
-          src.disconnect();
-        } catch {}
-      });
-      audioSourcesMapRef.current.clear();
-      audioContextRef.current?.close();
-    } catch {}
-
-    // Upload finalized recording segment
-    const finalChunks = [...recordedChunksRef.current];
-    recordedChunksRef.current = [];
-    const finalStart = recordingStartTimeRef.current || Date.now();
 
     if (finalChunks.length > 0) {
       setIsUploading(true);
@@ -307,9 +268,9 @@ export function useLessonAutoRecorder({
       window.AudioContext ||
       (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
     const audioCtx = new AudioCtx();
-    audioContextRef.current = audioCtx;
+    const audioSources = new Map<string, MediaStreamAudioSourceNode>();
+    const recordingInputs = new Map<string, { input: MediaStreamTrack; track: MediaStreamTrack; stream: MediaStream; isCloned: boolean }>();
     const destination = audioCtx.createMediaStreamDestination();
-    audioDestinationRef.current = destination;
 
     const resumeAudioIfSuspended = () => {
       if (audioCtx.state === "suspended") {
@@ -326,16 +287,17 @@ export function useLessonAutoRecorder({
     window.addEventListener("keydown", handleUserGestureUnlock, { passive: true });
 
     // 2. Connect audio tracks to destination using cloned tracks so the live WebRTC audio is never hijacked
-    const addAudioTrack = (track: MediaStreamTrack, id: string) => {
-      if (isCleanedUp || audioSourcesMapRef.current.has(id)) return;
+    const addAudioTrack = (track: MediaStreamTrack, id: string, clone = true) => {
+      if (isCleanedUp || recordingInputs.get(id)?.input === track) return;
+      removeAudioTrack(id);
       resumeAudioIfSuspended();
+      let audioTrackToUse = track;
       try {
         // Clone track for background recording so Web Audio graph NEVER silences or alters
         // the original track delivering audio to the participant's speakers!
-        let audioTrackToUse = track;
         let isCloned = false;
         try {
-          if (typeof track.clone === "function") {
+          if (clone && typeof track.clone === "function") {
             audioTrackToUse = track.clone();
             isCloned = true;
           }
@@ -347,32 +309,50 @@ export function useLessonAutoRecorder({
         const stream = new MediaStream([audioTrackToUse]);
         const source = audioCtx.createMediaStreamSource(stream);
         source.connect(destination);
-        audioSourcesMapRef.current.set(id, source);
-        clonedAudioTracksRef.current.set(id, { track: audioTrackToUse, stream, isCloned });
+        audioSources.set(id, source);
+        recordingInputs.set(id, { input: track, track: audioTrackToUse, stream, isCloned });
       } catch (err) {
+        if (audioTrackToUse !== track) audioTrackToUse.stop();
         console.warn("[AutoRecorder] Could not connect audio track:", err);
       }
     };
 
     const removeAudioTrack = (id: string) => {
-      const source = audioSourcesMapRef.current.get(id);
+      const source = audioSources.get(id);
       if (source) {
         try {
           source.disconnect();
         } catch {
           // Ignore
         }
-        audioSourcesMapRef.current.delete(id);
+        audioSources.delete(id);
       }
-      const item = clonedAudioTracksRef.current.get(id);
+      const item = recordingInputs.get(id);
       if (item) {
         if (item.isCloned) {
           try {
             item.track.stop();
           } catch {}
         }
-        clonedAudioTracksRef.current.delete(id);
+        recordingInputs.delete(id);
       }
+    };
+
+    const localAudioListeners = new Map<string, () => void>();
+    const bindLocalAudio = (pub: LocalTrackPublication) => {
+      const track = pub.audioTrack;
+      if (!(track instanceof LocalAudioTrack) || localAudioListeners.has(pub.trackSid)) return;
+      const refresh = () => {
+        removeAudioTrack(pub.trackSid);
+        // Use the actual input so local mute also silences the recording.
+        addAudioTrack(track.mediaStreamTrack, pub.trackSid, false);
+      };
+      refresh();
+      track.on(TrackEvent.Restarted, refresh);
+      localAudioListeners.set(pub.trackSid, () => {
+        track.off(TrackEvent.Restarted, refresh);
+        removeAudioTrack(pub.trackSid);
+      });
     };
 
     // 3. Connect existing local mic and camera
@@ -380,7 +360,7 @@ export function useLessonAutoRecorder({
       if (!room.localParticipant) return;
       for (const pub of room.localParticipant.audioTrackPublications.values()) {
         if (pub.track?.mediaStreamTrack) {
-          addAudioTrack(pub.track.mediaStreamTrack, "local_audio");
+          bindLocalAudio(pub);
         }
       }
       for (const pub of room.localParticipant.videoTrackPublications.values()) {
@@ -399,7 +379,7 @@ export function useLessonAutoRecorder({
     // Listen for local tracks published after initial room connection
     const handleLocalTrackPublished = (pub: LocalTrackPublication) => {
       if (pub.track?.kind === Track.Kind.Audio && pub.track.mediaStreamTrack) {
-        addAudioTrack(pub.track.mediaStreamTrack, "local_audio");
+        bindLocalAudio(pub);
       } else if (pub.track?.kind === Track.Kind.Video && pub.track.mediaStreamTrack) {
         if (pub.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
           screenShareVideoRef.current.srcObject = new MediaStream([pub.track.mediaStreamTrack]);
@@ -412,8 +392,9 @@ export function useLessonAutoRecorder({
     };
 
     const handleLocalTrackUnpublished = (pub: LocalTrackPublication) => {
-      if (pub.track?.kind === Track.Kind.Audio) {
-        removeAudioTrack("local_audio");
+      if (pub.kind === Track.Kind.Audio) {
+        localAudioListeners.get(pub.trackSid)?.();
+        localAudioListeners.delete(pub.trackSid);
       } else if (pub.track?.kind === Track.Kind.Video) {
         if (pub.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
           screenShareVideoRef.current.srcObject = null;
@@ -424,12 +405,11 @@ export function useLessonAutoRecorder({
     // 4. Connect remote participant tracks
     const handleTrackSubscribed = (
       track: RemoteTrack,
-      pub: unknown,
-      participant: RemoteParticipant,
+      pub: RemoteTrackPublication,
     ) => {
       resumeAudioIfSuspended();
       if (track.kind === Track.Kind.Audio) {
-        addAudioTrack(track.mediaStreamTrack, `remote_audio_${participant.identity}`);
+        addAudioTrack(track.mediaStreamTrack, pub.trackSid);
       } else if (track.kind === Track.Kind.Video) {
         if (track.source === Track.Source.ScreenShare && screenShareVideoRef.current) {
           screenShareVideoRef.current.srcObject = new MediaStream([track.mediaStreamTrack]);
@@ -443,11 +423,10 @@ export function useLessonAutoRecorder({
 
     const handleTrackUnsubscribed = (
       track: RemoteTrack,
-      pub: unknown,
-      participant: RemoteParticipant,
+      pub: RemoteTrackPublication,
     ) => {
-      if (track.kind === Track.Kind.Audio) {
-        removeAudioTrack(`remote_audio_${participant.identity}`);
+      if (track.kind === Track.Kind.Audio && recordingInputs.get(pub.trackSid)?.input === track.mediaStreamTrack) {
+        removeAudioTrack(pub.trackSid);
       }
     };
 
@@ -465,8 +444,8 @@ export function useLessonAutoRecorder({
     let lastDrawTime = 0;
     const frameInterval = 1000 / 15; // 15 fps for high performance & moderate file size
 
-    const drawFrame = (timestamp: number) => {
-      if (isCleanedUp || !ctx) return;
+    const drawFrame = (timestamp: number, scheduleNext = true) => {
+      if (isCleanedUp || !isRecordingRef.current || !ctx) return;
 
       if (timestamp - lastDrawTime >= frameInterval) {
         lastDrawTime = timestamp;
@@ -573,7 +552,7 @@ export function useLessonAutoRecorder({
         );
       }
 
-      animationFrameIdRef.current = requestAnimationFrame(drawFrame);
+      if (scheduleNext) animationFrameIdRef.current = requestAnimationFrame(drawFrame);
     };
 
     // 6. Start Recording Stream
@@ -586,7 +565,7 @@ export function useLessonAutoRecorder({
       room.remoteParticipants.forEach((p) => {
         p.trackPublications.forEach((pub) => {
           if (pub.track) {
-            handleTrackSubscribed(pub.track as RemoteTrack, pub, p);
+            handleTrackSubscribed(pub.track, pub);
           }
         });
       });
@@ -615,21 +594,9 @@ export function useLessonAutoRecorder({
       selectedMimeRef.current = selectedMime;
 
       try {
-        const recorder = new MediaRecorder(combinedStream, {
-          mimeType: selectedMime || undefined,
-          videoBitsPerSecond: 450_000, // 450 kbps moderate quality, highly optimized
-          audioBitsPerSecond: 64_000,  // 64 kbps Opus
-        });
-
-        recorder.ondataavailable = (event) => {
-          if (event.data && event.data.size > 0) {
-            recordedChunksRef.current.push(event.data);
-          }
-        };
-
-        // Slice every 2 seconds into chunks to ensure data availability even for short calls
-        recorder.start(2000);
-        mediaRecorderRef.current = recorder;
+        const chunks: Blob[] = [];
+        recordedChunksRef.current = chunks;
+        mediaRecorderRef.current = startSegment(combinedStream, selectedMime, chunks);
         isRecordingRef.current = true;
         setIsRecording(true);
         recordingStartTimeRef.current = Date.now();
@@ -644,7 +611,6 @@ export function useLessonAutoRecorder({
 
         // Draw initial frame immediately so stream has active frames
         drawFrame(performance.now());
-        animationFrameIdRef.current = requestAnimationFrame(drawFrame);
       } catch (recErr) {
         console.warn("[AutoRecorder] Failed to start MediaRecorder:", recErr);
       }
@@ -653,7 +619,7 @@ export function useLessonAutoRecorder({
     // Background timer to keep drawing frames even if tab is minimized/in background
     const bgRenderInterval = setInterval(() => {
       if (typeof document !== "undefined" && document.hidden && !isCleanedUp) {
-        drawFrame(performance.now());
+        drawFrame(performance.now(), false);
       }
     }, 150);
 
@@ -672,6 +638,9 @@ export function useLessonAutoRecorder({
 
     return () => {
       isCleanedUp = true;
+      room.off(RoomEvent.Connected, startMediaRecording);
+      localAudioListeners.forEach(unbind => unbind());
+      localAudioListeners.clear();
       clearInterval(bgRenderInterval);
       if (segmentIntervalRef.current) {
         clearInterval(segmentIntervalRef.current);
@@ -690,15 +659,11 @@ export function useLessonAutoRecorder({
 
       stopAndUpload();
 
+      combinedStreamRef.current?.getVideoTracks().forEach(track => track.stop());
+      destination.stream.getTracks().forEach(track => track.stop());
+      if (audioCtx.state !== "closed") void audioCtx.close().catch(() => {});
       // Clean up cloned audio tracks
-      clonedAudioTracksRef.current.forEach((item) => {
-        if (item.isCloned) {
-          try {
-            item.track.stop();
-          } catch {}
-        }
-      });
-      clonedAudioTracksRef.current.clear();
+      for (const id of recordingInputs.keys()) removeAudioTrack(id);
 
       // Clean up hidden video elements
       if (localVideoRef.current) {

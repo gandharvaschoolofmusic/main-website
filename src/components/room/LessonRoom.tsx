@@ -5,22 +5,18 @@ import Image from "next/image";
 
 import {
   LiveKitRoom,
+  RoomAudioRenderer,
   useRoomContext,
 } from "@livekit/components-react";
 import {
   ConnectionQuality,
   DisconnectReason,
-  LocalAudioTrack,
   LocalTrackPublication,
-  Participant,
-  RemoteParticipant,
-  RemoteTrack,
-  RemoteTrackPublication,
   RoomEvent,
   Track,
-  TrackPublication,
 } from "livekit-client";
-import { AudioMode, switchLocalAudioMode } from "@/lib/audio-engine";
+import type { AudioMode } from "@/lib/audio-engine";
+import { useLessonMicrophone } from "@/hooks/useLessonMicrophone";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
 import { MeetRoomUI } from "./MeetRoomUI";
 
@@ -86,7 +82,7 @@ export function LessonRoom(props: LessonRoomProps) {
         token={token}
         serverUrl={serverUrl}
         connect={true}
-        audio={false} // Managed explicitly via switchLocalAudioMode
+        audio={false} // The microphone controller applies the pre-join choice after connection.
         video={false} // Managed explicitly after engine is connected
         className="w-full h-full flex flex-col"
         onDisconnected={handleDisconnected}
@@ -205,13 +201,7 @@ function LessonRoomContent({
 }) {
   const room = useRoomContext();
 
-  // Reference to manually managed local audio track to guarantee track.stop() on teardown
-  const currentAudioTrackRef = useRef<LocalAudioTrack | null>(null);
-
-  // Audio Mode & Track state
-  const [audioMode, setAudioMode] = useState<AudioMode>(initialConfig.audioMode);
-  const [isSwitchingAudioMode, setIsSwitchingAudioMode] = useState(false);
-  const [isMuted, setIsMuted] = useState(Boolean(initialConfig.isAudioMuted));
+  const mic = useLessonMicrophone(room, initialConfig);
   const [isVideoOff, setIsVideoOff] = useState(Boolean(initialConfig.isVideoMuted));
   const [isScreenSharing, setIsScreenSharing] = useState(false);
 
@@ -282,271 +272,6 @@ function LessonRoomContent({
     }, 1000);
     return () => clearInterval(interval);
   }, [lesson.endsAt]);
-
-  // 3. Initialize Audio Track with specified constraints and hardware backoff retry
-  const initializedAudioRef = useRef(false);
-  useEffect(() => {
-    if (!room || initializedAudioRef.current) return;
-    initializedAudioRef.current = true;
-
-    async function initAudio(attempt = 0): Promise<void> {
-      try {
-        setIsSwitchingAudioMode(true);
-        const track = await switchLocalAudioMode(
-          room,
-          initialConfig.audioMode,
-          initialConfig.audioDeviceId,
-        );
-        currentAudioTrackRef.current = track;
-        console.log("[Audio] Local audio track initialized & published successfully");
-
-        if (initialConfig.isAudioMuted) {
-          console.log("[Audio] Muting audio track per user Pre-Join selection");
-          track.mute();
-        } else {
-          console.log("[Audio] Ensuring mic track is unmuted and transmitting");
-          track.unmute();
-        }
-      } catch (err) {
-        console.warn(`[Audio] Failed to initialize audio track (attempt ${attempt + 1}):`, err);
-        // When transitioning from PreJoinScreen, OS drivers take ~300ms to release hardware
-        if (attempt < 3) {
-          await new Promise((resolve) => setTimeout(resolve, 350));
-          return initAudio(attempt + 1);
-        }
-        // Fallback: use LiveKit's native setMicrophoneEnabled to ensure mic is active if unmuted
-        try {
-          if (!initialConfig.isAudioMuted) {
-            console.log("[Audio] Fallback: calling room.localParticipant.setMicrophoneEnabled(true)");
-            await room.localParticipant.setMicrophoneEnabled(true);
-          } else {
-            console.log("[Audio] Fallback: mic kept disabled per initialConfig.isAudioMuted");
-            await room.localParticipant.setMicrophoneEnabled(false);
-          }
-        } catch (fallbackErr) {
-          console.error("[Audio] All audio initialization attempts failed:", fallbackErr);
-        }
-      } finally {
-        setIsSwitchingAudioMode(false);
-      }
-    }
-
-    if (room.state === "connected") {
-      void initAudio();
-    } else {
-      room.once(RoomEvent.Connected, () => void initAudio(0));
-    }
-  }, [room, initialConfig.audioMode, initialConfig.audioDeviceId, initialConfig.isAudioMuted]);
-
-  // 3b. Dedicated Remote Audio Playback Manager:
-  // Guarantees remote participant audio (e.g. Teacher's voice to Student, Student to Teacher)
-  // plays out through speakers without being throttled, suspended, or blocked by layout engines.
-  useEffect(() => {
-    if (!room) return;
-
-    // Create an active, unthrottled DOM container for remote audio elements.
-    // Kept in the layout tree (avoids display:none which halts audio decoding in Chromium & Safari).
-    const audioContainer = document.createElement("div");
-    audioContainer.id = "toneroom-remote-audio-container";
-    audioContainer.style.position = "fixed";
-    audioContainer.style.top = "-9999px";
-    audioContainer.style.left = "-9999px";
-    audioContainer.style.width = "1px";
-    audioContainer.style.height = "1px";
-    audioContainer.style.opacity = "0";
-    audioContainer.style.pointerEvents = "none";
-    document.body.appendChild(audioContainer);
-
-    // Strictly enforce ONE audio element per participant source (mic or screen) to eliminate duplicate playback & comb filtering
-    const attachedElements = new Map<string, HTMLAudioElement>();
-
-    const getTrackKey = (track: RemoteTrack, participantIdentity: string) => {
-      const source = track.source === Track.Source.ScreenShareAudio ? "screen" : "mic";
-      return `${participantIdentity}_${source}`;
-    };
-
-    const playAudioTrack = async (track: RemoteTrack, participantIdentity: string) => {
-      if (track.kind !== Track.Kind.Audio) return;
-
-      const trackKey = getTrackKey(track, participantIdentity);
-      console.log(`[Audio] Managing remote audio playback for ${participantIdentity} (${trackKey})`);
-
-      // If an element already exists for this participant, check if it is already playing this track
-      const existingEl = attachedElements.get(trackKey);
-      if (existingEl) {
-        // If already attached to the track's stream, avoid re-creating DOM element (prevents double audio and glitches)
-        if (track.mediaStream && existingEl.srcObject === track.mediaStream) {
-          if (existingEl.paused) {
-            existingEl.play().catch(() => {});
-          }
-          return;
-        }
-
-        // Clean up previous element if replacing track
-        try {
-          track.detach(existingEl);
-        } catch {}
-        existingEl.pause();
-        existingEl.srcObject = null;
-        existingEl.remove();
-        attachedElements.delete(trackKey);
-      }
-
-      // Detach any previously attached elements for this track to guarantee clean 1:1 playback
-      try {
-        track.detach();
-      } catch {}
-
-      const audioEl = document.createElement("audio");
-      audioEl.autoplay = true;
-      audioEl.setAttribute("playsinline", "true");
-      audioEl.volume = 1.0;
-      audioEl.muted = false;
-
-      track.attach(audioEl);
-      audioContainer.appendChild(audioEl);
-      attachedElements.set(trackKey, audioEl);
-
-      try {
-        await audioEl.play();
-        console.log(`[Audio] Remote audio playing cleanly for ${participantIdentity}`);
-      } catch (playErr) {
-        console.warn(`[Audio] Remote audio play() waiting for user interaction:`, playErr);
-      }
-    };
-
-    const stopAudioTrack = (track: RemoteTrack, participantIdentity: string) => {
-      if (track.kind !== Track.Kind.Audio) return;
-      const trackKey = getTrackKey(track, participantIdentity);
-      const el = attachedElements.get(trackKey);
-      if (el) {
-        try {
-          track.detach(el);
-        } catch {}
-        el.pause();
-        el.srcObject = null;
-        el.remove();
-        attachedElements.delete(trackKey);
-      }
-    };
-
-    // Attach any remote tracks from participants who are already in the room
-    room.remoteParticipants.forEach((p) => {
-      p.audioTrackPublications.forEach((pub) => {
-        if (pub.track) {
-          void playAudioTrack(pub.track, p.identity);
-        }
-      });
-    });
-
-    // Listen for new remote track arrivals
-    const handleTrackSubscribed = (
-      track: RemoteTrack,
-      _pub: unknown,
-      participant: RemoteParticipant,
-    ) => {
-      if (track.kind === Track.Kind.Audio) {
-        void playAudioTrack(track, participant.identity);
-        void room.startAudio();
-      }
-    };
-
-    const handleTrackUnsubscribed = (
-      track: RemoteTrack,
-      _pub: unknown,
-      participant: RemoteParticipant,
-    ) => {
-      if (track.kind === Track.Kind.Audio) {
-        stopAudioTrack(track, participant.identity);
-      }
-    };
-
-    const handleTrackUnmuted = (
-      pub: TrackPublication,
-      participant: Participant,
-    ) => {
-      if (pub.kind === Track.Kind.Audio && pub.track && pub.track instanceof RemoteTrack) {
-        void playAudioTrack(pub.track, participant.identity);
-      }
-    };
-
-    const handleParticipantConnected = (participant: RemoteParticipant) => {
-      participant.audioTrackPublications.forEach((pub) => {
-        if (pub.track) {
-          void playAudioTrack(pub.track, participant.identity);
-        }
-      });
-    };
-
-    const handleParticipantDisconnected = (participant: RemoteParticipant) => {
-      const micKey = `${participant.identity}_mic`;
-      const screenKey = `${participant.identity}_screen`;
-      [micKey, screenKey].forEach((key) => {
-        const el = attachedElements.get(key);
-        if (el) {
-          el.pause();
-          el.srcObject = null;
-          el.remove();
-          attachedElements.delete(key);
-        }
-      });
-    };
-
-    const handleAudioPlaybackChanged = () => {
-      attachedElements.forEach((el) => {
-        if (el.paused) {
-          el.play().catch(() => {});
-        }
-      });
-    };
-
-    room.on(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-    room.on(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-    room.on(RoomEvent.TrackUnmuted, handleTrackUnmuted);
-    room.on(RoomEvent.ParticipantConnected, handleParticipantConnected);
-    room.on(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-    room.on(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
-
-    // Unconditionally unlock Web Audio and resume any deferred media elements on user gesture
-    const unlockAudio = async () => {
-      try {
-        await room.startAudio();
-      } catch {}
-
-      attachedElements.forEach((el) => {
-        if (el.paused) {
-          el.play().catch(() => {});
-        }
-      });
-    };
-
-    // Attempt immediately (click from PreJoin "Join now" may satisfy browser autoplay)
-    void unlockAudio();
-
-    window.addEventListener("click", unlockAudio, { passive: true });
-    window.addEventListener("touchstart", unlockAudio, { passive: true });
-    window.addEventListener("keydown", unlockAudio, { passive: true });
-
-    return () => {
-      room.off(RoomEvent.TrackSubscribed, handleTrackSubscribed);
-      room.off(RoomEvent.TrackUnsubscribed, handleTrackUnsubscribed);
-      room.off(RoomEvent.TrackUnmuted, handleTrackUnmuted);
-      room.off(RoomEvent.ParticipantConnected, handleParticipantConnected);
-      room.off(RoomEvent.ParticipantDisconnected, handleParticipantDisconnected);
-      room.off(RoomEvent.AudioPlaybackStatusChanged, handleAudioPlaybackChanged);
-      window.removeEventListener("click", unlockAudio);
-      window.removeEventListener("touchstart", unlockAudio);
-      window.removeEventListener("keydown", unlockAudio);
-
-      attachedElements.forEach((el) => {
-        el.pause();
-        el.srcObject = null;
-        el.remove();
-      });
-      attachedElements.clear();
-      audioContainer.remove();
-    };
-  }, [room]);
 
   // 3b. Initialize Video Track safely after engine connects with transition backoff
   const initializedVideoRef = useRef(false);
@@ -664,54 +389,6 @@ function LessonRoomContent({
     };
   }, [room]);
 
-  // Handle runtime Audio Mode Switch
-  const handleSwitchAudioMode = async (targetMode: AudioMode) => {
-    if (isSwitchingAudioMode) return;
-    setIsSwitchingAudioMode(true);
-    try {
-      const track = await switchLocalAudioMode(
-        room,
-        targetMode,
-        initialConfig.audioDeviceId,
-      );
-      currentAudioTrackRef.current = track;
-      if (isMuted) {
-        track.mute();
-      }
-      setAudioMode(targetMode);
-    } catch (err) {
-      console.error("Failed to switch audio mode", err);
-    } finally {
-      setIsSwitchingAudioMode(false);
-    }
-  };
-
-  // Toggle Microphone cleanly via track mute/unmute to prevent duplicate LiveKit mic track generation
-  const handleToggleMic = async () => {
-    const nextMuted = !isMuted;
-    setIsMuted(nextMuted);
-    try {
-      if (currentAudioTrackRef.current) {
-        if (nextMuted) {
-          await currentAudioTrackRef.current.mute();
-        } else {
-          await currentAudioTrackRef.current.unmute();
-        }
-      }
-      for (const pub of room.localParticipant.audioTrackPublications.values()) {
-        if (pub.track) {
-          if (nextMuted) {
-            await pub.track.mute();
-          } else {
-            await pub.track.unmute();
-          }
-        }
-      }
-    } catch (err) {
-      console.warn("[Audio] Error toggling mic state:", err);
-    }
-  };
-
   // Toggle Video
   const handleToggleVideo = async () => {
     const nextOff = !isVideoOff;
@@ -774,7 +451,7 @@ function LessonRoomContent({
         }
       } catch {}
       multiCam.stopSecondaryCamera().catch(() => {});
-      releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
+      releaseAllMediaDevices(room, [multiCam.secondaryTrack]);
     };
 
     window.addEventListener("beforeunload", handleWindowUnload);
@@ -826,22 +503,16 @@ function LessonRoomContent({
         }
       } catch {}
 
-      // 2. Stop and upload any in-progress client recording cleanly before room teardown
-      if (recordingMode === "CLIENT_RECORDER") {
-        try {
-          await autoRecorder.stopAndUpload();
-        } catch (uploadErr) {
-          console.warn("[LessonRoom] AutoRecorder upload on leave warning:", uploadErr);
-        }
-      }
-
-      // 3. Immediately terminate all hardware camera (primary + secondary) and mic tracks synchronously
+      // Finalize the recorder before stopping its inputs. Release capture immediately,
+      // even when saving the final segment takes time.
+      const saving = recordingMode === "CLIENT_RECORDER" ? autoRecorder.stopAndUpload() : undefined;
+      releaseAllMediaDevices(room, [multiCam.secondaryTrack]);
       try {
         await multiCam.stopSecondaryCamera();
       } catch {
         // Ignore
       }
-      releaseAllMediaDevices(room, [currentAudioTrackRef.current, multiCam.secondaryTrack]);
+      await saving?.catch(error => console.warn("[LessonRoom] Recording upload on leave:", error));
 
       // 4. Disconnect from LiveKit room cleanly
       try {
@@ -863,11 +534,12 @@ function LessonRoomContent({
 
   return (
     <>
+      <RoomAudioRenderer />
       <MeetRoomUI
         lesson={lesson}
-        audioMode={audioMode}
-        isSwitchingAudioMode={isSwitchingAudioMode}
-        isMuted={isMuted}
+        audioMode={mic.settings.mode}
+        isSwitchingAudioMode={mic.busy}
+        isMuted={!mic.enabled}
         isVideoOff={isVideoOff}
         isScreenSharing={isScreenSharing}
         activeFloorState={activeFloorState}
@@ -877,12 +549,14 @@ function LessonRoomContent({
         timeFormatted={timeFormatted}
         availableCameras={availableCameras}
         selectedCameraId={selectedCameraId}
-        audioDeviceId={initialConfig.audioDeviceId}
+        audioDeviceId={mic.settings.deviceId}
+        microphoneError={mic.error}
+        onAudioDeviceSwitch={mic.selectDevice}
         multiCam={multiCam}
-        onToggleMic={handleToggleMic}
+        onToggleMic={mic.toggle}
         onToggleVideo={handleToggleVideo}
         onToggleScreenShare={handleToggleScreenShare}
-        onSwitchAudioMode={handleSwitchAudioMode}
+        onSwitchAudioMode={mic.selectMode}
         onCameraDeviceSwitch={handleCameraDeviceSwitch}
         onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
         onLeave={handleLeaveRoom}
