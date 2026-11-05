@@ -63,11 +63,6 @@ export async function cancelLessonAction(
 
     // If lesson has already ended or started, reject cancellation
     if (now >= endsAt) {
-      // Auto-update status to COMPLETED if not already updated
-      await db.lesson.updateMany({
-        where: { id: lesson.id, status: "SCHEDULED" },
-        data: { status: "COMPLETED" },
-      });
       throw new ConflictError(
         "This lesson has already concluded and cannot be cancelled.",
       );

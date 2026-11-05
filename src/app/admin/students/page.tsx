@@ -8,6 +8,7 @@ import {
   StudentRecord,
 } from "./AdminStudentsManager";
 import { isStudentInActiveTrialPeriod } from "@/lib/student-filters";
+import { autoResolvePastLessons } from "@/lib/attendance";
 
 export const metadata = {
   title: "Students | Admin Portal | Gandharva School of Music",
@@ -17,22 +18,11 @@ export const metadata = {
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
     return getResilientData("admin-students-v5", async () => {
-    // 0. Auto-conclude scheduled lessons whose scheduled time has elapsed (> 30 mins ago)
-    const now = new Date();
+    // 0. Auto-resolve concluded lessons based on verified attendance
     try {
-      await db.lesson.updateMany({
-        where: {
-          status: LessonStatus.SCHEDULED,
-          startsAt: {
-            lt: new Date(now.getTime() - 30 * 60 * 1000),
-          },
-        },
-        data: {
-          status: LessonStatus.COMPLETED,
-        },
-      });
+      await autoResolvePastLessons();
     } catch (e) {
-      console.warn("[getCachedAdminStudentsData] auto-conclude failed:", e);
+      console.warn("[getCachedAdminStudentsData] auto-resolve failed:", e);
     }
 
     // Run ALL queries in parallel for maximum speed

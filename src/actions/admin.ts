@@ -677,6 +677,7 @@ export async function updateLessonDateTimeAdminAction(input: {
   startsAt: string;
   durationMinutes?: number;
   adminTimezone?: string;
+  status?: LessonStatus;
 }): Promise<AdminActionResponse<{ formattedTime: string; startsAt: string; status: LessonStatus }>> {
   try {
     const admin = await requireRole(Role.ADMIN);
@@ -713,15 +714,15 @@ export async function updateLessonDateTimeAdminAction(input: {
         : lesson.payoutAmountMinor;
 
     const isFuture = startsAtDate.getTime() > Date.now();
-    // When an admin edits/reschedules a lesson to a future time (or any time in global directory),
-    // change the status to RESCHEDULED so it reappears as an active upcoming lesson.
+    // If admin explicitly provided a status, use it; otherwise determine based on timing/reschedule
     const newStatus =
-      isFuture ||
+      input.status ||
+      (isFuture ||
       lesson.status === LessonStatus.SCHEDULED ||
       lesson.status === LessonStatus.CANCELLED ||
       lesson.status === LessonStatus.COMPLETED
         ? LessonStatus.RESCHEDULED
-        : lesson.status;
+        : lesson.status);
 
     const updateData: Record<string, unknown> = {
       startsAt: startsAtDate,
@@ -730,10 +731,27 @@ export async function updateLessonDateTimeAdminAction(input: {
       ...(updatedPayoutMinor !== undefined && { payoutAmountMinor: updatedPayoutMinor }),
     };
 
-    // If moving from COMPLETED or CANCELLED to RESCHEDULED, clear past departure flags so new future class has a clean entry
+    // If setting to CANCELLED from an active status, restore session quota and record cancellation
+    if (newStatus === LessonStatus.CANCELLED && lesson.status !== LessonStatus.CANCELLED) {
+      updateData.cancelledBy = admin.id;
+      updateData.cancelledAt = new Date();
+      if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
+        await db.enrollment.update({
+          where: { id: lesson.enrollmentId },
+          data: { sessionsRemaining: { increment: 1 } },
+        });
+      } else if (lesson.lessonSource === LessonSource.TRIAL) {
+        await db.studentTrialStatus.updateMany({
+          where: { studentId: lesson.studentId },
+          data: { lessonsUsed: { decrement: 1 } },
+        });
+      }
+    }
+
+    // If moving from COMPLETED or CANCELLED to an active upcoming status (SCHEDULED/RESCHEDULED), clean past exit flags
     if (
       (lesson.status === LessonStatus.COMPLETED || lesson.status === LessonStatus.CANCELLED) &&
-      newStatus === LessonStatus.RESCHEDULED
+      (newStatus === LessonStatus.RESCHEDULED || newStatus === LessonStatus.SCHEDULED)
     ) {
       updateData.teacherJoinedAt = null;
       updateData.teacherLeftAt = null;
@@ -744,7 +762,7 @@ export async function updateLessonDateTimeAdminAction(input: {
     }
 
     // If moving from CANCELLED to an active status, re-consume quota if available
-    if (lesson.status === LessonStatus.CANCELLED) {
+    if (lesson.status === LessonStatus.CANCELLED && newStatus !== LessonStatus.CANCELLED) {
       if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
         const enr = await db.enrollment.findUnique({ where: { id: lesson.enrollmentId } });
         if (enr && enr.sessionsRemaining > 0) {

@@ -7,6 +7,7 @@ import { AdminLessonsManager, AdminLessonItem } from "./AdminLessonsManager";
 import { formatToIST } from "@/lib/timezone";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
+import { autoResolvePastLessons } from "@/lib/attendance";
 
 export const metadata = {
   title: "Global Lessons | Admin Portal | Gandharva School of Music",
@@ -16,6 +17,13 @@ export const metadata = {
 const getCachedAdminLessonsData = unstable_cache(
   async () => {
     return getResilientData(`admin-lessons-ist`, async () => {
+      // Auto-resolve past concluded lessons based on verified attendance rules
+      try {
+        await autoResolvePastLessons();
+      } catch (err) {
+        console.warn("[AdminLessonsPage] autoResolvePastLessons error:", err);
+      }
+
       const dbLessons = await db.lesson.findMany({
         include: {
           teacher: { select: { name: true, email: true } },

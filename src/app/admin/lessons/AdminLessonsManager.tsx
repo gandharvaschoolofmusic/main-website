@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useTransition } from "react";
+import { useState, useEffect, useTransition, useMemo } from "react";
 import { LessonStatus, LessonSource } from "@prisma/client";
 import { cancelLessonAdminAction, updateLessonDateTimeAdminAction } from "@/actions/admin";
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
@@ -18,6 +18,8 @@ import {
   Check,
   X,
   Clock,
+  Sparkles,
+  ChevronRight,
 } from "lucide-react";
 
 export interface AdminLessonItem {
@@ -37,6 +39,10 @@ export interface AdminLessonItem {
   studentEmail: string;
 }
 
+type TimelineTab = "ALL" | "UPCOMING" | "PAST";
+type UpcomingSubFilter = "ALL" | "NEXT_24_HRS" | "SCHEDULED" | "RESCHEDULED" | "CANCELLED";
+type PastSubFilter = "ALL" | "COMPLETED" | "CANCELLED";
+
 export function AdminLessonsManager({
   initialLessons,
   adminTimezone = "Asia/Kolkata",
@@ -45,12 +51,22 @@ export function AdminLessonsManager({
   adminTimezone?: string;
 }) {
   const [lessons, setLessons] = useState<AdminLessonItem[]>(initialLessons);
-  const [statusFilter, setStatusFilter] = useState<"ALL" | LessonStatus>("ALL");
+
+  // Line 1 Timeline Tab: All | Upcoming Sessions | Past Sessions
+  const [timelineTab, setTimelineTab] = useState<TimelineTab>("ALL");
+
+  // Line 2 Sub-filters (conditional depending on Line 1)
+  const [upcomingSubFilter, setUpcomingSubFilter] = useState<UpcomingSubFilter>("ALL");
+  const [pastSubFilter, setPastSubFilter] = useState<PastSubFilter>("ALL");
+
+  // Secondary filters
   const [sourceFilter, setSourceFilter] = useState<"ALL" | LessonSource>("ALL");
   const [searchQuery, setSearchQuery] = useState("");
 
+  // Edit State (Date & Time + Status)
   const [editingLessonId, setEditingLessonId] = useState<string | null>(null);
   const [editDateInput, setEditDateInput] = useState<string>("");
+  const [editStatusInput, setEditStatusInput] = useState<LessonStatus>(LessonStatus.SCHEDULED);
   const [isSaving, setIsSaving] = useState(false);
   const [savedSuccessId, setSavedSuccessId] = useState<string | null>(null);
   const [toast, setToast] = useState<{ text: string; type: "success" | "error" } | null>(null);
@@ -61,12 +77,52 @@ export function AdminLessonsManager({
     setLessons(initialLessons);
   }, [initialLessons]);
 
+  // Check current time boundaries
+  const nowMs = Date.now();
+
+  const isLessonUpcoming = (lesson: AdminLessonItem) => {
+    const startsAtMs = new Date(lesson.startsAt).getTime();
+    const endsAtMs = startsAtMs + (lesson.durationMinutes || 60) * 60 * 1000;
+    return endsAtMs >= nowMs;
+  };
+
+  const isLessonPast = (lesson: AdminLessonItem) => {
+    const startsAtMs = new Date(lesson.startsAt).getTime();
+    const endsAtMs = startsAtMs + (lesson.durationMinutes || 60) * 60 * 1000;
+    return endsAtMs < nowMs;
+  };
+
+  const isLessonNext24Hours = (lesson: AdminLessonItem) => {
+    const startsAtMs = new Date(lesson.startsAt).getTime();
+    return startsAtMs >= nowMs && startsAtMs <= nowMs + 24 * 60 * 60 * 1000;
+  };
+
+  // Pre-computed counts for navigation badges
+  const counts = useMemo(() => {
+    const all = lessons.length;
+    const upcomingList = lessons.filter(isLessonUpcoming);
+    const pastList = lessons.filter(isLessonPast);
+
+    return {
+      all,
+      upcoming: upcomingList.length,
+      upcoming24h: upcomingList.filter(isLessonNext24Hours).length,
+      upcomingScheduled: upcomingList.filter((l) => l.status === LessonStatus.SCHEDULED).length,
+      upcomingRescheduled: upcomingList.filter((l) => l.status === LessonStatus.RESCHEDULED).length,
+      upcomingCancelled: upcomingList.filter((l) => l.status === LessonStatus.CANCELLED).length,
+      past: pastList.length,
+      pastCompleted: pastList.filter((l) => l.status === LessonStatus.COMPLETED).length,
+      pastCancelled: pastList.filter((l) => l.status === LessonStatus.CANCELLED).length,
+    };
+  }, [lessons, nowMs]);
+
   const handleStartEdit = (lesson: AdminLessonItem) => {
     setEditingLessonId(lesson.id);
     setEditDateInput(toISTInputString(lesson.startsAt));
+    setEditStatusInput(lesson.status);
   };
 
-  const handleSaveDateTime = async (lessonId: string) => {
+  const handleSaveDateTimeAndStatus = async (lessonId: string) => {
     if (!editDateInput) return;
     setIsSaving(true);
     try {
@@ -74,6 +130,7 @@ export function AdminLessonsManager({
       const res = await updateLessonDateTimeAdminAction({
         lessonId,
         startsAt: utcDate.toISOString(),
+        status: editStatusInput,
         adminTimezone: "Asia/Kolkata",
       });
 
@@ -93,14 +150,14 @@ export function AdminLessonsManager({
         setEditingLessonId(null);
         setSavedSuccessId(lessonId);
         setTimeout(() => setSavedSuccessId(null), 3500);
-        setToast({ text: "Class Date & Time updated directly in database (IST)!", type: "success" });
+        setToast({ text: "Session schedule & status updated directly in database!", type: "success" });
         setTimeout(() => setToast(null), 4000);
       } else {
-        setToast({ text: res.error || "Failed to update date and time in database.", type: "error" });
+        setToast({ text: res.error || "Failed to update session.", type: "error" });
         setTimeout(() => setToast(null), 4000);
       }
     } catch {
-      setToast({ text: "Network error updating date and time.", type: "error" });
+      setToast({ text: "Network error updating session.", type: "error" });
       setTimeout(() => setToast(null), 4000);
     } finally {
       setIsSaving(false);
@@ -108,7 +165,7 @@ export function AdminLessonsManager({
   };
 
   const handleCancelLesson = (lessonId: string, studentName: string) => {
-    if (!confirm(`Cancel lesson with ${studentName}? This will restore the student's trial or course session quota.`)) {
+    if (!confirm(`Cancel lesson with ${studentName}? This will restore the student's session quota.`)) {
       return;
     }
 
@@ -126,31 +183,67 @@ export function AdminLessonsManager({
     });
   };
 
-  const filteredLessons = lessons
-    .filter((l) => {
-      // "ALL" filter shows scheduled, rescheduled, and cancelled classes, excluding completed classes.
-      // Completed classes only show when the "Completed" filter tab is explicitly selected.
-      const matchesStatus =
-        statusFilter === "ALL"
-          ? l.status !== LessonStatus.COMPLETED
-          : l.status === statusFilter;
-      const matchesSource = sourceFilter === "ALL" || l.lessonSource === sourceFilter;
-      const matchesSearch =
-        l.studentName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.teacherName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        l.instrument.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        (l.courseTitle && l.courseTitle.toLowerCase().includes(searchQuery.toLowerCase())) ||
-        l.trackingCode.toLowerCase().includes(searchQuery.toLowerCase());
+  // Filtered & sorted lessons
+  const filteredLessons = useMemo(() => {
+    return lessons
+      .filter((l) => {
+        // 1. Line 1 Timeline Filter
+        if (timelineTab === "UPCOMING") {
+          if (!isLessonUpcoming(l)) return false;
 
-      return matchesStatus && matchesSource && matchesSearch;
-    })
-    .sort((a, b) => {
-      // Default: Upcoming closest first (scheduled date ascending)
-      return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
-    });
+          // Line 2 Upcoming Sub-filters
+          if (upcomingSubFilter === "NEXT_24_HRS") {
+            if (!isLessonNext24Hours(l)) return false;
+          } else if (upcomingSubFilter === "SCHEDULED") {
+            if (l.status !== LessonStatus.SCHEDULED) return false;
+          } else if (upcomingSubFilter === "RESCHEDULED") {
+            if (l.status !== LessonStatus.RESCHEDULED) return false;
+          } else if (upcomingSubFilter === "CANCELLED") {
+            if (l.status !== LessonStatus.CANCELLED) return false;
+          }
+        } else if (timelineTab === "PAST") {
+          if (!isLessonPast(l)) return false;
+
+          // Line 2 Past Sub-filters: All | Completed | Cancelled
+          if (pastSubFilter === "COMPLETED") {
+            if (l.status !== LessonStatus.COMPLETED) return false;
+          } else if (pastSubFilter === "CANCELLED") {
+            if (l.status !== LessonStatus.CANCELLED) return false;
+          }
+        } else {
+          // timelineTab === "ALL": No status filtering ("In All, no any filter should be there")
+        }
+
+        // 2. Source Filter (All Types, Trials, Course Sessions)
+        const matchesSource = sourceFilter === "ALL" || l.lessonSource === sourceFilter;
+        if (!matchesSource) return false;
+
+        // 3. Search Query Filter
+        if (searchQuery.trim()) {
+          const q = searchQuery.toLowerCase().trim();
+          const matchesSearch =
+            l.studentName.toLowerCase().includes(q) ||
+            l.teacherName.toLowerCase().includes(q) ||
+            l.instrument.toLowerCase().includes(q) ||
+            (l.courseTitle && l.courseTitle.toLowerCase().includes(q)) ||
+            l.trackingCode.toLowerCase().includes(q);
+          if (!matchesSearch) return false;
+        }
+
+        return true;
+      })
+      .sort((a, b) => {
+        if (timelineTab === "PAST") {
+          // Past sessions: Most recent completed/cancelled first
+          return new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime();
+        }
+        // Upcoming and All: Earliest upcoming session first
+        return new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime();
+      });
+  }, [lessons, timelineTab, upcomingSubFilter, pastSubFilter, sourceFilter, searchQuery, nowMs]);
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
       {/* Toast Alert */}
       {toast && (
         <div
@@ -171,76 +264,185 @@ export function AdminLessonsManager({
         </div>
       )}
 
-      {/* Filters Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div className="flex items-center gap-3 flex-wrap">
-          {/* Status Filter */}
-          <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-primary/10 shadow-xs">
-            <button
-              type="button"
-              onClick={() => setStatusFilter("ALL")}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
-                statusFilter === "ALL"
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-body hover:text-heading hover:bg-bg-alt/30"
-              }`}
-            >
-              All
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter(LessonStatus.SCHEDULED)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
-                statusFilter === LessonStatus.SCHEDULED
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-body hover:text-heading hover:bg-bg-alt/30"
-              }`}
-            >
-              Scheduled
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter(LessonStatus.RESCHEDULED)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
-                statusFilter === LessonStatus.RESCHEDULED
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-body hover:text-heading hover:bg-bg-alt/30"
-              }`}
-            >
-              Rescheduled
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter(LessonStatus.COMPLETED)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
-                statusFilter === LessonStatus.COMPLETED
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-body hover:text-heading hover:bg-bg-alt/30"
-              }`}
-            >
-              Completed
-            </button>
-            <button
-              type="button"
-              onClick={() => setStatusFilter(LessonStatus.CANCELLED)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
-                statusFilter === LessonStatus.CANCELLED
-                  ? "bg-primary text-white shadow-xs"
-                  : "text-body hover:text-heading hover:bg-bg-alt/30"
-              }`}
-            >
-              Cancelled
-            </button>
-          </div>
+      {/* ─── Line 1: Primary Timeline Navigation Tabs ─── */}
+      <div className="flex items-center gap-1.5 p-1 rounded-2xl bg-neutral-100/90 border border-neutral-200/90 shadow-2xs w-fit">
+        <button
+          type="button"
+          onClick={() => setTimelineTab("ALL")}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer ${
+            timelineTab === "ALL"
+              ? "bg-[#3C096C] text-white shadow-xs"
+              : "text-body hover:text-heading hover:bg-white/60"
+          }`}
+        >
+          All ({counts.all})
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTimelineTab("UPCOMING");
+            setUpcomingSubFilter("ALL");
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
+            timelineTab === "UPCOMING"
+              ? "bg-[#3C096C] text-white shadow-xs"
+              : "text-body hover:text-heading hover:bg-white/60"
+          }`}
+        >
+          <span>Upcoming Sessions</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              timelineTab === "UPCOMING" ? "bg-white/20 text-white" : "bg-neutral-200 text-body"
+            }`}
+          >
+            {counts.upcoming}
+          </span>
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setTimelineTab("PAST");
+            setPastSubFilter("ALL");
+          }}
+          className={`px-4 py-2 rounded-xl text-xs font-bold transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 ${
+            timelineTab === "PAST"
+              ? "bg-[#3C096C] text-white shadow-xs"
+              : "text-body hover:text-heading hover:bg-white/60"
+          }`}
+        >
+          <span>Past Sessions</span>
+          <span
+            className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+              timelineTab === "PAST" ? "bg-white/20 text-white" : "bg-neutral-200 text-body"
+            }`}
+          >
+            {counts.past}
+          </span>
+        </button>
+      </div>
 
-          {/* Source Filter */}
+      {/* ─── Line 2 (Sub-filters) & Controls Row ─── */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 flex-wrap">
+          {/* Line 2 for Upcoming Sessions */}
+          {timelineTab === "UPCOMING" && (
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-primary/10 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setUpcomingSubFilter("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  upcomingSubFilter === "ALL"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                All ({counts.upcoming})
+              </button>
+              <button
+                type="button"
+                onClick={() => setUpcomingSubFilter("NEXT_24_HRS")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer flex items-center gap-1 ${
+                  upcomingSubFilter === "NEXT_24_HRS"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                <span>Next 24 hrs</span>
+                {counts.upcoming24h > 0 && (
+                  <span
+                    className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                      upcomingSubFilter === "NEXT_24_HRS"
+                        ? "bg-white/20 text-white"
+                        : "bg-amber-100 text-amber-800"
+                    }`}
+                  >
+                    {counts.upcoming24h}
+                  </span>
+                )}
+              </button>
+              <button
+                type="button"
+                onClick={() => setUpcomingSubFilter("SCHEDULED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  upcomingSubFilter === "SCHEDULED"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                Scheduled ({counts.upcomingScheduled})
+              </button>
+              <button
+                type="button"
+                onClick={() => setUpcomingSubFilter("RESCHEDULED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  upcomingSubFilter === "RESCHEDULED"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                Rescheduled ({counts.upcomingRescheduled})
+              </button>
+              <button
+                type="button"
+                onClick={() => setUpcomingSubFilter("CANCELLED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  upcomingSubFilter === "CANCELLED"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                Cancel ({counts.upcomingCancelled})
+              </button>
+            </div>
+          )}
+
+          {/* Line 2 for Past Sessions */}
+          {timelineTab === "PAST" && (
+            <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-primary/10 shadow-xs">
+              <button
+                type="button"
+                onClick={() => setPastSubFilter("ALL")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  pastSubFilter === "ALL"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                All ({counts.past})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPastSubFilter("COMPLETED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  pastSubFilter === "COMPLETED"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                Completed ({counts.pastCompleted})
+              </button>
+              <button
+                type="button"
+                onClick={() => setPastSubFilter("CANCELLED")}
+                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
+                  pastSubFilter === "CANCELLED"
+                    ? "bg-primary text-white shadow-xs font-bold"
+                    : "text-body hover:text-heading hover:bg-bg-alt/30"
+                }`}
+              >
+                Cancelled ({counts.pastCancelled})
+              </button>
+            </div>
+          )}
+
+          {/* Source Filter (All Types, Trials, Course Sessions) */}
           <div className="flex items-center gap-1 p-1 rounded-xl bg-white border border-primary/10 shadow-xs">
             <button
               type="button"
               onClick={() => setSourceFilter("ALL")}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
                 sourceFilter === "ALL"
-                  ? "bg-accent text-white shadow-xs"
+                  ? "bg-accent text-white shadow-xs font-bold"
                   : "text-body hover:text-heading hover:bg-bg-alt/30"
               }`}
             >
@@ -249,9 +451,9 @@ export function AdminLessonsManager({
             <button
               type="button"
               onClick={() => setSourceFilter(LessonSource.TRIAL)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
                 sourceFilter === LessonSource.TRIAL
-                  ? "bg-accent text-white shadow-xs"
+                  ? "bg-accent text-white shadow-xs font-bold"
                   : "text-body hover:text-heading hover:bg-bg-alt/30"
               }`}
             >
@@ -260,9 +462,9 @@ export function AdminLessonsManager({
             <button
               type="button"
               onClick={() => setSourceFilter(LessonSource.ENROLLMENT)}
-              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 ${
+              className={`px-2.5 py-1.5 rounded-lg text-xs font-semibold transition-colors active:scale-95 cursor-pointer ${
                 sourceFilter === LessonSource.ENROLLMENT
-                  ? "bg-cta text-white shadow-xs"
+                  ? "bg-cta text-white shadow-xs font-bold"
                   : "text-body hover:text-heading hover:bg-bg-alt/30"
               }`}
             >
@@ -284,7 +486,7 @@ export function AdminLessonsManager({
             type="text"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search student, teacher, instrument, course..."
+            placeholder="Search student, teacher, instrument..."
             className="w-full rounded-xl bg-white border border-primary/15 pl-9 pr-3 py-2 text-xs text-heading placeholder:text-body/50 focus:outline-none focus:border-primary focus:ring-1 focus:ring-primary shadow-xs"
           />
         </div>
@@ -320,52 +522,32 @@ export function AdminLessonsManager({
                     key={l.id}
                     className="hover:bg-bg-alt/15 transition-colors"
                   >
+                    {/* Tracking ID */}
                     <td className="py-3.5 px-4 whitespace-nowrap">
                       <span className="font-mono font-bold text-accent-dark text-[11px] bg-accent/10 px-2 py-0.5 rounded border border-accent/20">
                         {l.trackingCode}
                       </span>
                     </td>
 
+                    {/* Date & Time */}
                     <td className="py-3.5 px-4 whitespace-nowrap font-numeric">
                       {editingLessonId === l.id ? (
-                        <div className="flex items-center gap-1.5 min-w-[270px]">
+                        <div className="flex items-center gap-1.5 min-w-[230px]">
                           <div className="flex-1">
                             <DateTimePicker
                               compact
                               value={editDateInput}
                               onChange={setEditDateInput}
-                              placeholder="Pick new date & time (IST)"
+                              placeholder="Pick date & time (IST)"
                             />
                           </div>
-                          <button
-                            type="button"
-                            disabled={isSaving || !editDateInput}
-                            onClick={() => handleSaveDateTime(l.id)}
-                            className="p-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center justify-center cursor-pointer shrink-0"
-                            title="Save directly to database"
-                          >
-                            {isSaving ? (
-                              <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                            ) : (
-                              <Check className="w-3.5 h-3.5" />
-                            )}
-                          </button>
-                          <button
-                            type="button"
-                            disabled={isSaving}
-                            onClick={() => setEditingLessonId(null)}
-                            className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-body transition-colors cursor-pointer shrink-0"
-                            title="Cancel"
-                          >
-                            <X className="w-3.5 h-3.5" />
-                          </button>
                         </div>
                       ) : (
                         <div className="flex items-center gap-2 group">
                           <span
                             onClick={() => handleStartEdit(l)}
                             className="text-heading font-medium hover:text-primary transition-colors cursor-pointer"
-                            title="Click to edit date & time directly in database (IST)"
+                            title="Click to edit date, time, and status in database (IST)"
                           >
                             {formatToIST(l.startsAt) || l.formattedTime}
                           </span>
@@ -373,19 +555,20 @@ export function AdminLessonsManager({
                             type="button"
                             onClick={() => handleStartEdit(l)}
                             className="p-1 rounded-md text-primary/60 hover:text-primary hover:bg-primary/10 transition-colors opacity-70 group-hover:opacity-100 cursor-pointer"
-                            title="Edit Date & Time directly in database"
+                            title="Edit Date, Time, and Status in database"
                           >
                             <Pencil className="w-3.5 h-3.5" />
                           </button>
                           {savedSuccessId === l.id && (
                             <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 animate-in fade-in">
-                              Updated in DB!
+                              Saved!
                             </span>
                           )}
                         </div>
                       )}
                     </td>
 
+                    {/* Session Type */}
                     <td className="py-3.5 px-4">
                       {l.lessonSource === "TRIAL" ? (
                         <div className="space-y-0.5">
@@ -417,64 +600,112 @@ export function AdminLessonsManager({
                       )}
                     </td>
 
+                    {/* Faculty Instructor */}
                     <td className="py-3.5 px-4 font-semibold text-heading whitespace-nowrap">
                       {l.teacherName}
                     </td>
 
+                    {/* Student */}
                     <td className="py-3.5 px-4">
                       <p className="font-bold text-heading whitespace-nowrap">{l.studentName}</p>
                       <p className="text-[10px] text-body">{l.studentEmail}</p>
                     </td>
 
+                    {/* Discipline */}
                     <td className="py-3.5 px-4 text-body">
                       {l.instrument} ({l.durationMinutes}m)
                     </td>
 
+                    {/* Status (View Mode / Edit Mode) */}
                     <td className="py-3.5 px-4">
-                      <span
-                        className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
-                          l.status === "SCHEDULED"
-                            ? "bg-purple-50 text-purple-700 border border-purple-200"
-                            : l.status === "RESCHEDULED"
-                            ? "bg-amber-50 text-amber-700 border border-amber-200"
-                            : l.status === "COMPLETED"
-                            ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                            : "bg-rose-50 text-rose-700 border border-rose-200"
-                        }`}
-                      >
-                        {l.status}
-                      </span>
+                      {editingLessonId === l.id ? (
+                        <select
+                          value={editStatusInput}
+                          onChange={(e) => setEditStatusInput(e.target.value as LessonStatus)}
+                          className="px-2.5 py-1.5 rounded-lg border border-primary/30 bg-white text-xs font-bold text-heading focus:outline-none focus:border-primary shadow-2xs cursor-pointer"
+                        >
+                          <option value={LessonStatus.SCHEDULED}>SCHEDULED</option>
+                          <option value={LessonStatus.RESCHEDULED}>RESCHEDULED</option>
+                          <option value={LessonStatus.COMPLETED}>COMPLETED</option>
+                          <option value={LessonStatus.CANCELLED}>CANCELLED</option>
+                        </select>
+                      ) : (
+                        <span
+                          className={`inline-block px-2.5 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider ${
+                            l.status === "SCHEDULED"
+                              ? "bg-purple-50 text-purple-700 border border-purple-200"
+                              : l.status === "RESCHEDULED"
+                              ? "bg-amber-50 text-amber-700 border border-amber-200"
+                              : l.status === "COMPLETED"
+                              ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
+                              : "bg-rose-50 text-rose-700 border border-rose-200"
+                          }`}
+                        >
+                          {l.status}
+                        </span>
+                      )}
                     </td>
 
+                    {/* Actions */}
                     <td className="py-3.5 px-4 text-right whitespace-nowrap">
                       <div className="flex items-center justify-end gap-2">
-                        <button
-                          type="button"
-                          onClick={() => handleStartEdit(l)}
-                          className="p-1.5 rounded-lg bg-purple-50 text-[#3C096C] hover:bg-purple-100 transition-colors border border-purple-200 active:scale-95 shadow-2xs cursor-pointer"
-                          title="Change Date & Time directly in database"
-                        >
-                          <Pencil className="w-3.5 h-3.5" />
-                        </button>
+                        {editingLessonId === l.id ? (
+                          <>
+                            <button
+                              type="button"
+                              disabled={isSaving || !editDateInput}
+                              onClick={() => handleSaveDateTimeAndStatus(l.id)}
+                              className="px-2.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold transition-all shadow-xs active:scale-95 disabled:opacity-50 flex items-center gap-1 cursor-pointer shrink-0"
+                              title="Save changes directly to database"
+                            >
+                              {isSaving ? (
+                                <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                              ) : (
+                                <Check className="w-3.5 h-3.5" />
+                              )}
+                              <span>Save</span>
+                            </button>
+                            <button
+                              type="button"
+                              disabled={isSaving}
+                              onClick={() => setEditingLessonId(null)}
+                              className="p-1.5 rounded-lg bg-neutral-100 hover:bg-neutral-200 text-body transition-colors cursor-pointer shrink-0"
+                              title="Cancel"
+                            >
+                              <X className="w-3.5 h-3.5" />
+                            </button>
+                          </>
+                        ) : (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => handleStartEdit(l)}
+                              className="p-1.5 rounded-lg bg-purple-50 text-[#3C096C] hover:bg-purple-100 transition-colors border border-purple-200 active:scale-95 shadow-2xs cursor-pointer"
+                              title="Edit Date, Time, and Status directly in database"
+                            >
+                              <Pencil className="w-3.5 h-3.5" />
+                            </button>
 
-                        <Link
-                          href={`/lesson/${l.id}`}
-                          target="_blank"
-                          className="p-1.5 rounded-lg bg-bg-alt/40 text-primary hover:bg-primary hover:text-white transition-all active:scale-95 shadow-2xs"
-                          title="Open Classroom"
-                        >
-                          <ExternalLink className="w-3.5 h-3.5" />
-                        </Link>
+                            <Link
+                              href={`/lesson/${l.id}`}
+                              target="_blank"
+                              className="p-1.5 rounded-lg bg-bg-alt/40 text-primary hover:bg-primary hover:text-white transition-all active:scale-95 shadow-2xs"
+                              title="Open Classroom"
+                            >
+                              <ExternalLink className="w-3.5 h-3.5" />
+                            </Link>
 
-                        {(l.status === "SCHEDULED" || l.status === "RESCHEDULED") && (
-                          <button
-                            type="button"
-                            disabled={isPending}
-                            onClick={() => handleCancelLesson(l.id, l.studentName)}
-                            className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors border border-rose-200 text-[11px] font-semibold active:scale-95"
-                          >
-                            Cancel
-                          </button>
+                            {(l.status === "SCHEDULED" || l.status === "RESCHEDULED") && (
+                              <button
+                                type="button"
+                                disabled={isPending}
+                                onClick={() => handleCancelLesson(l.id, l.studentName)}
+                                className="px-2.5 py-1 rounded-lg bg-rose-50 text-rose-700 hover:bg-rose-100 transition-colors border border-rose-200 text-[11px] font-semibold active:scale-95 cursor-pointer"
+                              >
+                                Cancel
+                              </button>
+                            )}
+                          </>
                         )}
                       </div>
                     </td>

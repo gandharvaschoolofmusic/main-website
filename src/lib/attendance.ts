@@ -1,4 +1,4 @@
-import type { Prisma } from "@prisma/client";
+import { Prisma, LessonStatus } from "@prisma/client";
 import { db } from "@/lib/db";
 import { revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
@@ -369,3 +369,98 @@ export function parseAttendanceLogs(
   };
 }
 
+/**
+ * Automatically resolves past scheduled or rescheduled lessons whose scheduled window has concluded.
+ *
+ * Rules:
+ * - Mark as COMPLETED only if:
+ *   1) Both student and teacher joined (attendance session logs or join timestamps for both roles exist), OR
+ *   2) Only the teacher joined, and the teacher stayed for at least 10 minutes (>= 600 seconds).
+ * - Otherwise mark as CANCELLED (do NOT automatically mark as completed just because time has passed).
+ */
+export async function autoResolvePastLessons(): Promise<number> {
+  const now = new Date();
+  const pastLessons = await db.lesson.findMany({
+    where: {
+      status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+      startsAt: { lt: new Date(now.getTime() - 15 * 60 * 1000) },
+    },
+    select: {
+      id: true,
+      startsAt: true,
+      durationMinutes: true,
+      teacherJoinedAt: true,
+      teacherLeftAt: true,
+      studentJoinedAt: true,
+      studentLeftAt: true,
+      attendanceLogs: true,
+      status: true,
+    },
+    take: 100,
+  });
+
+  let resolvedCount = 0;
+
+  for (const lesson of pastLessons) {
+    const duration = lesson.durationMinutes || 60;
+    const endsAt = new Date(lesson.startsAt.getTime() + duration * 60 * 1000);
+    if (now.getTime() < endsAt.getTime() + 5 * 60 * 1000) {
+      continue;
+    }
+
+    let teacherJoined = !!lesson.teacherJoinedAt;
+    let studentJoined = !!lesson.studentJoinedAt;
+    let teacherSeconds = 0;
+
+    if (Array.isArray(lesson.attendanceLogs)) {
+      const logs = lesson.attendanceLogs as unknown as AttendanceSession[];
+      for (const log of logs) {
+        if (log && typeof log === "object") {
+          if (log.userRole === "TEACHER") {
+            teacherJoined = true;
+            if (typeof log.durationSeconds === "number" && log.durationSeconds > 0) {
+              teacherSeconds += log.durationSeconds;
+            } else if (log.joinedAt && log.leftAt) {
+              const diff = (new Date(log.leftAt).getTime() - new Date(log.joinedAt).getTime()) / 1000;
+              if (diff > 0) teacherSeconds += diff;
+            }
+          }
+          if (log.userRole === "STUDENT") {
+            studentJoined = true;
+          }
+        }
+      }
+    }
+
+    if (teacherSeconds === 0 && lesson.teacherJoinedAt) {
+      const exitTime = lesson.teacherLeftAt || endsAt;
+      teacherSeconds = Math.max(0, (exitTime.getTime() - lesson.teacherJoinedAt.getTime()) / 1000);
+    }
+
+    const bothJoined = teacherJoined && studentJoined;
+    const teacherTenMins = teacherJoined && teacherSeconds >= 600;
+
+    if (bothJoined || teacherTenMins) {
+      await db.lesson.update({
+        where: { id: lesson.id },
+        data: {
+          status: LessonStatus.COMPLETED,
+          teacherLeftAt: lesson.teacherLeftAt || now,
+          studentLeftAt: studentJoined ? (lesson.studentLeftAt || now) : null,
+        },
+      });
+    } else {
+      await db.lesson.update({
+        where: { id: lesson.id },
+        data: {
+          status: LessonStatus.CANCELLED,
+          cancelledBy: "system_auto_resolve",
+          cancelledAt: now,
+        },
+      });
+    }
+    resolvedCount++;
+  }
+
+  return resolvedCount;
+}
