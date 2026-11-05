@@ -619,7 +619,7 @@ export function WeeklySchedulePicker({
             Class Duration
           </label>
           <div className="grid grid-cols-3 gap-1.5">
-            {[45, 60, 90].map((dur) => (
+            {[30, 45, 60].map((dur) => (
               <button
                 key={dur}
                 type="button"

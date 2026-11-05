@@ -26,7 +26,7 @@ export {
 // ─── Constants ───────────────────────────────────────────────────────────────
 
 /** Lesson duration options in minutes */
-export const LESSON_DURATIONS = [30, 45, 60, 90] as const;
+export const LESSON_DURATIONS = [30, 45, 60] as const;
 export type LessonDuration = (typeof LESSON_DURATIONS)[number];
 
 /** How many minutes before lesson start the join button activates */

@@ -2641,9 +2641,9 @@ export function AdminEnrollmentsManager({
                         onChange={(e) => setSingleLessonDuration(Number(e.target.value))}
                         className="w-full px-3 py-1.5 rounded-lg border border-neutral-300 bg-white text-xs font-medium focus:outline-none focus:border-[#3C096C]"
                       >
+                        <option value={30}>30 mins</option>
                         <option value={45}>45 mins</option>
                         <option value={60}>60 mins</option>
-                        <option value={90}>90 mins</option>
                       </select>
                     </div>
                     <div className="w-40">
