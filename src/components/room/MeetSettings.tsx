@@ -6,6 +6,7 @@ import { RoomEvent } from "livekit-client";
 import { Mic, Video, Settings, Captions, Smile, Volume2 } from "lucide-react";
 import type { AudioMode } from "@/lib/audio-engine";
 import { getCleanDeviceList } from "@/lib/media-devices";
+import { canRouteLessonAudio } from "@/lib/lesson-speaker";
 import { RoomDialog, RoomSwitch } from "./MeetPrimitives";
 
 export type SettingsTab = "Audio" | "Video" | "General" | "Captions" | "Reactions";
@@ -59,6 +60,12 @@ export function MeetSettings({
   const [error, setError] = useState("");
   const [speaker, setSpeaker] = useState(() => room.getActiveDevice("audiooutput") || "default");
   const [busy, setBusy] = useState(false);
+  const mediaDevices = typeof navigator !== "undefined" ? navigator.mediaDevices as
+    (MediaDevices & { selectAudioOutput?: () => Promise<MediaDeviceInfo> }) | undefined : undefined;
+  const canChooseOutput = canRouteLessonAudio();
+  const hasPicker = canChooseOutput && typeof mediaDevices?.selectAudioOutput === "function";
+  const isAndroid = typeof navigator !== "undefined" && /Android/i.test(navigator.userAgent);
+  const outputChoices = getCleanDeviceList(devices, "audiooutput");
 
   useEffect(() => {
     const activeChanged = (kind: MediaDeviceKind, id: string) => {
@@ -158,6 +165,24 @@ export function MeetSettings({
     }
   }
 
+  async function switchSpeaker(id: string) {
+    if (!await room.switchActiveDevice("audiooutput", id)) throw new Error("Could not switch the lesson audio output.");
+    setSpeaker(id);
+  }
+
+  async function openSpeakerPicker() {
+    if (!mediaDevices?.selectAudioOutput) return;
+    let selected: MediaDeviceInfo;
+    try {
+      selected = await mediaDevices.selectAudioOutput();
+    } catch (error) {
+      if (error instanceof DOMException && error.name === "AbortError") return;
+      throw error;
+    }
+    await switchSpeaker(selected.deviceId);
+    setDevices(items => [...items.filter(item => item.kind !== "audiooutput" || item.deviceId !== selected.deviceId), selected]);
+  }
+
   return (
     <RoomDialog title="Settings" onClose={onClose} wide>
       <div className="meet-settings-layout">
@@ -185,12 +210,9 @@ export function MeetSettings({
             <>
               {selectDevice("audioinput", "Microphone", audioDeviceId, onAudioDevice)}
               <div className="meet-speaker-field">
-                {selectDevice("audiooutput", "Speaker", speaker, async (id) => {
-                  if (!await room.switchActiveDevice("audiooutput", id || "default")) {
-                    throw new Error("Could not switch to the selected speaker.");
-                  }
-                  setSpeaker(id || "default");
-                })}
+                {canChooseOutput && outputChoices.length > 1
+                  ? selectDevice("audiooutput", "Speaker", speaker, switchSpeaker)
+                  : <div className="meet-field"><span>Speaker</span><strong>System output</strong></div>}
                 <button
                   type="button"
                   className="meet-text-button"
@@ -200,6 +222,12 @@ export function MeetSettings({
                   <Volume2 size={18} /> Test
                 </button>
               </div>
+              {hasPicker && <button type="button" className="meet-text-button" disabled={busy}
+                onClick={() => void run(openSpeakerPicker)}><Volume2 size={18} />Choose audio output</button>}
+              {!hasPicker && (!canChooseOutput || outputChoices.length < 2) &&
+                <p className="meet-muted">{isAndroid
+                  ? "Android controls the lesson audio on this phone. If your phone offers an output selector during the call, choose Phone speaker there. Tap Test to hear the current output."
+                  : "Your browser uses the system audio route. Check your device’s audio output controls for available speakers or headphones."}</p>}
               <RoomSwitch
                 label="Music mode"
                 description="Preserve instrument tone with stereo audio. Use headphones to avoid echo."

@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useChat, useParticipants, useRoomContext, useAudioPlayback } from "@livekit/components-react";
 import { ConnectionQuality, RoomEvent } from "livekit-client";
-import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp, VolumeX } from "lucide-react";
+import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp, Volume2, VolumeX } from "lucide-react";
 import type { AudioMode } from "@/lib/audio-engine";
 import type { MultiCameraState } from "@/hooks/useMultiCamera";
 import { MeetStage, type MeetLayout } from "./MeetStage";
@@ -93,7 +93,10 @@ export function MeetRoomUI(props: Props) {
   const floorControls = <TurnTakingControls isTeacher={props.lesson.isTeacher} activeState={props.activeFloorState} onStateChange={props.onFloorChange}/>;
   return <div className="meet-room">
     <header className="meet-topbar"><div className="meet-room-heading"><time suppressHydrationWarning>{clock || "--:--"}</time><span className="meet-divider"/><h1>{props.lesson.instrument} lesson</h1><RoomIconButton label="Meeting details" active={panel === "details"} onClick={() => togglePanel("details")}><Info size={17}/></RoomIconButton></div>
-      <div className="meet-top-actions"><button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} title="Audio mode"><Mic size={14}/>{props.audioMode === "TALKING" ? "Talking mode" : "Instrument mode"}</button><button type="button" className="meet-people-pill" aria-label={`People (${participants.length})`} aria-expanded={panel === "people"} onClick={() => togglePanel("people")}><span className="meet-mini-avatar">{(room.localParticipant.name || "Y")[0]}</span><Users size={16}/><span>{participants.length}</span></button></div>
+      <div className="meet-top-actions"><button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} aria-label="Sound settings: microphone and speaker" title="Sound settings">
+        <span className="meet-desktop-sound"><Mic size={14}/>{props.audioMode === "TALKING" ? "Talking mode" : "Instrument mode"}</span>
+        <span className="meet-mobile-sound"><Volume2 size={18}/>Sound</span>
+      </button><button type="button" className="meet-people-pill" aria-label={`People (${participants.length})`} aria-expanded={panel === "people"} onClick={() => togglePanel("people")}><span className="meet-mini-avatar">{(room.localParticipant.name || "Y")[0]}</span><Users size={16}/><span>{participants.length}</span></button></div>
     </header>
     {props.microphoneError && <div className="meet-call-banner" role="alert">
       <span>{props.microphoneError}</span>

@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AudioMode } from "@/lib/audio-engine";
-import { microphoneOptions } from "@/lib/lesson-microphone";
+import { microphoneOptions, resolveMicrophoneId } from "@/lib/lesson-microphone";
 import { getCleanDeviceList, CleanedDeviceOption } from "@/lib/media-devices";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Music, ArrowLeft } from "lucide-react";
@@ -26,7 +26,7 @@ interface PreJoinScreenProps {
     audioMode: AudioMode;
     isAudioMuted: boolean;
     isVideoMuted: boolean;
-  }) => void;
+  }, microphone?: MediaStreamTrack) => void;
   onCancel?: () => void;
 }
 
@@ -68,10 +68,12 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
     const request = ++previewRequest.current;
     setChangingPreview(!restore);
     const input = (id: string) => id ? { deviceId: restore ? { ideal: id } : { exact: id } } : true;
-    const audio = microphoneOptions({ deviceId: micId, mode });
-    if (restore && micId) audio.deviceId = { ideal: micId };
     let acquired: MediaStream | undefined;
     try {
+      micId = await resolveMicrophoneId(micId);
+      if (request !== previewRequest.current) return;
+      const audio = microphoneOptions({ deviceId: micId, mode });
+      if (restore && micId) audio.deviceId = { ideal: micId };
       const previousCamera = keepCamera ? streamRef.current?.getVideoTracks().find(track => track.readyState === "live") : undefined;
       try {
         acquired = await navigator.mediaDevices.getUserMedia({ audio, video: previousCamera ? false : input(camId) });
@@ -86,6 +88,16 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
         }
       }
       if (request !== previewRequest.current) return;
+      // Labels may only become available after the first permission grant.
+      const resolved = await resolveMicrophoneId(micId);
+      if (request !== previewRequest.current) return;
+      if (resolved !== micId && acquired.getAudioTracks().length) {
+        const replacement = await navigator.mediaDevices.getUserMedia({ audio: microphoneOptions({ deviceId: resolved, mode }) });
+        acquired.getAudioTracks().forEach(track => { acquired!.removeTrack(track); track.stop(); });
+        replacement.getAudioTracks().forEach(track => acquired!.addTrack(track));
+        micId = resolved;
+        if (request !== previewRequest.current) return;
+      }
       if (previousCamera) acquired.addTrack(previousCamera);
       const cameraUnavailable = !acquired.getVideoTracks().length;
       void refreshDevices();
@@ -165,6 +177,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       // Ignore
     }
 
+    const microphone = !isAudioMuted ? streamRef.current?.getAudioTracks()[0] : undefined;
+    if (microphone) streamRef.current?.removeTrack(microphone);
     releasePreview();
 
     onJoin({
@@ -173,7 +187,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
       audioMode,
       isAudioMuted,
       isVideoMuted,
-    });
+    }, microphone);
   };
 
   const handleCancel = () => {

@@ -5,6 +5,7 @@ import {
   EncodedFileType,
   EncodingOptionsPreset,
   EgressStatus,
+  type EgressInfo,
 } from "livekit-server-sdk";
 import { getS3UploadConfig, recordingS3Object } from "./recording-s3";
 export { getS3UploadConfig } from "./recording-s3";
@@ -173,6 +174,11 @@ export function getEgressClient(): EgressClient | null {
   return cachedEgressClient;
 }
 
+export function completedRecordingFile(job: EgressInfo) {
+  if (job.status !== EgressStatus.EGRESS_COMPLETE) return undefined;
+  return job.fileResults[0] ?? (job.result.case === "file" ? job.result.value : undefined);
+}
+
 /**
  * Starts a server-side Room Composite Egress recording for a live lesson.
  * This runs completely server-side in LiveKit Cloud without consuming any client CPU or upload bandwidth.
@@ -219,8 +225,9 @@ export async function startLessonRoomEgress(params: {
 
     const existing = activeEgresses.find(job =>
       (job.status === EgressStatus.EGRESS_ACTIVE || job.status === EgressStatus.EGRESS_STARTING) &&
-      job.request.case === "roomComposite" && job.request.value.fileOutputs.some(file =>
-        file.output.case === "s3" && file.output.value.bucket === s3.bucket));
+      job.request.case === "roomComposite" && !job.request.value.audioOnly && !job.request.value.videoOnly &&
+      [...job.request.value.fileOutputs, ...(job.request.value.output.case === "file" ? [job.request.value.output.value] : [])]
+        .some(file => file.output.case === "s3" && file.output.value.bucket === s3.bucket));
     if (existing) {
       logger.info(
         { roomName, egressId: existing.egressId, status: existing.status },
@@ -248,7 +255,9 @@ export async function startLessonRoomEgress(params: {
       roomName,
       fileOutput,
       {
-        layout: "grid-dark",
+        layout: "single-speaker",
+        audioOnly: false,
+        videoOnly: false,
         encodingOptions: EncodingOptionsPreset.H264_720P_30,
       },
     );

@@ -1,6 +1,8 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import { Room } from "livekit-client";
+import { preferPhoneSpeaker } from "@/lib/lesson-speaker";
 import "./meet-room.css";
 
 import { useRouter } from "next/navigation";
@@ -26,9 +28,17 @@ interface LessonRoomClientProps {
 
 export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
   const router = useRouter();
+  const room = useRef<Room | null>(null);
+  const previewMicrophone = useRef<MediaStreamTrack | null>(null);
+  useEffect(() => {
+    const releasePending = () => { previewMicrophone.current?.stop(); previewMicrophone.current = null; };
+    window.addEventListener("pagehide", releasePending);
+    return () => { window.removeEventListener("pagehide", releasePending); releasePending(); };
+  }, []);
 
   const [step, setStep] = useState<"PRE_JOIN" | "CONNECTING" | "CONNECTED" | "ERROR">("PRE_JOIN");
   const [tokenData, setTokenData] = useState<{
+    room: Room;
     token: string;
     serverUrl: string;
   } | null>(null);
@@ -55,13 +65,20 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     audioMode: AudioMode;
     isAudioMuted: boolean;
     isVideoMuted: boolean;
-  }) => {
+  }, microphone?: MediaStreamTrack) => {
+    previewMicrophone.current = microphone ?? null;
+    room.current ??= new Room();
+    // Use the Join gesture while the browser still permits starting playback.
+    void room.current.startAudio().catch(() => {});
     setJoinedConfig(config);
     setStep("CONNECTING");
     setErrorMessage(null);
 
     try {
-      const res = await fetch(`/api/lessons/${lesson.id}/room-token?early=true`);
+      const [res] = await Promise.all([
+        fetch(`/api/lessons/${lesson.id}/room-token?early=true`),
+        preferPhoneSpeaker(room.current),
+      ]);
       const data = await res.json();
 
       if (!res.ok) {
@@ -69,11 +86,14 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
       }
 
       setTokenData({
+        room: room.current,
         token: data.token,
         serverUrl: data.serverUrl,
       });
       setStep("CONNECTED");
     } catch (err: unknown) {
+      previewMicrophone.current?.stop();
+      previewMicrophone.current = null;
       const error = err as Error;
       setErrorMessage(error.message || "Failed to connect to lesson room.");
       setStep("ERROR");
@@ -108,10 +128,11 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
 
   return (
     <LessonRoom
+      room={tokenData.room}
       token={tokenData.token}
       serverUrl={tokenData.serverUrl}
       lesson={lesson}
-      initialConfig={joinedConfig}
+      initialConfig={{ ...joinedConfig, previewMicrophone }}
       onLeave={handleLeave}
     />
   );

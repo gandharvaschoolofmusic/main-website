@@ -5,12 +5,13 @@ import { useLocalParticipant } from "@livekit/components-react";
 import { RoomEvent, TrackEvent, type Room } from "livekit-client";
 import type { AudioMode } from "@/lib/audio-engine";
 import {
-  enableLessonMicrophone, restartLessonMicrophone,
+  enableLessonMicrophone, resolveMicrophoneId, restartLessonMicrophone,
   type MicrophoneSettings,
 } from "@/lib/lesson-microphone";
 
 export function useLessonMicrophone(room: Room, initial: {
   audioMode: AudioMode; audioDeviceId: string; isAudioMuted?: boolean;
+  previewMicrophone?: { current: MediaStreamTrack | null };
 }) {
   const { isMicrophoneEnabled: enabled, microphoneTrack: publication } = useLocalParticipant({ room });
   const [settings, setSettings] = useState<MicrophoneSettings>({
@@ -52,11 +53,13 @@ export function useLessonMicrophone(room: Room, initial: {
 
   const enable = useCallback(async (signal: AbortSignal) => {
     const requested = selected.current;
-    const actual = await enableLessonMicrophone(room, requested, signal, applied.current);
+    const preview = initial.previewMicrophone?.current;
+    if (initial.previewMicrophone) initial.previewMicrophone.current = null;
+    const actual = await enableLessonMicrophone(room, requested, signal, applied.current, preview);
     if (signal.aborted) return;
     selected.current = applied.current = actual;
     setSettings(actual);
-  }, [room]);
+  }, [room, initial.previewMicrophone]);
 
   useEffect(() => {
     const controller = new AbortController();
@@ -75,6 +78,7 @@ export function useLessonMicrophone(room: Room, initial: {
   const change = useCallback((patch: Partial<MicrophoneSettings>) => run(async signal => {
     const next = { ...selected.current, ...patch };
     if (room.localParticipant.isMicrophoneEnabled) {
+      next.deviceId = await resolveMicrophoneId(next.deviceId);
       await restartLessonMicrophone(room, applied.current, next);
       if (signal.aborted) return;
       applied.current = next;

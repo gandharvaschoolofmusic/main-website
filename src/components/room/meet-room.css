@@ -24,6 +24,13 @@
 .meet-people-pill>svg{width:14px;margin-left:-12px;margin-top:15px;background:#28292c;border-radius:6px}
 .meet-audio-status{display:flex;align-items:center;gap:7px;color:#c4c7c5;background:transparent;border:0;border-radius:20px;padding:7px 10px;font-size:12px!important}
 .meet-audio-status:hover{background:#28292c}
+.meet-desktop-sound{display:inline-flex;align-items:center;gap:7px}
+.meet-mobile-sound{display:none}
+@media(max-width:800px),(pointer:coarse){
+  .meet-audio-status .meet-desktop-sound{display:none}
+  .meet-mobile-sound{display:inline-flex;align-items:center;justify-content:center;gap:5px;min-height:44px;padding-inline:5px;font-size:13px}
+  .meet-top-actions{flex-shrink:0}
+}
 .meet-workspace{flex:1;min-height:0;display:flex;gap:16px;padding:0 16px;position:relative}
 .meet-stage-wrap{position:relative;flex:1;min-width:0;min-height:0}
 .meet-stage{height:100%;width:100%;display:flex;gap:12px;min-width:0;position:relative}

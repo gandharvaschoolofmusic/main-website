@@ -4,7 +4,7 @@ import { WebhookReceiver, EgressStatus } from "livekit-server-sdk";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
 import { AuthRateLimits } from "@/lib/rate-limit";
-import { startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
+import { completedRecordingFile, startLessonRoomEgress, stopActiveRoomEgressByRoom } from "@/lib/livekit";
 import { recordParticipantJoin, recordParticipantLeave } from "@/lib/attendance";
 import { recordingS3Object } from "@/lib/recording-s3";
 import { recordingPlaybackUrl } from "@/lib/supabase-storage";
@@ -219,7 +219,8 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       }
 
       // Automatically initiate LiveKit server-side Room Composite Egress recording
-      startLessonRoomEgress({
+      if (!isTeacher && !isStudent) break;
+      await startLessonRoomEgress({
         roomName: `lesson-${lessonId}`,
         lessonId,
       }).catch((err) => {
@@ -282,7 +283,7 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       }
 
       // Ensure any active LiveKit Room Egress is stopped
-      stopActiveRoomEgressByRoom(`lesson-${lessonId}`).catch((err) => {
+      await stopActiveRoomEgressByRoom(`lesson-${lessonId}`).catch((err) => {
         logger.warn({ err, lessonId }, "Failed to stop active room egress on room_finished");
       });
       break;
@@ -292,8 +293,8 @@ async function handleIndividualRoom(event: any, lessonId: string) {
       const egressInfo = event.egressInfo;
       if (!egressInfo || egressInfo.status !== EgressStatus.EGRESS_COMPLETE) break;
 
-      const fileResults = egressInfo.fileResults || [];
-      if (fileResults.length === 0) {
+      const primaryFile = completedRecordingFile(egressInfo);
+      if (!primaryFile) {
         logger.warn(
           { egressId: egressInfo.egressId, lessonId, status: egressInfo.status, error: egressInfo.error },
           "LiveKit Egress ended with no output file results",
@@ -301,7 +302,6 @@ async function handleIndividualRoom(event: any, lessonId: string) {
         break;
       }
 
-      const primaryFile = fileResults[0];
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;
@@ -442,7 +442,8 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       }
 
       // Automatically initiate LiveKit server-side Room Composite Egress recording for group room
-      startLessonRoomEgress({
+      if (!isTeacher && !groupLessons.some(lesson => lesson.studentId === participantIdentity)) break;
+      await startLessonRoomEgress({
         roomName: groupRoomId,
         groupRoomId,
       }).catch((err) => {
@@ -501,7 +502,7 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       );
 
       // Clean up any remaining active LiveKit Room Egress for group room
-      stopActiveRoomEgressByRoom(groupRoomId).catch((err) => {
+      await stopActiveRoomEgressByRoom(groupRoomId).catch((err) => {
         logger.warn({ err, groupRoomId }, "Failed to stop active group room egress on room_finished");
       });
       break;
@@ -511,8 +512,8 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
       const egressInfo = event.egressInfo;
       if (!egressInfo || egressInfo.status !== EgressStatus.EGRESS_COMPLETE) break;
 
-      const fileResults = egressInfo.fileResults || [];
-      if (fileResults.length === 0) {
+      const primaryFile = completedRecordingFile(egressInfo);
+      if (!primaryFile) {
         logger.warn(
           { egressId: egressInfo.egressId, groupRoomId, status: egressInfo.status, error: egressInfo.error },
           "LiveKit Egress ended with no output file results for group room",
@@ -520,7 +521,6 @@ async function handleGroupRoom(event: any, groupRoomId: string) {
         break;
       }
 
-      const primaryFile = fileResults[0];
       const durationSeconds = primaryFile.duration
         ? Math.max(1, Math.round(Number(primaryFile.duration) / 1_000_000_000))
         : null;

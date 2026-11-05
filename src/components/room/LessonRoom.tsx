@@ -12,6 +12,7 @@ import {
   ConnectionQuality,
   DisconnectReason,
   LocalTrackPublication,
+  type Room,
   RoomEvent,
   Track,
 } from "livekit-client";
@@ -28,6 +29,7 @@ import { MultiCameraModal } from "./MultiCameraModal";
 import { useLessonAutoRecorder } from "@/hooks/useLessonAutoRecorder";
 
 interface LessonRoomProps {
+  room: Room;
   token: string;
   serverUrl: string;
   lesson: {
@@ -42,6 +44,7 @@ interface LessonRoomProps {
     lessonSource?: string | null;
   };
   initialConfig: {
+    previewMicrophone?: { current: MediaStreamTrack | null };
     audioDeviceId: string;
     videoDeviceId: string;
     audioMode: AudioMode;
@@ -79,6 +82,7 @@ export function LessonRoom(props: LessonRoomProps) {
   return (
     <div className="fixed inset-0 bg-[#111111] text-stone-100 flex flex-col z-50 overflow-hidden">
       <LiveKitRoom
+        room={props.room}
         token={token}
         serverUrl={serverUrl}
         connect={true}
@@ -101,6 +105,8 @@ export function LessonRoom(props: LessonRoomProps) {
           }
 
           console.error("LiveKit connection error:", err);
+          initialConfig.previewMicrophone?.current?.stop();
+          if (initialConfig.previewMicrophone) initialConfig.previewMicrophone.current = null;
           setDisconnectedError(
             err.message || "Failed to establish WebRTC video room connection.",
           );
@@ -417,10 +423,11 @@ function LessonRoomContent({
     try {
       const nextShare = !isScreenSharing;
       await room.localParticipant.setScreenShareEnabled(nextShare, {
-        audio: true,
-        selfBrowserSurface: "include",
+        video: { displaySurface: "monitor" },
+        audio: { restrictOwnAudio: true },
+        selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
-        systemAudio: "include",
+        systemAudio: "exclude",
         contentHint: "detail",
       });
       setIsScreenSharing(nextShare);
