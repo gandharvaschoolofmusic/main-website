@@ -71,9 +71,16 @@ export default function AffiliatePartner() {
       return;
     }
 
-    const ipResponse = await fetch("https://api.ipify.org?format=json");
-    const ipData = await ipResponse.json();
-    const userIP = ipData.ip;
+    let userIP = "client";
+    try {
+      const ipResponse = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(2500) });
+      if (ipResponse.ok) {
+        const ipData = await ipResponse.json();
+        userIP = ipData.ip || "client";
+      }
+    } catch {
+      // Non-blocking fallback
+    }
     const data = {
       ...formData,
       activeSheet: "Affiliate",
@@ -193,6 +200,7 @@ export default function AffiliatePartner() {
             <div className="flex items-center border border-gray-300 rounded-sm focus-within:ring-[#8506D5] focus-within:ring-2 transition-all duration-300">
               <div className="relative">
                 <Select
+                  instanceId="affiliate-country-code"
                   id="countryCode"
                   name="countryCode"
                   value={formData.countryCode}

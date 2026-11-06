@@ -2,7 +2,9 @@
 
 import { db } from "@/lib/db";
 import { requireRole, requireUser } from "@/lib/auth-helpers";
-import { Role } from "@prisma/client";
+import { Role, NotificationType } from "@prisma/client";
+import { notifyAdmins } from "@/actions/notifications";
+import { sendMail } from "@/lib/email";
 import fs from "fs";
 import path from "path";
 import {
@@ -857,6 +859,143 @@ export async function removeTeacherPaymentQrAction(
     const errMsg =
       error instanceof Error ? error.message : "Failed to remove QR code.";
     return { success: false, error: errMsg };
+  }
+}
+
+export type TeacherJobApplicationData = {
+  name: string;
+  phone: string;
+  mail: string;
+  gender: string;
+  qualification: string;
+  experience: string;
+  english: string;
+  certificate: string[];
+  setup: string;
+  userIP?: string;
+};
+
+/**
+ * Submit teacher job application safely from the server.
+ * Dispatches admin notifications, sends alert email, and mirrors to Google Sheets.
+ */
+export async function submitTeacherJobApplicationAction(
+  data: TeacherJobApplicationData
+): Promise<TeacherActionResponse> {
+  try {
+    const {
+      name,
+      phone,
+      mail,
+      gender,
+      qualification,
+      experience,
+      english,
+      certificate,
+      setup,
+      userIP,
+    } = data;
+
+    if (!name?.trim()) {
+      return { success: false, error: "Please enter your full name." };
+    }
+    if (!phone?.trim() || phone.replace(/\D/g, "").length < 6) {
+      return { success: false, error: "Please enter a valid mobile phone number." };
+    }
+    if (!mail?.trim() || !mail.includes("@")) {
+      return { success: false, error: "Please enter a valid email address." };
+    }
+    if (!qualification?.trim()) {
+      return { success: false, error: "Please select your highest qualification." };
+    }
+
+    logger.info({ name, mail, phone }, "Teacher job application received");
+
+    // 1. Notify system admins in Admin Portal
+    try {
+      await notifyAdmins({
+        type: NotificationType.NEW_TEACHER_SIGNUP,
+        title: "New Faculty Job Application",
+        body: `${name.trim()} applied for Gandharva online faculty (${qualification}, ${experience} exp). Contact: ${mail.trim()}, ${phone.trim()}.`,
+        link: "/admin/teachers",
+      });
+    } catch (notifErr) {
+      logger.warn({ error: notifErr }, "Non-blocking admin notification failure");
+    }
+
+    // 2. Dispatch email notification to admissions/admin
+    try {
+      const recipient =
+        process.env.ADMIN_EMAIL ||
+        process.env.EMAIL_FROM ||
+        "admin@gandharvaschoolofmusic.com";
+      const certList = Array.isArray(certificate) ? certificate.join(", ") : certificate || "None";
+
+      await sendMail({
+        to: recipient,
+        subject: `[Faculty Application] New Teacher Application from ${name.trim()}`,
+        html: `
+          <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto; padding: 24px; color: #1c1917;">
+            <h2 style="color: #3C096C; margin-bottom: 16px;">New Faculty Job Application</h2>
+            <p>A new instructor candidate has submitted a faculty application on Gandharva School of Music:</p>
+            <table style="width: 100%; border-collapse: collapse; margin: 20px 0;">
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Full Name:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${name.trim()}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Email:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;"><a href="mailto:${mail.trim()}">${mail.trim()}</a></td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Phone:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${phone.trim()}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Gender:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${gender || "Not specified"}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Qualification:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${qualification}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Experience:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${experience}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">English:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${english}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Certifications:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${certList}</td></tr>
+              <tr><td style="padding: 8px; font-weight: bold; border-bottom: 1px solid #f3f4f6;">Home Studio Setup:</td><td style="padding: 8px; border-bottom: 1px solid #f3f4f6;">${setup}</td></tr>
+            </table>
+            <p style="color: #78716c; font-size: 13px;">This application was recorded automatically by the Gandharva platform.</p>
+          </div>
+        `,
+      });
+    } catch (emailErr) {
+      logger.warn({ error: emailErr }, "Non-blocking admin email dispatch failure");
+    }
+
+    // 3. Mirror to Google Sheets from the server (bypassing client CORS & content-blocker issues)
+    try {
+      await fetch(
+        "https://script.google.com/macros/s/AKfycbySJzE7ICyLe7PubP04AOdVRKpCt9DeqV6v3xeelfjvMRf95KIwIqBsUCvTw1_4yeWyCw/exec",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "text/plain; charset=utf-8",
+          },
+          body: JSON.stringify({
+            name: name.trim(),
+            phone: phone.trim(),
+            mail: mail.trim(),
+            gender: gender || "",
+            qualification: qualification || "",
+            experience: experience || "",
+            english: english || "",
+            certificate: Array.isArray(certificate) ? certificate.join(", ") : certificate || "",
+            setup: setup || "",
+            activeSheet: "Job_Application",
+            userIP: userIP || "server",
+          }),
+          signal: AbortSignal.timeout(6000),
+        }
+      );
+    } catch (sheetErr) {
+      logger.warn({ error: sheetErr }, "Non-blocking: Failed to mirror to Google Sheets");
+    }
+
+    return {
+      success: true,
+      message: "Your application has been submitted successfully! Our Academic Board will review your credentials and contact you shortly.",
+    };
+  } catch (error) {
+    logger.error({ error }, "Error submitting teacher job application");
+    return {
+      success: false,
+      error: "An unexpected error occurred while submitting your application. Please try again or reach out to us at support@gandharvaschoolofmusic.com.",
+    };
   }
 }
 

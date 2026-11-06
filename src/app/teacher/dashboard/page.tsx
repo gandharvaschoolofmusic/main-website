@@ -88,6 +88,34 @@ export default async function TeacherDashboardPage() {
     });
   }
 
+  // Ensure newly registered teacher has a teacherProfile record
+  if (!profile) {
+    try {
+      profile = await db.teacherProfile.create({
+        data: {
+          userId: user.id,
+          bio: "",
+          instruments: [],
+          expertInstruments: [],
+          moderateInstruments: [],
+          yearsTeaching: 0,
+          hourlyRate: 50000,
+          payoutPerSession: 50000,
+          currency: "INR",
+          languages: ["English"],
+          isPublished: false,
+          approvalStatus: "PENDING",
+        },
+        include: {
+          availabilityRules: { select: { id: true } },
+          lessonsAsTeacher: true,
+        },
+      });
+    } catch (createErr) {
+      console.warn("Failed to auto-create missing teacherProfile in TeacherDashboardPage:", createErr);
+    }
+  }
+
   const isEmailVerified = !!user.emailVerified;
   const isPublished = !!profile?.isPublished;
   const rulesCount = profile?.availabilityRules?.length || 0;
@@ -126,7 +154,7 @@ export default async function TeacherDashboardPage() {
       durationMinutes: l.durationMinutes,
       status: l.status,
       lessonSource: l.lessonSource as "TRIAL" | "ENROLLMENT",
-      studentTimezone: l.student.timezone,
+      studentTimezone: l.student?.timezone || "UTC",
       courseTitle: l.enrollment?.course?.title,
       groupRoomId: l.groupRoomId,
       formattedTime: formatInViewerTimezone(
@@ -135,8 +163,8 @@ export default async function TeacherDashboardPage() {
         "EEE, MMM d, yyyy 'at' h:mm a",
       ),
       timezoneAbbr: getTimezoneAbbr(startsAtDate, user.timezone || "UTC"),
-      studentName: l.student.name || "Student",
-      studentEmail: l.student.email,
+      studentName: l.student?.name || "Student",
+      studentEmail: l.student?.email || "",
       teacherJoinedAt: l.teacherJoinedAt ? new Date(l.teacherJoinedAt).toISOString() : null,
       studentJoinedAt: l.studentJoinedAt ? new Date(l.studentJoinedAt).toISOString() : null,
       cancelledBy: l.cancelledBy,

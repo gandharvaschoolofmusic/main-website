@@ -45,9 +45,16 @@ export default function ContactUsClient() {
     // console.log("Email:", email);
     // console.log("Phone:", phone);
     // console.log("Message:", message);
-    const ipResponse = await fetch("https://api.ipify.org?format=json");
-    const ipData = await ipResponse.json();
-    const userIP = ipData.ip;
+    let userIP = "client";
+    try {
+      const ipResponse = await fetch("https://api.ipify.org?format=json", { signal: AbortSignal.timeout(2500) });
+      if (ipResponse.ok) {
+        const ipData = await ipResponse.json();
+        userIP = ipData.ip || "client";
+      }
+    } catch {
+      // Non-blocking fallback
+    }
     const data = {
       activeSheet: "Contact__Us",
       name: name,
@@ -257,6 +264,7 @@ export default function ContactUsClient() {
                     <div className="flex flex-row items-center border border-gray-300 rounded-md focus-within:ring-purple-500 focus-within:ring-2 transition-all duration-300">
                       <div className="relative w-auto">
                         <Select
+                          instanceId="contact-us-country-code"
                           id="countryCode"
                           name="countryCode"
                           options={countryOptions}

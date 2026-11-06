@@ -350,7 +350,7 @@ function Section5TeachersCarousel() {
                 <div className="w-full max-w-xs md:max-w-sm lg:max-w-xs relative text-white flex flex-col justify-center items-center">
                   <img
                     src={`/${item.img}`}
-                    className="aspect-square w-44 md:w-52 rounded-xl object-cover border-4 border-white mb-2"
+                    className="aspect-square w-44 md:w-52 rounded-xl object-cover shadow-md mb-2"
                     alt={item.name}
                   />
                   <div className="relative w-full flex pt-2 pb-12 flex-col justify-center items-center bg-white text-lg text-black rounded-b-xl shadow-lg">

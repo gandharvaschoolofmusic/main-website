@@ -13,7 +13,7 @@ export const dynamic = "force-dynamic";
 export default async function TeacherAvailabilityPage() {
   const user = await requireRole(Role.TEACHER);
 
-  const profile = await db.teacherProfile.findUnique({
+  let profile = await db.teacherProfile.findUnique({
     where: { userId: user.id },
     include: {
       availabilityRules: true,
@@ -23,15 +23,42 @@ export default async function TeacherAvailabilityPage() {
     },
   });
 
+  if (!profile) {
+    try {
+      profile = await db.teacherProfile.create({
+        data: {
+          userId: user.id,
+          bio: "",
+          instruments: [],
+          expertInstruments: [],
+          moderateInstruments: [],
+          yearsTeaching: 0,
+          hourlyRate: 50000,
+          payoutPerSession: 50000,
+          currency: "INR",
+          languages: ["English"],
+          isPublished: false,
+          approvalStatus: "PENDING",
+        },
+        include: {
+          availabilityRules: true,
+          availabilityExceptions: true,
+        },
+      });
+    } catch (createErr) {
+      console.warn("Failed to auto-create missing teacherProfile in TeacherAvailabilityPage:", createErr);
+    }
+  }
+
   const rules =
-    profile?.availabilityRules.map((r) => ({
+    profile?.availabilityRules?.map((r) => ({
       dayOfWeek: r.dayOfWeek,
       startMinute: r.startMinute,
       endMinute: r.endMinute,
     })) || [];
 
   const exceptions =
-    profile?.availabilityExceptions.map((e) => ({
+    profile?.availabilityExceptions?.map((e) => ({
       id: e.id,
       date: e.date.toISOString().split("T")[0],
       isBlocked: e.isBlocked,

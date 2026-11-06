@@ -153,15 +153,15 @@ export default async function TeacherStudentsPage() {
     const key = `${enr.studentId}-${enr.courseId}`;
     studentMap.set(key, {
       studentId: enr.studentId,
-      studentName: enr.student.name || "Student",
-      studentEmail: enr.student.email,
-      studentTimezone: enr.student.timezone,
-      courseTitle: enr.course.title,
+      studentName: enr.student?.name || "Student",
+      studentEmail: enr.student?.email || "",
+      studentTimezone: enr.student?.timezone || "UTC",
+      courseTitle: enr.course?.title || "Music Course",
       type: "COURSE",
       sessionsCompleted: completedSessions,
       sessionsTotal: totalSessions,
       nextLessonFormatted: nextFormatted,
-      instrument: enr.course.instrument,
+      instrument: enr.course?.instrument || "Music",
     });
   }
 
@@ -175,9 +175,9 @@ export default async function TeacherStudentsPage() {
 
       studentMap.set(key, {
         studentId: tl.studentId,
-        studentName: tl.student.name || "Student",
-        studentEmail: tl.student.email,
-        studentTimezone: tl.student.timezone,
+        studentName: tl.student?.name || "Student",
+        studentEmail: tl.student?.email || "",
+        studentTimezone: tl.student?.timezone || "UTC",
         courseTitle: "Free Trial Lesson",
         type: "TRIAL",
         sessionsCompleted: isCompleted ? 1 : 0,

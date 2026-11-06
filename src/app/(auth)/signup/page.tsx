@@ -101,8 +101,16 @@ export default function SignupPage() {
       // Detect the browser timezone after hydration so server markup stays stable.
       // eslint-disable-next-line react-hooks/set-state-in-effect
       if (tz) setDetectedTz(tz);
+
+      if (typeof window !== "undefined") {
+        const params = new URLSearchParams(window.location.search);
+        const r = params.get("role")?.toUpperCase();
+        if (r === "TEACHER") {
+          setSelectedRole("TEACHER");
+        }
+      }
     } catch {
-      // Fallback to UTC
+      // Fallback
     }
   }, []);
 

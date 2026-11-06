@@ -23,7 +23,35 @@ export default async function TeacherOnboardingPage() {
     console.warn("Transient DB query error in TeacherOnboardingPage:", err);
   }
 
-  const profile = dbUser?.teacherProfile;
+  let profile = dbUser?.teacherProfile;
+
+  // Auto-create teacher profile if user is a teacher but profile is missing
+  if (dbUser && !profile) {
+    try {
+      profile = await db.teacherProfile.create({
+        data: {
+          userId: dbUser.id,
+          bio: "",
+          instruments: [],
+          expertInstruments: [],
+          moderateInstruments: [],
+          yearsTeaching: 0,
+          hourlyRate: 50000,
+          payoutPerSession: 50000,
+          currency: "INR",
+          languages: ["English"],
+          isPublished: false,
+          approvalStatus: "PENDING",
+        },
+        include: {
+          availabilityRules: true,
+        },
+      });
+    } catch (createErr) {
+      console.warn("Failed to auto-create missing teacherProfile:", createErr);
+    }
+  }
+
   const isEmailVerified = !!dbUser?.emailVerified;
 
   return (
@@ -54,7 +82,7 @@ export default async function TeacherOnboardingPage() {
           rejectionReason: profile?.rejectionReason || null,
         }}
         availabilityRules={
-          profile?.availabilityRules.map((r) => ({
+          profile?.availabilityRules?.map((r) => ({
             dayOfWeek: r.dayOfWeek,
             startMinute: r.startMinute,
             endMinute: r.endMinute,
