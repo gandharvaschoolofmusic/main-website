@@ -46,6 +46,10 @@ export function InstructorsCarousel() {
 
   // Maximum offset: on desktop showing 3 cards at a time, max offset is INSTRUCTORS.length - 3
   const maxDesktopOffset = Math.max(0, INSTRUCTORS.length - 3);
+  const maxMobileOffset = Math.max(0, INSTRUCTORS.length - 1);
+
+  const desktopOffset = Math.min(slideOffset, maxDesktopOffset);
+  const mobileOffset = Math.min(slideOffset, maxMobileOffset);
 
   return (
     <div className="w-full flex flex-col items-center">
@@ -53,7 +57,7 @@ export function InstructorsCarousel() {
       <div className="hidden md:block w-full max-w-6xl overflow-hidden pb-8 px-4">
         <div
           className="flex transition-transform duration-500 ease-out gap-8"
-          style={{ transform: `translateX(-${slideOffset * (100 / 3 + 2.6)}%)` }}
+          style={{ transform: `translateX(-${desktopOffset * (100 / 3 + 2.6)}%)` }}
         >
           {INSTRUCTORS.map((teacher, idx) => (
             <div
@@ -95,7 +99,7 @@ export function InstructorsCarousel() {
       <div className="md:hidden w-full max-w-xs overflow-hidden pb-6 px-2">
         <div
           className="flex transition-transform duration-500 ease-out"
-          style={{ transform: `translateX(-${slideOffset * 100}%)` }}
+          style={{ transform: `translateX(-${mobileOffset * 100}%)` }}
         >
           {INSTRUCTORS.map((teacher, idx) => (
             <div
@@ -130,8 +134,8 @@ export function InstructorsCarousel() {
         </div>
       </div>
 
-      {/* Dot Indicators */}
-      <div className="flex gap-3 justify-center items-center pt-2">
+      {/* Desktop Dot Indicators */}
+      <div className="hidden md:flex gap-3 justify-center items-center pt-2">
         {Array.from({ length: maxDesktopOffset + 1 }).map((_, idx) => (
           <button
             key={idx}
@@ -139,8 +143,25 @@ export function InstructorsCarousel() {
             onClick={() => setSlideOffset(idx)}
             aria-label={`Slide ${idx + 1}`}
             className={`h-2.5 rounded-full transition-all duration-300 ${
-              slideOffset === idx
+              desktopOffset === idx
                 ? "w-7 bg-[#FF7703] opacity-100"
+                : "w-2.5 bg-black/25 hover:bg-black/50"
+            }`}
+          />
+        ))}
+      </div>
+
+      {/* Mobile Dot Indicators */}
+      <div className="flex md:hidden gap-2.5 justify-center items-center pt-2">
+        {Array.from({ length: maxMobileOffset + 1 }).map((_, idx) => (
+          <button
+            key={idx}
+            type="button"
+            onClick={() => setSlideOffset(idx)}
+            aria-label={`Slide ${idx + 1}`}
+            className={`h-2.5 rounded-full transition-all duration-300 ${
+              mobileOffset === idx
+                ? "w-6 bg-[#FF7703] opacity-100"
                 : "w-2.5 bg-black/25 hover:bg-black/50"
             }`}
           />

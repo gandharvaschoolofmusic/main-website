@@ -5,12 +5,15 @@ import { CourseShowcase } from "@/components/home/CourseShowcase";
 import { TestimonialsCarousel } from "@/components/home/TestimonialsCarousel";
 import { InstructorsCarousel } from "@/components/home/InstructorsCarousel";
 import { LandingFooter } from "@/components/home/LandingFooter";
+import { SectionErrorBoundary } from "@/components/common/SectionErrorBoundary";
 
 export default function HomePage() {
   return (
     <div className="min-h-screen bg-white text-[#54595F] font-sans selection:bg-[#FF7703] selection:text-white pb-12 md:pb-0">
       {/* ─── Section 1: Hero Carousel ──────────────────────────────────── */}
-      <HeroSlider />
+      <SectionErrorBoundary name="HeroSlider">
+        <HeroSlider />
+      </SectionErrorBoundary>
 
       {/* ─── Section 2: 24/7 Support Banner & Four Pillars ─────────────── */}
       <section className="px-5 relative md:px-10 lg:px-32">
@@ -230,7 +233,9 @@ export default function HomePage() {
           </div>
 
           {/* Interactive Showcase Tabs & Cards */}
-          <CourseShowcase />
+          <SectionErrorBoundary name="CourseShowcase">
+            <CourseShowcase />
+          </SectionErrorBoundary>
         </div>
       </section>
 
@@ -242,7 +247,9 @@ export default function HomePage() {
             <span className="text-[#FF7703]">About Us.</span>
           </h2>
         </div>
-        <TestimonialsCarousel />
+        <SectionErrorBoundary name="TestimonialsCarousel">
+          <TestimonialsCarousel />
+        </SectionErrorBoundary>
       </section>
 
       {/* ─── Section 6: Meet Our Instructors ────────────────────────────── */}
@@ -253,7 +260,9 @@ export default function HomePage() {
             <span className="text-[#FF7703]">Instructors</span>
           </h2>
         </div>
-        <InstructorsCarousel />
+        <SectionErrorBoundary name="InstructorsCarousel">
+          <InstructorsCarousel />
+        </SectionErrorBoundary>
       </section>
 
       {/* ─── Section 7: Journey @ Gandharva ─────────────────────────────── */}

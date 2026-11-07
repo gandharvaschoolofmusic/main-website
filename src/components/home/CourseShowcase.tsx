@@ -117,7 +117,10 @@ export function CourseShowcase() {
       ? SINGING_COURSES
       : DANCE_COURSES;
 
-  const currentCourse = currentList[selectedCourseIndex] || currentList[0];
+  const currentCourse =
+    currentList[selectedCourseIndex] ||
+    currentList[0] ||
+    INSTRUMENT_COURSES[0];
 
   const handleCategoryChange = (cat: Category) => {
     setActiveCategory(cat);
@@ -171,9 +174,9 @@ export function CourseShowcase() {
         {/* Full-bleed Authentic Background Image */}
         <div className="absolute inset-0 z-10 overflow-hidden">
           <Image
-            key={currentCourse.bgImg}
-            src={currentCourse.bgImg}
-            alt={currentCourse.name}
+            key={currentCourse?.bgImg || "fallback"}
+            src={currentCourse?.bgImg || "/HomeSection4/backgrounds/piano.webp"}
+            alt={currentCourse?.name || "Music Course"}
             fill
             sizes="100vw"
             priority
@@ -189,10 +192,10 @@ export function CourseShowcase() {
           {/* Top text block */}
           <div className="space-y-6 max-w-2xl">
             <h3 className="text-3xl md:text-5xl font-medium custom-font-2 tracking-wide text-white drop-shadow-md">
-              {currentCourse.name}
+              {currentCourse?.name || "Music Course"}
             </h3>
             <p className="text-white/95 text-base md:text-lg leading-relaxed font-light drop-shadow-sm">
-              {currentCourse.description}
+              {currentCourse?.description || "Explore personalized 1-on-1 online music and dance lessons."}
             </p>
             <div>
               <Link

@@ -9,7 +9,8 @@ export default function SiteChrome({
 }: {
   children: React.ReactNode;
 }) {
-  const pathname = usePathname();
+  const rawPathname = usePathname();
+  const pathname = rawPathname || "";
 
   const hideFooter =
     pathname === "/" ||
@@ -26,7 +27,6 @@ export default function SiteChrome({
     pathname.startsWith("/reset-password") ||
     pathname.startsWith("/verify-email") ||
     pathname.startsWith("/book-trial") ||
-
     pathname.startsWith("/thank-you");
 
   if (hideFooter) {
