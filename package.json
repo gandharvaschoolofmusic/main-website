@@ -13,7 +13,8 @@
     "db:seed:admin": "tsx prisma/seed-admin.ts",
     "db:delete-user": "tsx scripts/delete-user.ts",
     "db:studio": "npx prisma studio",
-    "db:reset": "npx prisma migrate reset"
+    "db:reset": "npx prisma migrate reset",
+    "docs:pdf": "node scripts/generate-db-docs-pdf.js"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

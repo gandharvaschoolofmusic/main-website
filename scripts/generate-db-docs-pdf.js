@@ -1,0 +1,1409 @@
+const fs = require("fs");
+const path = require("path");
+const { execSync } = require("child_process");
+
+const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <title>Gandharva School of Music - Database Architecture & Schema Specification</title>
+  <style>
+    @page {
+      size: A4;
+      margin: 16mm 14mm 16mm 14mm;
+    }
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+      color: #1e1e24;
+      background: #ffffff;
+      font-size: 11.5px;
+      line-height: 1.5;
+      -webkit-print-color-adjust: exact;
+      print-color-adjust: exact;
+    }
+    h1, h2, h3, h4 {
+      font-family: "Georgia", "Times New Roman", serif;
+      color: #240046;
+      font-weight: 700;
+    }
+    .cover {
+      page-break-after: always;
+      break-after: page;
+      padding: 40px 10px 20px 10px;
+      min-height: 85vh;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+    .cover-top {
+      border-bottom: 3px solid #3C096C;
+      padding-bottom: 25px;
+    }
+    .brand-tag {
+      display: inline-block;
+      text-transform: uppercase;
+      font-size: 11px;
+      font-weight: 800;
+      letter-spacing: 2px;
+      color: #7B2CBF;
+      margin-bottom: 15px;
+    }
+    .cover-title {
+      font-size: 34px;
+      line-height: 1.15;
+      color: #10002B;
+      margin-bottom: 12px;
+    }
+    .cover-subtitle {
+      font-size: 15px;
+      color: #5a5a6e;
+      max-width: 650px;
+      line-height: 1.5;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      font-weight: 400;
+    }
+    .meta-card {
+      margin-top: 35px;
+      background: #FAF7FC;
+      border: 1px solid #E2D9F3;
+      border-radius: 10px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 15px;
+      font-size: 12px;
+    }
+    .meta-item strong {
+      display: block;
+      color: #3C096C;
+      font-size: 10px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      margin-bottom: 3px;
+    }
+    .meta-item span {
+      color: #2b2b36;
+      font-weight: 600;
+    }
+    .toc-card {
+      margin-top: 35px;
+      background: #FFFFFF;
+      border: 1px solid #ECECEC;
+      border-radius: 10px;
+      padding: 20px 25px;
+    }
+    .toc-title {
+      font-size: 14px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      color: #3C096C;
+      margin-bottom: 12px;
+      font-family: -apple-system, sans-serif;
+      font-weight: 700;
+      border-bottom: 1px solid #F0F0F0;
+      padding-bottom: 6px;
+    }
+    .toc-list {
+      list-style: none;
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 8px 25px;
+      font-size: 11px;
+    }
+    .toc-list li {
+      display: flex;
+      justify-content: space-between;
+      color: #444;
+    }
+    .toc-list li span.name {
+      font-weight: 600;
+      color: #240046;
+    }
+    .cover-footer {
+      border-top: 1px solid #E2D9F3;
+      padding-top: 15px;
+      font-size: 10px;
+      color: #777;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .page-break {
+      page-break-before: always;
+      break-before: page;
+    }
+    .avoid-break {
+      page-break-inside: avoid;
+      break-inside: avoid;
+    }
+
+    .section-header {
+      border-bottom: 2px solid #3C096C;
+      padding-bottom: 6px;
+      margin-top: 25px;
+      margin-bottom: 15px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+    }
+    .section-title {
+      font-size: 19px;
+      color: #240046;
+    }
+    .section-badge {
+      font-size: 10px;
+      font-family: monospace;
+      color: #7B2CBF;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+    .section-intro {
+      font-size: 11.5px;
+      color: #4A4A5A;
+      margin-bottom: 15px;
+      line-height: 1.55;
+    }
+
+    .model-card {
+      margin-bottom: 22px;
+      border: 1px solid #E5E5EB;
+      border-radius: 8px;
+      background: #FFFFFF;
+      overflow: hidden;
+    }
+    .model-header {
+      background: #F8F5FC;
+      border-bottom: 1px solid #E2D9F3;
+      padding: 10px 14px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .model-name {
+      font-size: 14px;
+      font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace;
+      color: #240046;
+      font-weight: 700;
+    }
+    .model-desc {
+      font-size: 11px;
+      color: #555566;
+      padding: 8px 14px 10px 14px;
+      background: #FFFFFF;
+      border-bottom: 1px solid #F0F0F4;
+      line-height: 1.45;
+    }
+    .model-stats {
+      font-size: 10.5px;
+      color: #7B2CBF;
+      font-weight: 600;
+    }
+
+    table.schema-table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 10.5px;
+      text-align: left;
+    }
+    table.schema-table th {
+      background: #FAFAFC;
+      color: #404050;
+      font-weight: 700;
+      font-size: 9.5px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      padding: 6px 10px;
+      border-bottom: 1px solid #E5E5EB;
+    }
+    table.schema-table td {
+      padding: 6px 10px;
+      border-bottom: 1px solid #F0F0F4;
+      color: #2B2B36;
+      vertical-align: top;
+      line-height: 1.4;
+    }
+    table.schema-table tr:last-child td {
+      border-bottom: none;
+    }
+    table.schema-table tr:nth-child(even) td {
+      background: #FCFCFD;
+    }
+    .field-name {
+      font-family: monospace;
+      font-weight: 700;
+      color: #1A1A24;
+      font-size: 11px;
+    }
+    .field-type {
+      font-family: monospace;
+      font-size: 10px;
+      color: #5A189A;
+      font-weight: 600;
+    }
+
+    .badge {
+      display: inline-block;
+      font-size: 8.5px;
+      font-weight: 700;
+      padding: 1.5px 5px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.3px;
+      font-family: -apple-system, sans-serif;
+      margin-right: 3px;
+      margin-bottom: 2px;
+    }
+    .badge-pk {
+      background: #FFE5D9;
+      color: #D9480F;
+    }
+    .badge-fk {
+      background: #E0E7FF;
+      color: #3730A3;
+    }
+    .badge-uq {
+      background: #E0F2FE;
+      color: #0369A1;
+    }
+    .badge-def {
+      background: #F1F5F9;
+      color: #475569;
+    }
+    .badge-req {
+      background: #FEE2E2;
+      color: #B91C1C;
+    }
+    .badge-opt {
+      background: #F3F4F6;
+      color: #6B7280;
+    }
+
+    .model-relations {
+      padding: 8px 14px;
+      background: #FAF9FD;
+      border-top: 1px solid #EAE6F4;
+      font-size: 10px;
+      color: #555;
+    }
+    .model-relations strong {
+      color: #3C096C;
+    }
+
+    .enum-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 12px;
+      margin-top: 10px;
+    }
+    .enum-card {
+      border: 1px solid #E5E5EB;
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #FFFFFF;
+    }
+    .enum-name {
+      font-family: monospace;
+      font-size: 12px;
+      font-weight: 700;
+      color: #240046;
+      margin-bottom: 6px;
+      border-bottom: 1px solid #F0F0F4;
+      padding-bottom: 4px;
+    }
+    .enum-values {
+      font-family: monospace;
+      font-size: 9.5px;
+      color: #4A4A5A;
+      display: flex;
+      flex-wrap: wrap;
+      gap: 4px;
+    }
+    .enum-val {
+      background: #F3EEFA;
+      color: #5A189A;
+      padding: 2px 5px;
+      border-radius: 3px;
+    }
+
+    .architecture-box {
+      background: #FAF7FC;
+      border: 1px solid #D8C8EE;
+      border-left: 4px solid #3C096C;
+      border-radius: 6px;
+      padding: 12px 16px;
+      margin-bottom: 18px;
+      font-size: 11px;
+      color: #2B2B36;
+    }
+    .architecture-box h4 {
+      font-family: -apple-system, sans-serif;
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #240046;
+      margin-bottom: 5px;
+    }
+
+    .flow-step {
+      display: flex;
+      gap: 12px;
+      margin-bottom: 10px;
+      align-items: baseline;
+    }
+    .flow-num {
+      width: 20px;
+      height: 20px;
+      background: #3C096C;
+      color: white;
+      border-radius: 50%;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 10px;
+      font-weight: bold;
+      shrink-0;
+    }
+    .flow-content {
+      flex: 1;
+      font-size: 11px;
+      color: #333;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ==================== COVER PAGE ==================== -->
+  <div class="cover">
+    <div class="cover-top">
+      <div class="brand-tag">GANDHARVA SCHOOL OF MUSIC &bull; TECHNICAL SPECIFICATION</div>
+      <h1 class="cover-title">Relational Database Architecture &amp; Complete Schema Documentation</h1>
+      <p class="cover-subtitle">
+        Comprehensive enterprise data model, entity relationships, security controls, lifecycle state machines, and API integration specifications for the Gandharva live music learning and classroom platform.
+      </p>
+
+      <div class="meta-card">
+        <div class="meta-item">
+          <strong>System Target Engine</strong>
+          <span>PostgreSQL 15+ / Supabase Cloud</span>
+        </div>
+        <div class="meta-item">
+          <strong>Data Access Layer</strong>
+          <span>Prisma ORM Client v7.x (Type-Safe Schema)</span>
+        </div>
+        <div class="meta-item">
+          <strong>Document Revision</strong>
+          <span>Release v2.4 (Production Architecture)</span>
+        </div>
+        <div class="meta-item">
+          <strong>Generation Date</strong>
+          <span>November 2026</span>
+        </div>
+        <div class="meta-item">
+          <strong>Security Framework</strong>
+          <span>Role-Based Access Control (RBAC), TOTP 2FA, PII Masking</span>
+        </div>
+        <div class="meta-item">
+          <strong>Timezone Convention</strong>
+          <span>UTC Timestamps (Timestamptz 6) with Dynamic IST Localization</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="toc-card">
+      <div class="toc-title">Documentation Table of Contents</div>
+      <ul class="toc-list">
+        <li><span>1. Architecture Overview &amp; Data Principles</span> <span class="name">Section 1</span></li>
+        <li><span>2. Core Identity &amp; Auth Models</span> <span class="name">User, Account, Session</span></li>
+        <li><span>3. Faculty &amp; Scheduling Engine</span> <span class="name">TeacherProfile, Availability</span></li>
+        <li><span>4. Classroom, Attendance &amp; Recordings</span> <span class="name">Lesson, Recordings, Chat</span></li>
+        <li><span>5. Academic Courses &amp; Enrollments</span> <span class="name">Course, Curriculum, EMI</span></li>
+        <li><span>6. Financial Ledger &amp; Payments</span> <span class="name">Payment, Certificates</span></li>
+        <li><span>7. CRM Leads &amp; Trial Lifecycle</span> <span class="name">TrialRequest, StudentTrial</span></li>
+        <li><span>8. Direct Messaging &amp; Learning Vault</span> <span class="name">Conversations, Resources</span></li>
+        <li><span>9. Masterclasses, Events &amp; Support</span> <span class="name">Events, SupportTickets</span></li>
+        <li><span>10. System Enums &amp; State Dictionaries</span> <span class="name">All 17 Platform Enums</span></li>
+      </ul>
+    </div>
+
+    <div class="cover-footer">
+      <span>Confidential &bull; Prepared for Client Architecture Review</span>
+      <span>Gandharva School of Music &copy; 2026. All rights reserved.</span>
+    </div>
+  </div>
+
+  <!-- ==================== SECTION 1: SYSTEM OVERVIEW ==================== -->
+  <div class="section-header">
+    <h2 class="section-title">1. System Architecture &amp; Core Data Principles</h2>
+    <span class="section-badge">Architecture Foundations</span>
+  </div>
+
+  <div class="section-intro">
+    The Gandharva School of Music database is architectured to support real-time audio/video WebRTC classrooms, high-concurrency booking, teacher payout ledgers, course enrollments with flexible EMI schedules, student resource sharing, and verified attendance auditing.
+  </div>
+
+  <div class="architecture-box">
+    <h4>Core Architectural Pillars</h4>
+    <p><strong>1. Strict Referential Integrity:</strong> Enforced via PostgreSQL foreign key constraints with cascading deletes for owned sub-entities (e.g. user tokens, teacher availability) and restrictive/set-null semantics on financial audit rows (e.g. payments, enrollments).</p>
+    <p><strong>2. Precision UTC Timestamps:</strong> All temporal records use <code>TIMESTAMP WITH TIME ZONE (Timestamptz 6)</code>. Storage occurs strictly in UTC instants; UI localization renders dynamically into viewer timezones with Indian Standard Time (IST) standardized for admin operations.</p>
+    <p><strong>3. Dual-Ledger Financial Integrity:</strong> Monetary balances, course fees, and teacher payouts are stored as <strong>Minor Units (Integers)</strong> representing Indian Paise (e.g. ₹500 = 50,000 paise). This prevents floating-point rounding errors across payment gateways (Razorpay, UPI) and payout reconciliation.</p>
+    <p><strong>4. Classroom Auditing &amp; Multi-Join Tracking:</strong> Every live lesson maintains both discrete entry/exit logs (<code>teacherJoinedAt</code>, <code>studentJoinedAt</code>) and comprehensive JSON multi-session timelines in <code>attendanceLogs</code>, along with archived in-call chat transcripts in <code>chatLogs</code>.</p>
+  </div>
+
+  <!-- ==================== SECTION 2: IDENTITY & AUTH ==================== -->
+  <div class="section-header">
+    <h2 class="section-title">2. Identity, Authentication &amp; RBAC Domain</h2>
+    <span class="section-badge">Core Security</span>
+  </div>
+
+  <!-- Model: User -->
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model User</span>
+      <span class="model-stats">Table: User &bull; 23 Fields &bull; 25 Relations</span>
+    </div>
+    <div class="model-desc">
+      Core identity record supporting multi-role access control (STUDENT, TEACHER, ADMIN). Handles password hashing, OAuth federated accounts, phone verification, two-factor authentication (TOTP), and demographic profiles.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Business Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">id</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-pk">PK</span> <span class="badge badge-def">cuid()</span></td>
+          <td>Unique alphanumeric system identifier.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">customId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span> <span class="badge badge-opt">Nullable</span></td>
+          <td>Human-readable student ID (e.g. <code>ST00001</code>) or teacher ID.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">email</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-uq">Unique</span> <span class="badge badge-req">Required</span></td>
+          <td>Primary login and communication identifier.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">role</span></td>
+          <td><span class="field-type">Role (Enum)</span></td>
+          <td><span class="badge badge-def">STUDENT</span></td>
+          <td>System authorization tier: <code>STUDENT</code>, <code>TEACHER</code>, or <code>ADMIN</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">passwordHash</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-opt">Nullable</span></td>
+          <td>Bcrypt-hashed credential for credentials-based authentication.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">phone</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span> <span class="badge badge-opt">Nullable</span></td>
+          <td>E.164 formatted telephone number for SMS notifications and OTP.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">twoFactorEnabled</span></td>
+          <td><span class="field-type">Boolean</span></td>
+          <td><span class="badge badge-def">false</span></td>
+          <td>Flag indicating if TOTP authenticator app verification is enforced.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">timezone</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-def">"UTC"</span></td>
+          <td>IANA timezone string (e.g. <code>Asia/Kolkata</code>, <code>America/New_York</code>).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">guardianName / Phone</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-opt">Nullable</span></td>
+          <td>Contact details for underage music students.</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="model-relations">
+      <strong>Primary Relations:</strong> 1:1 with <code>TeacherProfile</code>, <code>StudentTrialStatus</code>; 1:N with <code>Enrollment</code>, <code>Lesson</code>, <code>Payment</code>, <code>Notification</code>, <code>Resource</code>.
+    </div>
+  </div>
+
+  <!-- Models: Account, Session, Verification Tokens -->
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Account, Session &amp; Tokens</span>
+      <span class="model-stats">Authentication &amp; Verification Infrastructure</span>
+    </div>
+    <div class="model-desc">
+      Standards-compliant Auth.js / NextAuth models managing OAuth providers (Google, Apple), persistent JWT/Database sessions, email verification tokens, and OTP phone verification tokens.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Model Name</th>
+          <th style="width: 30%;">Key Fields</th>
+          <th>Purpose &amp; Security Protocol</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">Account</span></td>
+          <td><code>userId, provider, providerAccountId, access_token</code></td>
+          <td>Federated single sign-on link mapping external OAuth tokens to internal <code>User</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">Session</span></td>
+          <td><code>sessionToken, userId, expires</code></td>
+          <td>Active user session tracker with automatic expiration timestamps.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">PasswordResetToken</span></td>
+          <td><code>email, token, expires, used</code></td>
+          <td>Single-use, cryptographically secure 24-hour expiration token for password recovery.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">PhoneVerificationToken</span></td>
+          <td><code>phone, code, expires, used</code></td>
+          <td>Time-bounded 6-digit OTP code for SMS identity verification.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 3: FACULTY & SCHEDULING ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">3. Faculty Management &amp; Dynamic Scheduling</h2>
+    <span class="section-badge">Teacher Domain</span>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model TeacherProfile</span>
+      <span class="model-stats">Table: TeacherProfile &bull; 21 Fields &bull; 4 Relations</span>
+    </div>
+    <div class="model-desc">
+      Faculty bio, musical discipline expertise, accreditation, onboarding approval lifecycle, bank/UPI payout credentials, and session remuneration rates.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Business Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">userId</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-fk">FK User</span> <span class="badge badge-uq">Unique</span></td>
+          <td>1-to-1 linkage to the corresponding User record.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">expertInstruments</span></td>
+          <td><span class="field-type">String[]</span></td>
+          <td><span class="badge badge-def">[]</span></td>
+          <td>Primary instruments where teacher holds master/advanced teaching qualifications.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">approvalStatus</span></td>
+          <td><span class="field-type">TeacherApprovalStatus</span></td>
+          <td><span class="badge badge-def">PENDING</span></td>
+          <td>Workflow state: <code>PENDING</code>, <code>APPROVED</code>, or <code>REJECTED</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">payoutDayRate</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-def">30000 (₹300)</span></td>
+          <td>Remuneration in minor units for sessions between 6:00 AM &ndash; 8:00 PM IST.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">payoutNightRate</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-def">50000 (₹500)</span></td>
+          <td>Remuneration in minor units for prime/night sessions (after 8:00 PM IST).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">upiId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-opt">Nullable</span></td>
+          <td>Direct UPI VPA (e.g. <code>teacher@okhdfcbank</code>) for automated fee disbursement.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">isPublished</span></td>
+          <td><span class="field-type">Boolean</span></td>
+          <td><span class="badge badge-def">false</span></td>
+          <td>Controls visibility on public course booking and instructor catalog pages.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model AvailabilityRule &amp; AvailabilityException</span>
+      <span class="model-stats">Dynamic Time-Slot Matrix Engine</span>
+    </div>
+    <div class="model-desc">
+      Powers student self-serve booking and time-zone conversion. Combines weekly recurring availability rules with specific calendar override exceptions.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Model</th>
+          <th style="width: 25%;">Fields</th>
+          <th>Time Mechanics &amp; Constraints</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">AvailabilityRule</span></td>
+          <td><code>teacherId, dayOfWeek, startMinute, endMinute</code></td>
+          <td>
+            Weekly repeating slot. <code>dayOfWeek</code> (0 = Sunday to 6 = Saturday). Minutes from midnight (e.g. 540 = 9:00 AM, 1080 = 6:00 PM) stored in teacher's native timezone.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">AvailabilityException</span></td>
+          <td><code>teacherId, date, isBlocked, startMinute, endMinute</code></td>
+          <td>
+            Calendar-specific date override. <code>isBlocked = true</code> blocks off teacher leave/vacations; <code>isBlocked = false</code> opens special ad-hoc slots.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 4: CLASSROOM & SESSIONS ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">4. Classroom Sessions, Attendance &amp; Recordings</h2>
+    <span class="section-badge">WebRTC &amp; Classroom Domain</span>
+  </div>
+
+  <!-- Model: Lesson -->
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Lesson</span>
+      <span class="model-stats">Table: Lesson &bull; 26 Fields &bull; 5 Relations</span>
+    </div>
+    <div class="model-desc">
+      Core operational record representing a scheduled or completed 1-on-1 music class. Captures LiveKit room credentials, WebRTC attendance multi-joins, mutual co-presence duration, chat transcripts, and faculty remuneration ledger status.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Business Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">id</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-pk">PK</span> <span class="badge badge-def">cuid()</span></td>
+          <td>Unique lesson ID used as the LiveKit room name.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">trackingCode</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span> <span class="badge badge-opt">Nullable</span></td>
+          <td>Human-readable session tracking ID (e.g. <code>S0017-SE009</code>).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">status</span></td>
+          <td><span class="field-type">LessonStatus</span></td>
+          <td><span class="badge badge-def">SCHEDULED</span></td>
+          <td>Lifecycle: <code>SCHEDULED</code>, <code>RESCHEDULED</code>, <code>COMPLETED</code>, <code>CANCELLED</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">lessonSource</span></td>
+          <td><span class="field-type">LessonSource?</span></td>
+          <td><span class="badge badge-opt">TRIAL | ENROLLMENT</span></td>
+          <td>Distinguishes complimentary free trials from paid course sessions.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">teacherJoinedAt / LeftAt</span></td>
+          <td><span class="field-type">DateTime?</span></td>
+          <td><span class="badge badge-opt">Timestamptz</span></td>
+          <td>Primary classroom entry and exit timestamps for faculty instructor.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">studentJoinedAt / LeftAt</span></td>
+          <td><span class="field-type">DateTime?</span></td>
+          <td><span class="badge badge-opt">Timestamptz</span></td>
+          <td>Primary classroom entry and exit timestamps for student.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">attendanceLogs</span></td>
+          <td><span class="field-type">Json?</span></td>
+          <td><span class="badge badge-opt">Structured JSON</span></td>
+          <td>
+            Granular timeline array logging every room visit, reconnect, disconnect, and calculated mutual co-presence seconds.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">chatLogs</span></td>
+          <td><span class="field-type">Json?</span></td>
+          <td><span class="badge badge-opt">Structured JSON</span></td>
+          <td>
+            Archived classroom chat transcript including message ID, sender role, sender name, message body, and timestamps.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">payoutStatus</span></td>
+          <td><span class="field-type">TeacherPayoutStatus</span></td>
+          <td><span class="badge badge-def">UNPAID</span></td>
+          <td>Faculty payment status: <code>UNPAID</code> or <code>PAID</code>. Free trials strictly default to UNPAID with 0 amount.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">payoutAmountMinor</span></td>
+          <td><span class="field-type">Int?</span></td>
+          <td><span class="badge badge-opt">Nullable</span></td>
+          <td>Computed remuneration in paise (e.g. 30,000 paise = ₹300, 50,000 paise = ₹500).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model LessonRecording &amp; LessonRecordingMedia</span>
+      <span class="model-stats">Cloud Video Archival &amp; Vault Failover</span>
+    </div>
+    <div class="model-desc">
+      Integrates LiveKit Egress recording with Supabase Storage and Google Drive cloud vault. Provides high-availability video storage for student practice playback and parent quality assurance.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Model</th>
+          <th style="width: 25%;">Key Fields</th>
+          <th>Storage Strategy &amp; Archival Semantics</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">LessonRecording</span></td>
+          <td><code>lessonId, fileUrl, fileSizeBytes, durationSeconds, storageBackend</code></td>
+          <td>
+            Metadata record pointing to object storage (Supabase S3 bucket or Google Drive). Stores double-precision file byte size and duration.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">LessonRecordingMedia</span></td>
+          <td><code>recordingId, mimeType, bytes</code></td>
+          <td>
+            Emergency database vault fallback storing raw binary stream (<code>bytea</code>) in case external cloud storage egress encounters network partitions.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 5: COURSES & ENROLLMENT ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">5. Academic Courses, Curricula &amp; Enrollments</h2>
+    <span class="section-badge">Academic Domain</span>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Course &amp; CourseLesson</span>
+      <span class="model-stats">Curriculum Catalog &amp; Syllabus Engine</span>
+    </div>
+    <div class="model-desc">
+      Defines academic music programs (Carnatic Vocals, Hindustani, Guitar, Piano, Keyboard, Drums, Western Vocals) with accreditation, pricing, EMI plans, and syllabus module roadmaps.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Business Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">title / slug</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-uq">Slug Unique</span></td>
+          <td>Course display name and SEO-friendly unique URL route.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">discipline</span></td>
+          <td><span class="field-type">Discipline</span></td>
+          <td><span class="badge badge-req">Required</span></td>
+          <td>Classification: <code>INSTRUMENT</code>, <code>VOCALS</code>, or <code>DANCE</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">level</span></td>
+          <td><span class="field-type">CourseLevel</span></td>
+          <td><span class="badge badge-req">Required</span></td>
+          <td>Academic difficulty: <code>FOUNDATION</code>, <code>BEGINNER</code>, <code>INTERMEDIATE</code>, <code>ADVANCED</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">priceMinorUnits</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-req">Paise</span></td>
+          <td>Total upfront course fee in minor currency units (e.g. 2400000 = ₹24,000).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">emiPrice3/6MinorUnits</span></td>
+          <td><span class="field-type">Int?</span></td>
+          <td><span class="badge badge-opt">Nullable</span></td>
+          <td>Monthly recurring installment amounts for 3-month or 6-month EMI plans.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">sessionCount</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-req">Required</span></td>
+          <td>Total quota of 1-on-1 sessions allotted upon enrollment (e.g. 24 or 48 classes).</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Enrollment</span>
+      <span class="model-stats">Table: Enrollment &bull; 17 Fields &bull; 6 Relations</span>
+    </div>
+    <div class="model-desc">
+      The active academic contract binding a student to a course. Tracks remaining session balance, assigned faculty mentor, EMI installment status, and trial conversion pedigree.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Business Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">studentId</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-fk">FK User</span></td>
+          <td>Enrolled student user reference.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">courseId</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-fk">FK Course</span></td>
+          <td>Target curriculum reference.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">sessionsRemaining</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-req">Required</span></td>
+          <td>Decrementing balance of unbooked class credits available to the student.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">status</span></td>
+          <td><span class="field-type">EnrollmentStatus</span></td>
+          <td><span class="badge badge-def">ACTIVE</span></td>
+          <td>Lifecycle: <code>ACTIVE</code>, <code>COMPLETED</code>, <code>CANCELLED</code>, <code>REFUNDED</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">emiStatus</span></td>
+          <td><span class="field-type">CourseEmiStatus</span></td>
+          <td><span class="badge badge-def">NOT_APPLICABLE</span></td>
+          <td>Payment plan health: <code>FIRST_INSTALLMENT_PAID</code>, <code>PARTIALLY_PAID</code>, <code>FULLY_PAID</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">convertedFromTrial</span></td>
+          <td><span class="field-type">Boolean</span></td>
+          <td><span class="badge badge-def">false</span></td>
+          <td>Analytics flag tracking sales conversion from complimentary trial sessions.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 6: PAYMENTS & CERTIFICATES ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">6. Financial Ledger, Invoicing &amp; Certification</h2>
+    <span class="section-badge">Finance &amp; Credentials</span>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Payment</span>
+      <span class="model-stats">Table: Payment &bull; 13 Fields &bull; 2 Relations</span>
+    </div>
+    <div class="model-desc">
+      Immutable double-entry financial transaction log. Integrates with Razorpay Orders and Payment APIs with idempotent webhook confirmation.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Gateway Validation</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">customId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span></td>
+          <td>Official invoice number (e.g. <code>PAYID000001</code>) issued on fee receipts.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">amountMinorUnits</span></td>
+          <td><span class="field-type">Int</span></td>
+          <td><span class="badge badge-req">Paise</span></td>
+          <td>Actual captured monetary amount in paise (e.g. 50,000 = ₹500.00).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">gatewayOrderId</span></td>
+          <td><span class="field-type">String</span></td>
+          <td><span class="badge badge-uq">Unique</span></td>
+          <td>Razorpay Order ID (<code>order_xxxxxxxxxxxxxx</code>).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">gatewayPaymentId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span></td>
+          <td>Razorpay Transaction ID (<code>pay_xxxxxxxxxxxxxx</code>) verified via HMAC SHA256 signature.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">status</span></td>
+          <td><span class="field-type">PaymentStatus</span></td>
+          <td><span class="badge badge-def">CREATED</span></td>
+          <td>Payment state: <code>CREATED</code>, <code>PAID</code>, <code>FAILED</code>, <code>REFUNDED</code>.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Certificate</span>
+      <span class="model-stats">Table: Certificate &bull; 6 Fields &bull; 1 Relation</span>
+    </div>
+    <div class="model-desc">
+      Official graduated credential issued upon successful completion of curriculum modules. Features verifiable serial numbers and vector PDF certificate rendering.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Field</th>
+          <th style="width: 20%;">Type</th>
+          <th>Verification &amp; Storage Logic</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">certificateNumber</span></td>
+          <td><span class="field-type">String (Unique)</span></td>
+          <td>Publicly verifiable credential code (e.g. <code>GSM-2026-VOC-0042</code>).</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">pdfUrl</span></td>
+          <td><span class="field-type">String</span></td>
+          <td>Permanent Supabase cloud storage URL pointing to the signed certificate document.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">enrollmentId</span></td>
+          <td><span class="field-type">String (Unique)</span></td>
+          <td>Strict 1-to-1 linkage guaranteeing only one certificate per course enrollment.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 7: LEADS & TRIALS ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">7. Lead Management, Free Trials &amp; Admissions</h2>
+    <span class="section-badge">CRM Domain</span>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model TrialRequest &amp; StudentTrialStatus</span>
+      <span class="model-stats">Complimentary Trial Ledger &amp; Admissions CRM</span>
+    </div>
+    <div class="model-desc">
+      Enforces platform policy on free trials (configured in PlatformSettings, e.g. 2 free trial lessons per student). Manages admissions leads, counselor assignment, and instructor allotment.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 22%;">Field Name</th>
+          <th style="width: 20%;">Type</th>
+          <th style="width: 18%;">Constraints</th>
+          <th>Description &amp; Workflow Rules</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">customId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-uq">Unique</span></td>
+          <td>Lead tracking ID (e.g. <code>TL00001</code>) used in CRM communications.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">status</span></td>
+          <td><span class="field-type">TrialRequestStatus</span></td>
+          <td><span class="badge badge-def">PENDING</span></td>
+          <td>Admissions state: <code>PENDING</code>, <code>ALLOTTED</code>, <code>CANCELLED</code>.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">allottedTeacherId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-fk">FK User</span></td>
+          <td>Faculty instructor matched and allotted by admissions coordinator.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">allottedLessonId</span></td>
+          <td><span class="field-type">String?</span></td>
+          <td><span class="badge badge-fk">FK Lesson</span></td>
+          <td>Direct linkage to the generated 1-on-1 trial classroom session.</td>
+        </tr>
+        <tr>
+          <td><span class="field-name">isConverted / ConvertedAt</span></td>
+          <td><span class="field-type">Boolean / DateTime?</span></td>
+          <td><span class="badge badge-def">false</span></td>
+          <td>Flag indicating if the trial student subsequently enrolled in a paid course.</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 8: COMMUNICATION & RESOURCES ==================== -->
+  <div class="section-header">
+    <h2 class="section-title">8. In-App Messaging, Safety &amp; Educational Vault</h2>
+    <span class="section-badge">Interaction &amp; Materials</span>
+  </div>
+
+  <div class="model-card avoid-break">
+    <div class="model-header">
+      <span class="model-name">model Conversation, DirectMessage &amp; Resource</span>
+      <span class="model-stats">Child Safety PII Shield &amp; Sheet Music Library</span>
+    </div>
+    <div class="model-desc">
+      Pairwise student-teacher messaging channel with proactive PII pattern sanitization. Secure sheet music, exercise audio, and homework distribution repository.
+    </div>
+    <table class="schema-table">
+      <thead>
+        <tr>
+          <th style="width: 25%;">Model</th>
+          <th style="width: 25%;">Key Fields</th>
+          <th>Business Rules &amp; Security Measures</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td><span class="field-name">Conversation</span></td>
+          <td><code>teacherId, studentId, instrument, isActive</code></td>
+          <td>
+            Unique 1-to-1 communication channel scoped strictly between an allotted instructor and student.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">DirectMessage</span></td>
+          <td><code>conversationId, senderId, messageType, body, fileName, fileUrl</code></td>
+          <td>
+            Supports text, file attachments (PDF/DOC only), and homework assignments. Blocked automatically if phone, email, or external social handles are detected.
+          </td>
+        </tr>
+        <tr>
+          <td><span class="field-name">Resource &amp; Share</span></td>
+          <td><code>teacherId, category, fileUrl, sharedAt, isViewed</code></td>
+          <td>
+            Curated sheet music, audio tracks, and lesson notes uploaded to Supabase and shared selectively with enrolled students.
+          </td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <!-- ==================== SECTION 9: ENUMS & SYSTEM DICTIONARY ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">9. Platform Enumeration Dictionary</h2>
+    <span class="section-badge">State Machines &amp; Constants</span>
+  </div>
+
+  <div class="section-intro">
+    All platform states, user roles, financial flows, and curriculum disciplines are governed by type-safe PostgreSQL enums defined in Prisma.
+  </div>
+
+  <div class="enum-grid">
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum Role</div>
+      <div class="enum-values">
+        <span class="enum-val">STUDENT</span>
+        <span class="enum-val">TEACHER</span>
+        <span class="enum-val">ADMIN</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum LessonStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">SCHEDULED</span>
+        <span class="enum-val">RESCHEDULED</span>
+        <span class="enum-val">COMPLETED</span>
+        <span class="enum-val">CANCELLED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum LessonSource</div>
+      <div class="enum-values">
+        <span class="enum-val">TRIAL</span>
+        <span class="enum-val">ENROLLMENT</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum Discipline</div>
+      <div class="enum-values">
+        <span class="enum-val">INSTRUMENT</span>
+        <span class="enum-val">VOCALS</span>
+        <span class="enum-val">DANCE</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum CourseLevel</div>
+      <div class="enum-values">
+        <span class="enum-val">FOUNDATION</span>
+        <span class="enum-val">BEGINNER</span>
+        <span class="enum-val">INTERMEDIATE</span>
+        <span class="enum-val">ADVANCED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum EnrollmentStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">ACTIVE</span>
+        <span class="enum-val">COMPLETED</span>
+        <span class="enum-val">CANCELLED</span>
+        <span class="enum-val">REFUNDED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum CoursePaymentPlan</div>
+      <div class="enum-values">
+        <span class="enum-val">FULL_PAYMENT</span>
+        <span class="enum-val">EMI_3_MONTHS</span>
+        <span class="enum-val">EMI_6_MONTHS</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum CourseEmiStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">NOT_APPLICABLE</span>
+        <span class="enum-val">PENDING_PAYMENT</span>
+        <span class="enum-val">FIRST_INSTALLMENT_PAID</span>
+        <span class="enum-val">PARTIALLY_PAID</span>
+        <span class="enum-val">FULLY_PAID</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum PaymentStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">CREATED</span>
+        <span class="enum-val">PAID</span>
+        <span class="enum-val">FAILED</span>
+        <span class="enum-val">REFUNDED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum TeacherApprovalStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">PENDING</span>
+        <span class="enum-val">APPROVED</span>
+        <span class="enum-val">REJECTED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum TeacherPayoutStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">UNPAID</span>
+        <span class="enum-val">PAID</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum TrialRequestStatus</div>
+      <div class="enum-values">
+        <span class="enum-val">PENDING</span>
+        <span class="enum-val">ALLOTTED</span>
+        <span class="enum-val">CANCELLED</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum ResourceCategory</div>
+      <div class="enum-values">
+        <span class="enum-val">SHEET_MUSIC</span>
+        <span class="enum-val">AUDIO_LESSON</span>
+        <span class="enum-val">LESSON_NOTES</span>
+        <span class="enum-val">EXERCISE</span>
+        <span class="enum-val">ASSIGNMENT</span>
+        <span class="enum-val">REFERENCE</span>
+      </div>
+    </div>
+
+    <div class="enum-card avoid-break">
+      <div class="enum-name">enum TicketCategory &amp; Status</div>
+      <div class="enum-values">
+        <span class="enum-val">BILLING</span>
+        <span class="enum-val">TECHNICAL</span>
+        <span class="enum-val">LESSON</span>
+        <span class="enum-val">COURSE</span>
+        <span class="enum-val">OPEN</span>
+        <span class="enum-val">IN_PROGRESS</span>
+        <span class="enum-val">RESOLVED</span>
+        <span class="enum-val">CLOSED</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==================== SECTION 10: WORKFLOWS & DATA FLOWS ==================== -->
+  <div class="page-break"></div>
+  <div class="section-header">
+    <h2 class="section-title">10. End-to-End System Lifecycles &amp; Data Flows</h2>
+    <span class="section-badge">Data Flow Pipelines</span>
+  </div>
+
+  <div class="architecture-box">
+    <h4>Lifecycle 1: Classroom Session, Attendance &amp; Remuneration Pipeline</h4>
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <strong>Session Scheduling:</strong> Admin or student schedules class &rarr; <code>Lesson</code> record inserted with status <code>SCHEDULED</code>, unique tracking ID (<code>S0017-SE009</code>), and allotted teacher/student.
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <strong>Live Classroom Entry:</strong> Student &amp; teacher join LiveKit WebRTC room &rarr; <code>/api/lessons/[id]/join</code> logs entry in <code>teacherJoinedAt</code>, <code>studentJoinedAt</code>, and appends timestamp session block to <code>attendanceLogs</code>.
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <strong>In-Call Chat &amp; Recording:</strong> Live chat messages persist via <code>/api/lessons/[id]/chat</code> into <code>Lesson.chatLogs</code>. LiveKit composite egress records video to Supabase S3 storage, creating <code>LessonRecording</code>.
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <strong>Departure &amp; Verified Presence:</strong> Participants leave &rarr; <code>/api/lessons/[id]/leave</code> records exit. Attendance parser verifies mutual co-presence duration. If session meets qualification, marked <code>COMPLETED</code>.
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">5</div>
+      <div class="flow-content">
+        <strong>Faculty Payout Ledger:</strong> If paid course session, remuneration computed based on day rate (₹300) vs night rate (₹500). If free trial, remuneration is strictly ₹0 (excluded from payouts).
+      </div>
+    </div>
+  </div>
+
+  <div class="architecture-box">
+    <h4>Lifecycle 2: Course Enrollment &amp; Financial Ledger Flow</h4>
+    <div class="flow-step">
+      <div class="flow-num">1</div>
+      <div class="flow-content">
+        <strong>Student Admissions Intake:</strong> Student selects course &rarr; creates <code>CourseEnrollmentRequest</code> with preferred schedule and payment plan (Full, 3-Month EMI, or 6-Month EMI).
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">2</div>
+      <div class="flow-content">
+        <strong>Razorpay Order Dispatch:</strong> Order created via Razorpay API &rarr; <code>Payment</code> record created with status <code>CREATED</code>, unique order ID, and amount in minor units (paise).
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">3</div>
+      <div class="flow-content">
+        <strong>Payment Webhook Verification:</strong> Razorpay webhook verifies HMAC signature &rarr; updates <code>Payment.status = PAID</code>, sets <code>gatewayPaymentId</code>, and generates custom invoice ID.
+      </div>
+    </div>
+    <div class="flow-step">
+      <div class="flow-num">4</div>
+      <div class="flow-content">
+        <strong>Academic Contract Provisioning:</strong> <code>Enrollment</code> record generated with <code>sessionsRemaining = Course.sessionCount</code>, status <code>ACTIVE</code>, and linked teacher allotted.
+      </div>
+    </div>
+  </div>
+
+  <div style="margin-top: 30px; text-align: center; font-size: 10px; color: #888; border-top: 1px solid #ECECEC; padding-top: 15px;">
+    <strong>End of Specification &bull; Gandharva School of Music Database Architecture Document &bull; Confidential</strong>
+  </div>
+
+</body>
+</html>
+`;
+
+async function main() {
+  const rootDir = path.resolve(__dirname, "..");
+  const tempHtmlPath = path.join(rootDir, "database_schema_documentation.html");
+  const outputPdfPath = path.join(rootDir, "Gandharva_Database_Architecture_Documentation.pdf");
+  const tempProfileDir = path.join(process.env.TEMP || "C:\\temp", "edge-pdf-profile-" + Date.now());
+
+  fs.writeFileSync(tempHtmlPath, htmlContent, "utf8");
+  console.log("HTML documentation generated at:", tempHtmlPath);
+
+  const edgePath = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
+
+  const psCommand = `powershell -NoProfile -Command "Start-Process -FilePath '${edgePath}' -ArgumentList '--headless', '--disable-gpu', '--user-data-dir=${tempProfileDir}', '--print-to-pdf=${outputPdfPath}', '${tempHtmlPath}' -Wait"`;
+
+  console.log("Running headless Edge to generate PDF...");
+  execSync(psCommand, { stdio: "inherit" });
+
+  if (fs.existsSync(outputPdfPath)) {
+    const publicPdfPath = path.join(rootDir, "public", "Gandharva_Database_Architecture_Documentation.pdf");
+    fs.copyFileSync(outputPdfPath, publicPdfPath);
+
+    const stats = fs.statSync(outputPdfPath);
+    console.log(`\nSUCCESS: PDF Generated Successfully!`);
+    console.log(`Path: ${outputPdfPath}`);
+    console.log(`Public Path: ${publicPdfPath}`);
+    console.log(`File Size: ${(stats.size / 1024).toFixed(1)} KB`);
+  } else {
+    console.error("PDF generation failed: Output file not found.");
+    process.exit(1);
+  }
+}
+
+main().catch(err => {
+  console.error("Error generating PDF:", err);
+  process.exit(1);
+});
