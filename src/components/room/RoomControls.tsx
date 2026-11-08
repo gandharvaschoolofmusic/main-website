@@ -1,6 +1,6 @@
 "use client";
 
-import { Mic, MicOff, Video, VideoOff, ChevronUp, MonitorUp, Smile, Captions, Hand, MoreVertical, PhoneOff } from "lucide-react";
+import { Mic, MicOff, Video, VideoOff, ChevronUp, MonitorUp, Smile, Captions, Hand, MoreVertical, PhoneOff, Loader2 } from "lucide-react";
 import { RoomIconButton } from "./MeetPrimitives";
 
 interface RoomControlsProps {
@@ -20,6 +20,7 @@ interface RoomControlsProps {
   onToggleMore: () => void;
   onSettings: (tab: "Audio" | "Video") => void;
   onLeave: () => void;
+  isLeaving?: boolean;
 }
 
 export function RoomControls(props: RoomControlsProps) {
@@ -37,6 +38,13 @@ export function RoomControls(props: RoomControlsProps) {
     <RoomIconButton label="Captions" active={props.captionsOpen} className="meet-secondary-control" onClick={props.onToggleCaptions}><Captions/></RoomIconButton>
     <RoomIconButton label={props.handRaised ? "Lower hand (Ctrl+Alt+H)" : "Raise hand (Ctrl+Alt+H)"} active={props.handRaised} onClick={props.onToggleHand}><Hand/></RoomIconButton>
     <RoomIconButton label="More options" active={props.moreOpen} aria-expanded={props.moreOpen} onClick={props.onToggleMore}><MoreVertical/></RoomIconButton>
-    <RoomIconButton label="Leave call" className="meet-leave" onClick={props.onLeave}><PhoneOff/></RoomIconButton>
+    <RoomIconButton
+      label={props.isLeaving ? "Ending meeting..." : "Leave call"}
+      className={`meet-leave ${props.isLeaving ? "is-leaving" : ""}`}
+      disabled={props.isLeaving}
+      onClick={props.onLeave}
+    >
+      {props.isLeaving ? <Loader2 className="w-6 h-6 animate-spin" /> : <PhoneOff />}
+    </RoomIconButton>
   </div>;
 }

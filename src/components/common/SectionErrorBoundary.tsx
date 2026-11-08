@@ -47,3 +47,4 @@ export class SectionErrorBoundary extends Component<Props, State> {
     return this.props.children;
   }
 }
+

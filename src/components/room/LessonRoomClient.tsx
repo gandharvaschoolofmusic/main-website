@@ -100,11 +100,14 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     }
   };
 
+  const hasLeftRouteRef = useRef(false);
   const handleLeave = () => {
+    if (hasLeftRouteRef.current) return;
+    hasLeftRouteRef.current = true;
     releaseAllMediaDevices();
     const dashboardRoute =
       lesson.callerRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
-    router.push(dashboardRoute);
+    router.replace(dashboardRoute);
   };
 
   if (step === "PRE_JOIN") {

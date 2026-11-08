@@ -11,10 +11,6 @@ const nextConfig: NextConfig = {
     "localhost:3000",
   ],
   experimental: {
-    staleTimes: {
-      dynamic: 60,
-      static: 300,
-    },
     optimizePackageImports: [
       "lucide-react",
       "date-fns",
@@ -25,7 +21,6 @@ const nextConfig: NextConfig = {
       "motion/react",
       "clsx",
       "tailwind-merge",
-      "@prisma/client",
     ],
     serverActions: {
       bodySizeLimit: "25mb",

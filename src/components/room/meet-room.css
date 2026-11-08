@@ -88,6 +88,8 @@
 .meet-control-dock .meet-leave{width:72px;background:#ea3323;color:#fff;border-radius:28px}
 .meet-control-dock .meet-leave:hover{background:#c5221f}
 .meet-control-dock .meet-leave svg{width:27px;height:27px;fill:#fff;stroke:#ea3323}
+.meet-control-dock .meet-leave.is-leaving{background:#b3261e;cursor:not-allowed;pointer-events:none;opacity:0.85}
+.meet-control-dock .meet-leave.is-leaving svg{fill:none;stroke:#fff}
 .meet-unread{position:absolute;top:1px;right:1px;border-radius:10px;background:#a8c7fa;color:#062e6f;font-size:10px;padding:1px 4px}
 .meet-panel{flex:0 0 360px;width:360px;display:flex;flex-direction:column;background:#1f2023;border-radius:24px;min-height:0;overflow:hidden;animation:meet-panel-in .18s ease-out}
 .meet-panel-header{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:14px 16px 14px 24px;min-height:72px;flex-shrink:0}

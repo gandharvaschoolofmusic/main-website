@@ -59,8 +59,11 @@ export function LessonRoom(props: LessonRoomProps) {
   const isIntentionalLeaveRef = useRef(false);
   const [isIntentionalLeave, setIsIntentionalLeave] = useState(false);
   const [disconnectedError, setDisconnectedError] = useState<string | null>(null);
+  const hasLeftRef = useRef(false);
 
   const handleExplicitLeave = () => {
+    if (hasLeftRef.current) return;
+    hasLeftRef.current = true;
     isIntentionalLeaveRef.current = true;
     setIsIntentionalLeave(true);
     releaseAllMediaDevices();
@@ -69,6 +72,8 @@ export function LessonRoom(props: LessonRoomProps) {
 
   const handleDisconnected = (reason?: DisconnectReason) => {
     if (isIntentionalLeaveRef.current) {
+      if (hasLeftRef.current) return;
+      hasLeftRef.current = true;
       releaseAllMediaDevices();
       onLeave();
     } else {
@@ -211,6 +216,8 @@ function LessonRoomContent({
   const mic = useLessonMicrophone(room, initialConfig);
   const [isVideoOff, setIsVideoOff] = useState(Boolean(initialConfig.isVideoMuted));
   const [isScreenSharing, setIsScreenSharing] = useState(false);
+  const [isLeaving, setIsLeaving] = useState(false);
+  const isLeavingRef = useRef(false);
 
   // Turn-taking state
   const [activeFloorState, setActiveFloorState] = useState<TurnTakingState>(
@@ -501,6 +508,10 @@ function LessonRoomContent({
   }, [room, lesson.id, lesson.isTeacher]);
 
   const handleLeaveRoom = async () => {
+    // Guard against multiple rapid clicks
+    if (isLeavingRef.current) return;
+    isLeavingRef.current = true;
+    setIsLeaving(true);
     try {
       // 1. Record exit timestamp immediately
       try {
@@ -523,7 +534,12 @@ function LessonRoomContent({
       } catch {
         // Ignore
       }
-      await saving?.catch(error => console.warn("[LessonRoom] Recording upload on leave:", error));
+      if (saving) {
+        await Promise.race([
+          saving.catch((error) => console.warn("[LessonRoom] Recording upload on leave:", error)),
+          new Promise((resolve) => setTimeout(resolve, 1200)),
+        ]);
+      }
 
       // 4. Disconnect from LiveKit room cleanly
       try {
@@ -535,6 +551,9 @@ function LessonRoomContent({
     } catch (e) {
       console.warn("[LessonRoom] Error during room exit:", e);
       onLeave();
+    } finally {
+      isLeavingRef.current = false;
+      setIsLeaving(false);
     }
   };
 
@@ -571,6 +590,7 @@ function LessonRoomContent({
         onCameraDeviceSwitch={handleCameraDeviceSwitch}
         onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
         onLeave={handleLeaveRoom}
+        isLeaving={isLeaving}
       >
         <MultiCameraModal
           isOpen={isMultiCamModalOpen}
