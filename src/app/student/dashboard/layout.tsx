@@ -5,34 +5,6 @@ import { db } from "@/lib/db";
 import { DashboardSidebar } from "@/components/dashboard/DashboardSidebar";
 import { ProfileCompletionPopup } from "@/components/dashboard/ProfileCompletionPopup";
 
-import { unstable_cache } from "next/cache";
-
-const getCachedStudentProfileData = unstable_cache(
-  async (userId: string) => {
-    return db.user.findUnique({
-      where: { id: userId },
-      select: {
-        country: true,
-        age: true,
-        gender: true,
-        guardianName: true,
-        guardianPhone: true,
-        address: true,
-        trialStatus: {
-          select: { id: true },
-        },
-        _count: {
-          select: {
-            trialRequestsAsStudent: true,
-          },
-        },
-      },
-    });
-  },
-  ["student-profile-layout-data"],
-  { revalidate: 60, tags: ["student-profile"] }
-);
-
 export const dynamic = "force-dynamic";
 
 export default async function StudentDashboardLayout({
@@ -50,7 +22,7 @@ export default async function StudentDashboardLayout({
     redirect("/dashboard");
   }
 
-  // Check student profile completeness and trial booking status (cached for 60s)
+  // Check student profile completeness and trial booking status
   let profileData: {
     country: string | null;
     age: number | null;
@@ -63,7 +35,25 @@ export default async function StudentDashboardLayout({
   } | null = null;
 
   try {
-    profileData = await getCachedStudentProfileData(user.id);
+    profileData = await db.user.findUnique({
+      where: { id: user.id },
+      select: {
+        country: true,
+        age: true,
+        gender: true,
+        guardianName: true,
+        guardianPhone: true,
+        address: true,
+        trialStatus: {
+          select: { id: true },
+        },
+        _count: {
+          select: {
+            trialRequestsAsStudent: true,
+          },
+        },
+      },
+    });
   } catch (err) {
     console.warn("Could not query student profile completeness:", err);
   }

@@ -7,34 +7,29 @@ import {
 } from "@/lib/errors";
 import { Role, Lesson } from "@prisma/client";
 import { cache } from "react";
-import { unstable_cache } from "next/cache";
-import { unstable_rethrow } from "next/navigation";
+import { redirect, unstable_rethrow } from "next/navigation";
 
 /**
- * Cache user database validation for 60 seconds across page navigations
- * to eliminate repeated cross-region database queries on every navigation click.
+ * Cache user database validation per-request using React cache()
+ * to eliminate repeated database queries within a single render pass.
  */
-const getCachedDbUser = unstable_cache(
-  async (userId: string) => {
-    return db.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        image: true,
-        timezone: true,
-        emailVerified: true,
-        isActive: true,
-        customId: true,
-        teacherProfile: { select: { approvalStatus: true } },
-      },
-    });
-  },
-  ["auth-cached-db-user-v2"],
-  { revalidate: 60, tags: ["user-session"] },
-);
+const getDbUser = cache(async (userId: string) => {
+  return db.user.findUnique({
+    where: { id: userId },
+    select: {
+      id: true,
+      name: true,
+      email: true,
+      role: true,
+      image: true,
+      timezone: true,
+      emailVerified: true,
+      isActive: true,
+      customId: true,
+      teacherProfile: { select: { approvalStatus: true } },
+    },
+  });
+});
 
 /**
  * Get the current session user, or null if not authenticated.
@@ -49,16 +44,10 @@ export const getCurrentUser = cache(async () => {
     }
 
     try {
-      const dbUser = await getCachedDbUser(session.user.id);
+      const dbUser = await getDbUser(session.user.id);
 
       if (dbUser) {
         if (!dbUser.isActive) {
-          return null;
-        }
-        if (
-          (dbUser.role === Role.TEACHER || dbUser.teacherProfile) &&
-          dbUser.teacherProfile?.approvalStatus === "REJECTED"
-        ) {
           return null;
         }
         return {
@@ -84,25 +73,31 @@ export const getCurrentUser = cache(async () => {
 });
 
 /**
- * Require a logged-in user. Throws UnauthorizedError if not signed in.
+ * Require a logged-in user. Redirects to /login if not signed in.
  */
 export async function requireUser() {
   const user = await getCurrentUser();
   if (!user || !user.id) {
-    throw new UnauthorizedError("You must be logged in to access this resource.");
+    redirect("/login");
   }
   return user;
 }
 
 /**
  * Require a user with a specific role (STUDENT or TEACHER).
+ * Seamlessly redirects to the user's correct dashboard if role doesn't match.
  */
 export async function requireRole(expectedRole: Role) {
   const user = await requireUser();
   if (user.role !== expectedRole) {
-    throw new ForbiddenError(
-      `Access restricted to ${expectedRole.toLowerCase()}s.`,
-    );
+    if (user.role === Role.TEACHER) {
+      redirect("/teacher/dashboard");
+    } else if (user.role === Role.STUDENT) {
+      redirect("/student/dashboard");
+    } else if (user.role === Role.ADMIN) {
+      redirect("/admin");
+    }
+    redirect("/login");
   }
   return user;
 }
@@ -114,9 +109,7 @@ export async function requireRole(expectedRole: Role) {
 export async function requireEmailVerified() {
   const user = await requireUser();
   if (!user.emailVerified) {
-    throw new ForbiddenError(
-      "Please verify your email address to proceed with this action.",
-    );
+    redirect("/verify-email");
   }
   return user;
 }

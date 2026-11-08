@@ -13,51 +13,11 @@ export const metadata = {
   description: "View scheduled live music lessons, enter video rooms, and manage students.",
 };
 
-import { unstable_cache } from "next/cache";
-
-const getCachedTeacherDashboardProfile = unstable_cache(
-  async (userId: string) => {
-    return db.teacherProfile.findUnique({
-      where: { userId },
-      include: {
-        availabilityRules: {
-          select: { id: true },
-        },
-        lessonsAsTeacher: {
-          include: {
-            student: {
-              select: {
-                name: true,
-                email: true,
-                timezone: true,
-              },
-            },
-            enrollment: {
-              select: {
-                course: {
-                  select: { title: true },
-                },
-              },
-            },
-          },
-          orderBy: { startsAt: "desc" },
-          take: 60,
-        },
-      },
-    });
-  },
-  ["teacher-dashboard-profile"],
-  { revalidate: 30, tags: ["teacher-lessons", "teacher-profile"] }
-);
-
 export default async function TeacherDashboardPage() {
   const user = await requireRole(Role.TEACHER);
 
   let profile: any = null;
   try {
-    profile = await getCachedTeacherDashboardProfile(user.id);
-  } catch (err) {
-    console.error("Failed to load cached teacher dashboard profile:", err);
     profile = await db.teacherProfile.findUnique({
       where: { userId: user.id },
       include: {
@@ -86,6 +46,8 @@ export default async function TeacherDashboardPage() {
         },
       },
     });
+  } catch (err) {
+    console.error("Failed to load teacher dashboard profile:", err);
   }
 
   // Ensure newly registered teacher has a teacherProfile record

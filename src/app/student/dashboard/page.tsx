@@ -19,17 +19,24 @@ export const metadata = {
     "View scheduled live music lessons, trial status, and join video classrooms.",
 };
 
-import { unstable_cache } from "next/cache";
+export default async function StudentDashboardPage() {
+  const user = await requireRole(Role.STUDENT);
+  const studentTimezone = user.timezone || "UTC";
 
-const getCachedStudentDashboardData = unstable_cache(
-  async (userId: string) => {
-    return Promise.all([
+  // Fetch trial status, active enrollment, lessons, and trial requests in parallel
+  let trialStatus: any = null;
+  let activeEnrollment: any = null;
+  let dbLessons: any[] = [];
+  let trialRequests: any[] = [];
+
+  try {
+    [trialStatus, activeEnrollment, dbLessons, trialRequests] = await Promise.all([
       db.studentTrialStatus.findUnique({
-        where: { studentId: userId },
+        where: { studentId: user.id },
       }),
       db.enrollment.findFirst({
         where: {
-          studentId: userId,
+          studentId: user.id,
           status: EnrollmentStatus.ACTIVE,
         },
         include: {
@@ -44,7 +51,7 @@ const getCachedStudentDashboardData = unstable_cache(
       }),
       db.lesson.findMany({
         where: {
-          studentId: userId,
+          studentId: user.id,
         },
         include: {
           teacher: {
@@ -67,7 +74,7 @@ const getCachedStudentDashboardData = unstable_cache(
       }),
       db.trialRequest.findMany({
         where: {
-          studentId: userId,
+          studentId: user.id,
         },
         select: {
           id: true,
@@ -83,58 +90,8 @@ const getCachedStudentDashboardData = unstable_cache(
         take: 5,
       }),
     ]);
-  },
-  ["student-dashboard-overview"],
-  { revalidate: 30, tags: ["student-lessons", "student-trials"] }
-);
-
-export default async function StudentDashboardPage() {
-  const user = await requireRole(Role.STUDENT);
-  const studentTimezone = user.timezone || "UTC";
-
-  // Fetch trial status, active enrollment, lessons, and trial requests in parallel (cached 30s)
-  let trialStatus: any = null;
-  let activeEnrollment: any = null;
-  let dbLessons: any[] = [];
-  let trialRequests: any[] = [];
-
-  try {
-    [trialStatus, activeEnrollment, dbLessons, trialRequests] =
-      await getCachedStudentDashboardData(user.id);
   } catch (err) {
-    console.error("Failed to load cached student dashboard data:", err);
-    [trialStatus, activeEnrollment, dbLessons, trialRequests] = await Promise.all([
-      db.studentTrialStatus.findUnique({ where: { studentId: user.id } }),
-      db.enrollment.findFirst({
-        where: { studentId: user.id, status: EnrollmentStatus.ACTIVE },
-        include: { course: { select: { title: true, sessionCount: true } } },
-        orderBy: { startedAt: "desc" },
-      }),
-      db.lesson.findMany({
-        where: { studentId: user.id },
-        include: {
-          teacher: { select: { name: true, email: true, timezone: true } },
-          teacherProfile: { select: { id: true } },
-        },
-        orderBy: { startsAt: "desc" },
-        take: 60,
-      }),
-      db.trialRequest.findMany({
-        where: { studentId: user.id },
-        select: {
-          id: true,
-          instrument: true,
-          ageGroup: true,
-          requestedStartsAt: true,
-          preferredTimeSlot: true,
-          studentNotes: true,
-          status: true,
-          isConverted: true,
-        },
-        orderBy: { requestedStartsAt: "desc" },
-        take: 5,
-      }),
-    ]);
+    console.error("Failed to load student dashboard data:", err);
   }
 
   const pendingTrialRequest =
@@ -161,8 +118,8 @@ export default async function StudentDashboardPage() {
         "EEE, MMM d, yyyy 'at' h:mm a",
       ),
       timezoneAbbr: getTimezoneAbbr(startsAtDate, studentTimezone),
-      teacherName: l.teacher.name || "Teacher",
-      teacherProfileId: l.teacherProfile.id,
+      teacherName: l.teacher?.name || "Teacher",
+      teacherProfileId: l.teacherProfile?.id || "",
       trackingCode: getLessonTrackingId(l),
       cancelledBy: l.cancelledBy,
       cancelledAt: l.cancelledAt?.toISOString() || null,
