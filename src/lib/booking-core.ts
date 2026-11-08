@@ -322,7 +322,7 @@ export async function bookLessonCore(
             }
 
             const trackingCode = await generateUniqueLessonTrackingCode(student.id, tx);
-            const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacherProfile);
+            const payoutAmountMinor = calculateLessonPayoutMinor(startsAtDate, teacherProfile, lessonSource);
 
             return await tx.lesson.create({
               data: {

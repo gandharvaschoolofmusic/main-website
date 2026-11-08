@@ -81,6 +81,7 @@ export function getPayoutTierInfo(date: Date | string, timezone = "Asia/Kolkata"
 /**
  * Calculates the remuneration payout (in minor units / paise) for a lesson
  * based on its scheduled start time and the teacher's profile payout rates.
+ * Free trials carry NO remuneration (returns 0).
  */
 export function calculateLessonPayoutMinor(
   startsAt: Date | string,
@@ -88,8 +89,13 @@ export function calculateLessonPayoutMinor(
     payoutDayRate?: number | null;
     payoutNightRate?: number | null;
     payoutPerSession?: number | null;
-  } | null
+  } | null,
+  lessonSource?: string | null
 ): number {
+  if (lessonSource === "TRIAL") {
+    return 0;
+  }
+
   const isDay = isDayTimeSlot(startsAt);
 
   if (isDay) {

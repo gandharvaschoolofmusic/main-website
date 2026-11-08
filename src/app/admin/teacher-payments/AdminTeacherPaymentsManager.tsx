@@ -170,10 +170,15 @@ export function AdminTeacherPaymentsManager({
     document.body.removeChild(link);
   };
 
-  // Completed sessions base list (sorted ascending by session date/time)
+  // Completed sessions base list (sorted ascending by session date/time; free trials have NO remuneration)
   const completedSessions = useMemo(() => {
     return sessions
-      .filter((s) => s.lessonStatus === "COMPLETED")
+      .filter(
+        (s) =>
+          s.lessonStatus === "COMPLETED" &&
+          s.lessonSource !== "TRIAL" &&
+          !s.courseTitle.toLowerCase().includes("trial"),
+      )
       .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime());
   }, [sessions]);
 

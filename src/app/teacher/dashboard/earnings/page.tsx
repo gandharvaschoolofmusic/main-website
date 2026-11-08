@@ -12,56 +12,23 @@ export const metadata = {
 
 import { unstable_cache } from "next/cache";
 
-const getCachedTeacherEarningsData = unstable_cache(
-  async (userId: string) => {
-    return db.user.findUnique({
-      where: { id: userId },
-      include: {
-        teacherProfile: {
-          include: {
-            lessonsAsTeacher: {
-              include: {
-                student: {
-                  select: {
-                    name: true,
-                    email: true,
-                  },
-                },
-                enrollment: {
-                  include: {
-                    course: {
-                      select: { title: true },
-                    },
-                  },
-                },
-              },
-              orderBy: { startsAt: "desc" },
-              take: 100,
-            },
-          },
-        },
-      },
-    });
-  },
-  ["teacher-earnings-data"],
-  { revalidate: 30, tags: ["teacher-earnings", "teacher-lessons"] }
-);
-
 export default async function TeacherEarningsPage() {
   const user = await requireRole(Role.TEACHER);
   const teacherTimezone = user.timezone || "UTC";
 
   let dbUser: any = null;
   try {
-    dbUser = await getCachedTeacherEarningsData(user.id);
-  } catch (err) {
-    console.error("Failed to load cached teacher earnings data:", err);
     dbUser = await db.user.findUnique({
       where: { id: user.id },
       include: {
         teacherProfile: {
           include: {
             lessonsAsTeacher: {
+              where: {
+                lessonSource: { not: "TRIAL" },
+                trialRequest: null,
+                enrollmentId: { not: null },
+              },
               include: {
                 student: {
                   select: {
@@ -84,6 +51,8 @@ export default async function TeacherEarningsPage() {
         },
       },
     });
+  } catch (err) {
+    console.error("Failed to load teacher earnings data:", err);
   }
 
   const profile = dbUser?.teacherProfile;

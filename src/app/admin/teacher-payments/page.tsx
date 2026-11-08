@@ -1,7 +1,7 @@
 import { Suspense } from "react";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { Role, LessonStatus } from "@prisma/client";
+import { Role, LessonStatus, LessonSource } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { formatInViewerTimezone } from "@/lib/timezone";
@@ -18,12 +18,15 @@ export const metadata = {
     "Manage teacher session payouts, disburse remuneration via UPI ID, and track completed session payment status.",
 };
 
-const getCachedAdminTeacherPaymentsData = unstable_cache(
-  async (adminTimezone: string) => {
-    return getResilientData(`admin-teacher-payments-${adminTimezone}`, async () => {
-      const lessons = await db.lesson.findMany({
+async function getAdminTeacherPaymentsData(adminTimezone: string) {
+  return getResilientData(`admin-teacher-payments-${adminTimezone}`, async () => {
+    // Only completed enrolled course sessions qualify for teacher remuneration (Free trials have NO payout)
+    const lessons = await db.lesson.findMany({
       where: {
         status: LessonStatus.COMPLETED,
+        enrollmentId: { not: null },
+        lessonSource: { not: LessonSource.TRIAL },
+        trialRequest: null,
       },
       include: {
         teacher: {
@@ -59,7 +62,7 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
 
     const formattedSessions: AdminSessionPayoutItem[] = lessons.map((l) => {
       const isPaid = l.payoutStatus === "PAID";
-      const computedMinor = calculateLessonPayoutMinor(l.startsAt, l.teacherProfile);
+      const computedMinor = calculateLessonPayoutMinor(l.startsAt, l.teacherProfile, l.lessonSource);
       const rateRupees = computedMinor / 100;
       const amountRupees = (l.payoutAmountMinor || computedMinor) / 100;
 
@@ -75,10 +78,7 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
         durationMinutes: l.durationMinutes,
         lessonStatus: l.status,
         lessonSource: l.lessonSource,
-        courseTitle:
-          l.lessonSource === "TRIAL"
-            ? "Free Trial Lesson"
-            : l.enrollment?.course?.title || "1:1 Private Course Lesson",
+        courseTitle: l.enrollment?.course?.title || "1:1 Private Course Lesson",
         studentId: l.student.id,
         studentName: l.student.name || "Student",
         studentEmail: l.student.email,
@@ -98,11 +98,8 @@ const getCachedAdminTeacherPaymentsData = unstable_cache(
     });
 
     return formattedSessions;
-    });
-  },
-  ["admin-teacher-payments-data-v2"],
-  { revalidate: 30, tags: ["admin-teacher-payments", "teacher-payments"] }
-);
+  });
+}
 
 export default async function AdminTeacherPaymentsPage() {
   const admin = await requireRole(Role.ADMIN);
@@ -110,9 +107,9 @@ export default async function AdminTeacherPaymentsPage() {
 
   let formattedSessions: AdminSessionPayoutItem[] = [];
   try {
-    formattedSessions = await getCachedAdminTeacherPaymentsData(adminTimezone);
+    formattedSessions = await getAdminTeacherPaymentsData(adminTimezone);
   } catch (err) {
-    console.error("[AdminTeacherPaymentsPage] Failed to load cached teacher payments, using fallback:", err);
+    console.error("[AdminTeacherPaymentsPage] Failed to load teacher payments, using fallback:", err);
   }
 
   if (formattedSessions.length === 0) {

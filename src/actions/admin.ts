@@ -578,10 +578,10 @@ export async function rescheduleEnrollmentLessonAction(input: {
       return { success: false, error: "Invalid date and time." };
     }
 
-    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid
+    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid (trials = 0)
     const updatedPayoutMinor =
       lesson.payoutStatus !== TeacherPayoutStatus.PAID
-        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
+        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile, lesson.lessonSource)
         : lesson.payoutAmountMinor;
 
     const updatePayload: Record<string, unknown> = {
@@ -707,10 +707,10 @@ export async function updateLessonDateTimeAdminAction(input: {
       return { success: false, error: "Invalid date and time." };
     }
 
-    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid
+    // Automatically recalculate payout amount according to day/night lesson timing if not yet paid (trials = 0)
     const updatedPayoutMinor =
       lesson.payoutStatus !== TeacherPayoutStatus.PAID
-        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile)
+        ? calculateLessonPayoutMinor(startsAtDate, lesson.teacherProfile, lesson.lessonSource)
         : lesson.payoutAmountMinor;
 
     const isFuture = startsAtDate.getTime() > Date.now();
@@ -2114,7 +2114,8 @@ export async function allotTrialTeacherAction(input: {
       } else {
         // Create scheduled Lesson with unique trackingCode
         const trackingCode = await generateUniqueLessonTrackingCode(trialRequest.studentId, tx);
-        const payoutAmountMinor = calculateLessonPayoutMinor(finalStartsAt, teacher.teacherProfile);
+        // Free trials carry no remuneration (0 payout)
+        const payoutAmountMinor = 0;
         activeLesson = await tx.lesson.create({
           data: {
             teacherProfileId: teacher.teacherProfile!.id,
@@ -2750,7 +2751,7 @@ export async function markLessonPayoutAction(input: {
       const payoutAmount =
         input.amountMinor ??
         lesson.payoutAmountMinor ??
-        calculateLessonPayoutMinor(lesson.startsAt, lesson.teacherProfile);
+        calculateLessonPayoutMinor(lesson.startsAt, lesson.teacherProfile, lesson.lessonSource);
 
       await db.lesson.update({
         where: { id: input.lessonId },
