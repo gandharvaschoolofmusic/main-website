@@ -20,6 +20,7 @@ import {
   Clock,
   Sparkles,
   ChevronRight,
+  MessageSquare,
 } from "lucide-react";
 
 export interface AdminLessonItem {
@@ -694,6 +695,15 @@ export function AdminLessonsManager({
                             >
                               <ExternalLink className="w-3.5 h-3.5" />
                             </Link>
+
+                            <a
+                              href={`/api/lessons/${l.id}/chat?download=1`}
+                              download
+                              className="p-1.5 rounded-lg bg-bg-alt/40 text-primary hover:bg-primary hover:text-white transition-all active:scale-95 shadow-2xs"
+                              title="Download Classroom Chatlog (with timestamps)"
+                            >
+                              <MessageSquare className="w-3.5 h-3.5" />
+                            </a>
 
                             {(l.status === "SCHEDULED" || l.status === "RESCHEDULED") && (
                               <button

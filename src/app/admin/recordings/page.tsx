@@ -211,6 +211,7 @@ const getCachedCourseRecordingsData = unstable_cache(
             studentDurationSeconds: att.totalStudentDurationSeconds,
             overlapDurationSeconds: att.overlapDurationSeconds,
             recordings,
+            chatLogs: (l.chatLogs as any) || [],
           };
         });
 
@@ -408,6 +409,7 @@ const getCachedCourseRecordingsData = unstable_cache(
           studentDurationSeconds: att.totalStudentDurationSeconds,
           overlapDurationSeconds: att.overlapDurationSeconds,
           recordings,
+          chatLogs: (tl.chatLogs as any) || [],
         };
 
         studentEntry.lessons.push(sessionItem);

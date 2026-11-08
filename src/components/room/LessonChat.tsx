@@ -11,6 +11,7 @@ interface LessonChatProps {
   isTeacher: boolean;
   participantName: string;
   onNewMessage?: (count: number) => void;
+  lessonId?: string;
 }
 
 // Comprehensive PII patterns for student and teacher safety
@@ -79,9 +80,10 @@ function checkPIIViolation(text: string): string | null {
 export function LessonChat({
   isOpen,
   onClose,
-
+  isTeacher,
   participantName,
   onNewMessage,
+  lessonId,
 }: LessonChatProps) {
   const { chatMessages, send, isSending } = useChat();
   const [inputText, setInputText] = useState("");
@@ -164,6 +166,21 @@ export function LessonChat({
       await send(trimmed);
       setInputText("");
       setSafetyWarning(null);
+
+      if (lessonId) {
+        fetch(`/api/lessons/${lessonId}/chat`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            message: trimmed,
+            senderName: isTeacher ? "Instructor" : (participantName || "Student"),
+            senderRole: isTeacher ? "TEACHER" : "STUDENT",
+            timestamp: new Date().toISOString(),
+          }),
+        }).catch((err) => {
+          console.error("Non-blocking: Failed to archive chat message:", err);
+        });
+      }
     } catch (err) {
       console.error("Failed to send chat message:", err);
       setSafetyWarning("Failed to send message. Please try again.");

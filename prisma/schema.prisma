@@ -213,6 +213,7 @@ model Lesson {
   studentJoinedAt          DateTime?           @db.Timestamptz(6)
   studentLeftAt            DateTime?           @db.Timestamptz(6)
   attendanceLogs           Json?
+  chatLogs                 Json?
   recordingUrl             String?
   recordingFileId          String?
   recordingDurationSeconds Int?

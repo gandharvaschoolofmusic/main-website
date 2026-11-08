@@ -32,7 +32,13 @@ import {
   CheckCircle2,
   UserCheck,
   Timer,
+  MessageSquare,
 } from "lucide-react";
+import {
+  generateChatlogText,
+  triggerDownload,
+  type LessonChatMessageItem,
+} from "@/lib/chatlog";
 import {
   syncRecordingToSupabaseAction,
   syncRecordingToDriveAction,
@@ -106,6 +112,7 @@ export interface SessionLessonItem {
     isActive: boolean;
   }[];
   recordings: RecordingFileItem[];
+  chatLogs?: LessonChatMessageItem[];
 }
 
 export interface EnrolledStudentItem {
@@ -418,6 +425,34 @@ export function AdminRecordingsManager({
       }
     });
   };
+
+  const handleDownloadChatlog = useCallback(
+    (session: SessionLessonItem) => {
+      const content = generateChatlogText({
+        sessionCode: session.trackingCode || session.id,
+        sessionNumber: session.sessionNumber,
+        courseTitle: selectedCourse?.title,
+        instrument: session.instrument || selectedCourse?.instrument,
+        startsAt: session.startsAt,
+        status: session.status,
+        teacherName: session.teacherName,
+        teacherEmail: session.teacherEmail,
+        studentName: selectedStudent?.name || "Student",
+        studentEmail: selectedStudent?.email,
+        teacherDurationSeconds: session.teacherDurationSeconds,
+        studentDurationSeconds: session.studentDurationSeconds,
+        overlapDurationSeconds: session.overlapDurationSeconds,
+        teacherSessions: session.teacherSessions,
+        studentSessions: session.studentSessions,
+        chatLogs: session.chatLogs,
+      });
+
+      const dateSlug = session.startsAt ? session.startsAt.slice(0, 10) : "session";
+      const filename = `Chatlog_${session.trackingCode || session.id}_${dateSlug}.txt`;
+      triggerDownload(filename, content);
+    },
+    [selectedCourse, selectedStudent],
+  );
 
   return (
     <div className="space-y-6">
@@ -1060,19 +1095,31 @@ export function AdminRecordingsManager({
               </div>
             </div>
 
-            <div className="text-right shrink-0">
-              <div className="text-xs font-semibold text-heading">
-                {selectedSession.recordings.length}{" "}
-                {selectedSession.recordings.length === 1 ? "Recording" : "Recording parts"}
-              </div>
-              <div className="text-[11px] text-body-muted">
-                Total duration:{" "}
-                {formatDuration(
-                  selectedSession.recordings.reduce(
-                    (sum, r) => sum + (r.durationSeconds || 0),
-                    0,
-                  ),
-                )}
+            <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
+              <button
+                type="button"
+                onClick={() => handleDownloadChatlog(selectedSession)}
+                className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all cursor-pointer shadow-2xs active:scale-95"
+                title="Download classroom chatlog transcript with timestamps"
+              >
+                <MessageSquare className="w-3.5 h-3.5" />
+                <span>Download Chatlog</span>
+                <Download className="w-3.5 h-3.5 ml-0.5 text-primary/80" />
+              </button>
+              <div className="text-right">
+                <div className="text-xs font-semibold text-heading">
+                  {selectedSession.recordings.length}{" "}
+                  {selectedSession.recordings.length === 1 ? "Recording" : "Recording parts"}
+                </div>
+                <div className="text-[11px] text-body-muted">
+                  Total duration:{" "}
+                  {formatDuration(
+                    selectedSession.recordings.reduce(
+                      (sum, r) => sum + (r.durationSeconds || 0),
+                      0,
+                    ),
+                  )}
+                </div>
               </div>
             </div>
           </div>
@@ -1094,7 +1141,18 @@ export function AdminRecordingsManager({
                 </div>
               </div>
 
-              <div>
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => handleDownloadChatlog(selectedSession)}
+                  className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all cursor-pointer shadow-2xs active:scale-95"
+                  title="Download complete session chatlog and attendance transcript with timestamps"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  <span>Download Chatlog</span>
+                  <Download className="w-3.5 h-3.5 ml-0.5 text-primary/80" />
+                </button>
+
                 {selectedSession.formattedTeacherJoined && selectedSession.formattedStudentJoined ? (
                   <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
                     <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
