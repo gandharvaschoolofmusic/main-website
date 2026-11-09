@@ -103,7 +103,7 @@ export async function signupAction(
     if (!isValidPhoneNumber(normalizedPhone)) {
       return {
         success: false,
-        error: "Please enter a valid mobile number with country code (e.g. +91 98765 43210).",
+        error: "Please enter a valid international mobile number including your country code (e.g. +1 555 123 4567 or +91 98765 43210).",
         fieldErrors: { phone: ["Invalid mobile number format"] },
       };
     }
@@ -321,7 +321,7 @@ export async function sendPhoneOtpAction(
     if (!isValidPhoneNumber(phone)) {
       return {
         success: false,
-        error: "Please enter a valid mobile number with country code (e.g. +91 98765 43210).",
+        error: "Please enter a valid international mobile number including your country code (e.g. +1 555 123 4567 or +91 98765 43210).",
       };
     }
 

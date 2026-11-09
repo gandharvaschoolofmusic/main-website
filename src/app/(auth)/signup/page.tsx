@@ -153,8 +153,24 @@ export default function SignupPage() {
       setPhoneError("Please enter your mobile phone number.");
       return;
     }
-    if (cleanDigits.length < 6) {
-      setPhoneError("Please enter a valid phone number.");
+
+    // Minimum digit counts differ by country:
+    // US/Canada: 10, UK: 10, most others: 7–15
+    const isIndianLike = selectedCountry.dialCode === "+91";
+    const minDigits = isIndianLike ? 10 : 6;
+    const maxDigits = 15;
+
+    if (cleanDigits.length < minDigits) {
+      setPhoneError(
+        isIndianLike
+          ? "Please enter a valid 10-digit Indian mobile number."
+          : `Please enter a valid phone number for ${selectedCountry.name}.`
+      );
+      return;
+    }
+
+    if (cleanDigits.length > maxDigits) {
+      setPhoneError("Phone number is too long. Please check and try again.");
       return;
     }
 
@@ -668,7 +684,7 @@ export default function SignupPage() {
                   autoComplete="tel-national"
                         value={rawPhoneNumber}
                         onChange={(e) => setRawPhoneNumber(e.target.value)}
-                        placeholder="98765 43210"
+                        placeholder={selectedCountry.dialCode === "+91" ? "98765 43210" : "Enter phone number"}
                         disabled={otpSent}
                         className="w-full bg-transparent px-3 py-2.5 text-xs sm:text-sm text-heading placeholder-body/40 focus:outline-none disabled:bg-neutral-50 disabled:opacity-80"
                       />

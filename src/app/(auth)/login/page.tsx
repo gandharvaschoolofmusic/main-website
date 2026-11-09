@@ -216,8 +216,18 @@ export default function LoginPage() {
       return;
     }
 
-    if (cleanDigits.length < 6) {
-      setOtpError("Please enter a valid phone number.");
+    const isIndianLike = selectedCountry.dialCode === "+91";
+    const minDigits = isIndianLike ? 10 : 6;
+    if (cleanDigits.length < minDigits) {
+      setOtpError(
+        isIndianLike
+          ? "Please enter a valid 10-digit Indian mobile number."
+          : `Please enter a valid phone number for ${selectedCountry.name}.`
+      );
+      return;
+    }
+    if (cleanDigits.length > 15) {
+      setOtpError("Phone number is too long. Please check and try again.");
       return;
     }
 

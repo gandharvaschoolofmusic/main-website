@@ -36,7 +36,9 @@ export function formatInternationalE164(dialCode: string, rawNumber: string): st
 
 /**
  * Normalizes phone numbers to standard E.164 format.
- * Defaults to India (+91) if a 10-digit number is provided without a country code.
+ * If the number already starts with + it is treated as international E.164 and
+ * returned cleaned but unchanged (no India default is applied).
+ * Only bare digit strings without a country code fall back to +91 (India).
  */
 export function normalizePhoneNumber(rawPhone: string): string {
   if (!rawPhone) return "";
@@ -49,7 +51,8 @@ export function normalizePhoneNumber(rawPhone: string): string {
     cleaned = "+" + cleaned.slice(2);
   }
 
-  // If starts with +, strip any domestic 0 after dial code if present
+  // If already a proper E.164 string (starts with +), clean domestic trunk 0
+  // only for specific known dial codes — then return as-is.
   if (cleaned.startsWith("+")) {
     const match = cleaned.match(/^(\+(?:1|44|49|33|61|65|971|966|974|968|965|973|60|64|27|353|41|81|977|880|94|230|39|34|46|47|45))0(\d+)$/);
     if (match) {
@@ -58,12 +61,12 @@ export function normalizePhoneNumber(rawPhone: string): string {
     return cleaned;
   }
 
-  // If it's a 10-digit number, prepend +91
+  // Bare 10-digit number with no country prefix → assume India only
   if (/^\d{10}$/.test(cleaned)) {
     return `+91${cleaned}`;
   }
 
-  // If 11 or 12 digits starting with 91, add +
+  // If 11-12 digits starting with 91 → Indian mobile stored without +
   if (/^91\d{10}$/.test(cleaned)) {
     return `+${cleaned}`;
   }
