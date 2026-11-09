@@ -1,7 +1,7 @@
 import { Resend } from "resend";
 import nodemailer from "nodemailer";
 import { logger } from "@/lib/logger";
-import { formatInViewerTimezone } from "@/lib/timezone";
+import { formatInViewerTimezone, formatToIST } from "@/lib/timezone";
 import { generateLessonIcs } from "@/lib/ical";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
@@ -870,6 +870,710 @@ export async function sendSupportTicketAdminEmail({
     return { success: false };
   }
 }
+
+// ─── Lesson Reminders (24h, 12h, 1h, 10m) ───────────────────────────────────
+
+export type LessonReminderWindow = "24h" | "12h" | "1h" | "10m";
+
+export interface LessonReminderParams {
+  lessonId: string;
+  trackingCode?: string | null;
+  instrument: string;
+  courseTitle?: string | null;
+  startsAt: Date;
+  durationMinutes: number;
+  window: LessonReminderWindow;
+  student: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+  teacher: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+}
+
+/**
+ * Sends automated reminder email for upcoming class sessions.
+ * Supports 24 hours, 12 hours, 1 hour, and 10 minutes windows before scheduled start time.
+ */
+export async function sendLessonReminderEmails(
+  params: LessonReminderParams,
+): Promise<{ success: boolean; studentSent: boolean; teacherSent: boolean }> {
+  const {
+    lessonId,
+    trackingCode,
+    instrument,
+    courseTitle,
+    startsAt,
+    durationMinutes,
+    window: reminderWindow,
+    student,
+    teacher,
+  } = params;
+
+  const roomUrl = `${appUrl}/lesson/${lessonId}`;
+  const istTimeFormatted = formatToIST(startsAt, "MMM d, yyyy 'at' h:mm a 'IST'");
+
+  // Window-specific metadata
+  const windowMeta: Record<
+    LessonReminderWindow,
+    {
+      badgeLabel: string;
+      badgeColor: string;
+      badgeBg: string;
+      headline: string;
+      urgencyNote: string;
+      ctaText: string;
+    }
+  > = {
+    "24h": {
+      badgeLabel: "24-Hour Reminder",
+      badgeColor: "#3C096C",
+      badgeBg: "#F3EEFA",
+      headline: "Class Tomorrow",
+      urgencyNote:
+        "Your 1-on-1 class is scheduled for tomorrow. Please review any practice notes or sheet music in advance.",
+      ctaText: "Preview Lesson Room",
+    },
+    "12h": {
+      badgeLabel: "12-Hour Reminder",
+      badgeColor: "#5A189A",
+      badgeBg: "#F3EEFA",
+      headline: "Class Coming Up Today",
+      urgencyNote:
+        "Your lesson is coming up in approximately 12 hours today. Be sure your device and music area are ready.",
+      ctaText: "Check Lesson Room",
+    },
+    "1h": {
+      badgeLabel: "Starting in 1 Hour",
+      badgeColor: "#D97706",
+      badgeBg: "#FEF3C7",
+      headline: "Class Starting in 1 Hour",
+      urgencyNote:
+        "Get ready! Please test your camera and microphone, tune your instrument, and find a quiet room.",
+      ctaText: "Get Ready & Join",
+    },
+    "10m": {
+      badgeLabel: "Classroom Live Now",
+      badgeColor: "#16A34A",
+      badgeBg: "#DCFCE7",
+      headline: "Class Starting in 10 Minutes!",
+      urgencyNote:
+        "The classroom is now active and ready. Join now to connect your video and microphone before session begins.",
+      ctaText: "Join Classroom Now",
+    },
+  };
+
+  const meta = windowMeta[reminderWindow];
+  const displaySubjectTitle = courseTitle ? `${instrument} (${courseTitle})` : instrument;
+
+  // Student email HTML
+  const studentFormattedTime = formatInViewerTimezone(
+    startsAt,
+    student.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+
+  const studentHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader(meta.headline, {
+        subtitleColor: meta.badgeColor,
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+      
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span style="background-color: ${meta.badgeBg}; color: ${meta.badgeColor}; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 9999px; display: inline-block;">
+          ${meta.badgeLabel}
+        </span>
+      </div>
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${student.name}</strong>, this is an automated reminder for your upcoming 1-on-1 music class with <strong>${teacher.name}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Instructor:</strong> ${teacher.name}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>When:</strong> ${studentFormattedTime}</p>
+        <p style="margin: 5px 0; font-size: 13px; color: #78716c;">(Indian Standard Time: ${istTimeFormatted})</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Duration:</strong> ${durationMinutes} minutes</p>
+        ${trackingCode ? `<p style="margin: 5px 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <p style="font-size: 14px; color: #57534e; line-height: 1.5; margin: 15px 0;">
+        ${meta.urgencyNote}
+      </p>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${roomUrl}" style="background-color: #3C096C; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 2px 4px rgba(60,9,108,0.15);">
+          ${meta.ctaText} &rarr;
+        </a>
+      </div>
+
+      <div style="background-color: #fafaf9; border-radius: 8px; padding: 12px 16px; margin-top: 20px; font-size: 12px; color: #78716c; line-height: 1.5;">
+        <strong>Quick Checklist:</strong>
+        <ul style="margin: 6px 0 0 16px; padding: 0;">
+          <li>Use headphones/earphones for optimal acoustic clarity.</li>
+          <li>Tune your instrument before classroom entry.</li>
+          <li>Ensure stable Wi-Fi / broadband connection.</li>
+        </ul>
+      </div>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Automated Class Reminder
+      </div>
+    </div>
+  `;
+
+  // Teacher email HTML
+  const teacherFormattedTime = formatInViewerTimezone(
+    startsAt,
+    teacher.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+
+  const teacherHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader(meta.headline, {
+        subtitleColor: meta.badgeColor,
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <div style="text-align: center; margin-bottom: 20px;">
+        <span style="background-color: ${meta.badgeBg}; color: ${meta.badgeColor}; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.5px; padding: 4px 12px; border-radius: 9999px; display: inline-block;">
+          ${meta.badgeLabel}
+        </span>
+      </div>
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${teacher.name}</strong>, this is an automated reminder for your upcoming teaching session with <strong>${student.name}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Student:</strong> ${student.name}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>When:</strong> ${teacherFormattedTime}</p>
+        <p style="margin: 5px 0; font-size: 13px; color: #78716c;">(Indian Standard Time: ${istTimeFormatted})</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Duration:</strong> ${durationMinutes} minutes</p>
+        ${trackingCode ? `<p style="margin: 5px 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <p style="font-size: 14px; color: #57534e; line-height: 1.5; margin: 15px 0;">
+        ${meta.urgencyNote}
+      </p>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${roomUrl}" style="background-color: #3C096C; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: 700; font-size: 15px; display: inline-block; box-shadow: 0 2px 4px rgba(60,9,108,0.15);">
+          ${meta.ctaText} &rarr;
+        </a>
+      </div>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Faculty Schedule Notification
+      </div>
+    </div>
+  `;
+
+  const studentSubject =
+    reminderWindow === "10m"
+      ? `🟢 Starting Now: ${displaySubjectTitle} with ${teacher.name}`
+      : reminderWindow === "1h"
+      ? `⏰ 1 Hour Reminder: ${displaySubjectTitle} with ${teacher.name}`
+      : `Reminder: ${displaySubjectTitle} class with ${teacher.name} (${meta.headline})`;
+
+  const teacherSubject =
+    reminderWindow === "10m"
+      ? `🟢 Starting Now: Teaching session with ${student.name} (${displaySubjectTitle})`
+      : reminderWindow === "1h"
+      ? `⏰ 1 Hour Reminder: Teaching session with ${student.name}`
+      : `Reminder: Teaching session with ${student.name} (${meta.headline})`;
+
+  const [studentRes, teacherRes] = await Promise.allSettled([
+    sendMail({
+      to: student.email,
+      subject: studentSubject,
+      html: studentHtml,
+    }),
+    sendMail({
+      to: teacher.email,
+      subject: teacherSubject,
+      html: teacherHtml,
+    }),
+  ]);
+
+  const studentSent = studentRes.status === "fulfilled" && studentRes.value;
+  const teacherSent = teacherRes.status === "fulfilled" && teacherRes.value;
+
+  logger.info(
+    { lessonId, reminderWindow, studentSent, teacherSent },
+    `Lesson reminder emails processed for window [${reminderWindow}]`,
+  );
+
+  return { success: studentSent || teacherSent, studentSent, teacherSent };
+}
+
+// ─── Lesson Rescheduled Notification Email ──────────────────────────────────
+
+export interface LessonRescheduledParams {
+  lessonId: string;
+  trackingCode?: string | null;
+  instrument: string;
+  courseTitle?: string | null;
+  previousStartsAt: Date;
+  newStartsAt: Date;
+  durationMinutes: number;
+  rescheduledByName?: string;
+  student: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+  teacher: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+}
+
+/**
+ * Dispatches email notifications to both student and teacher when a lesson is rescheduled.
+ * Includes previous time, new time in local + IST, and updated .ics calendar event.
+ */
+export async function sendLessonRescheduledEmails(
+  params: LessonRescheduledParams,
+): Promise<{ success: boolean }> {
+  const {
+    lessonId,
+    trackingCode,
+    instrument,
+    courseTitle,
+    previousStartsAt,
+    newStartsAt,
+    durationMinutes,
+    rescheduledByName = "Academy Administration",
+    student,
+    teacher,
+  } = params;
+
+  const roomUrl = `${appUrl}/lesson/${lessonId}`;
+  const displaySubjectTitle = courseTitle ? `${instrument} (${courseTitle})` : instrument;
+
+  // New times formatted
+  const studentPrevFormatted = formatInViewerTimezone(
+    previousStartsAt,
+    student.timezone,
+    "EEE, MMM d, yyyy 'at' h:mm a zzz",
+  );
+  const studentNewFormatted = formatInViewerTimezone(
+    newStartsAt,
+    student.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+  const studentNewIST = formatToIST(newStartsAt, "MMM d, yyyy 'at' h:mm a 'IST'");
+
+  const teacherPrevFormatted = formatInViewerTimezone(
+    previousStartsAt,
+    teacher.timezone,
+    "EEE, MMM d, yyyy 'at' h:mm a zzz",
+  );
+  const teacherNewFormatted = formatInViewerTimezone(
+    newStartsAt,
+    teacher.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+  const teacherNewIST = formatToIST(newStartsAt, "MMM d, yyyy 'at' h:mm a 'IST'");
+
+  // Generate updated RFC 5545 .ics calendar event
+  const icsContent = generateLessonIcs({
+    lessonId,
+    instrument,
+    startsAt: newStartsAt,
+    durationMinutes,
+    teacherName: teacher.name,
+    studentName: student.name,
+  });
+  const icsBase64 = Buffer.from(icsContent).toString("base64");
+
+  const studentHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader("Class Rescheduled", {
+        subtitleColor: "#D97706",
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${student.name}</strong>, your upcoming music class with <strong>${teacher.name}</strong> has been rescheduled by <strong>${rescheduledByName}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Instructor:</strong> ${teacher.name}</p>
+        
+        <div style="margin: 12px 0; padding: 10px 12px; background: #FFF1F2; border-left: 3px solid #E11D48; border-radius: 6px;">
+          <p style="margin: 0; font-size: 13px; color: #9F1239;">
+            <strong>Previous Time:</strong> <span style="text-decoration: line-through;">${studentPrevFormatted}</span>
+          </p>
+        </div>
+
+        <div style="margin: 12px 0; padding: 10px 12px; background: #ECFDF5; border-left: 3px solid #059669; border-radius: 6px;">
+          <p style="margin: 0; font-size: 14px; color: #065F46; font-weight: bold;">
+            New Scheduled Time: ${studentNewFormatted}
+          </p>
+          <p style="margin: 2px 0 0 0; font-size: 12px; color: #047857;">
+            (Indian Standard Time: ${studentNewIST})
+          </p>
+        </div>
+
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Duration:</strong> ${durationMinutes} minutes</p>
+        ${trackingCode ? `<p style="margin: 6px 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${roomUrl}" style="background-color: #3C096C; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 15px; display: inline-block;">
+          Go to Lesson Room &rarr;
+        </a>
+      </div>
+
+      <p style="color: #78716c; font-size: 13px; text-align: center; line-height: 1.5;">
+        An updated calendar invitation (.ics) is attached to this email so your calendar stays up to date.
+      </p>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Schedule Update Notification
+      </div>
+    </div>
+  `;
+
+  const teacherHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader("Class Rescheduled", {
+        subtitleColor: "#D97706",
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${teacher.name}</strong>, your teaching session with student <strong>${student.name}</strong> has been rescheduled by <strong>${rescheduledByName}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Student:</strong> ${student.name}</p>
+
+        <div style="margin: 12px 0; padding: 10px 12px; background: #FFF1F2; border-left: 3px solid #E11D48; border-radius: 6px;">
+          <p style="margin: 0; font-size: 13px; color: #9F1239;">
+            <strong>Previous Time:</strong> <span style="text-decoration: line-through;">${teacherPrevFormatted}</span>
+          </p>
+        </div>
+
+        <div style="margin: 12px 0; padding: 10px 12px; background: #ECFDF5; border-left: 3px solid #059669; border-radius: 6px;">
+          <p style="margin: 0; font-size: 14px; color: #065F46; font-weight: bold;">
+            New Scheduled Time: ${teacherNewFormatted}
+          </p>
+          <p style="margin: 2px 0 0 0; font-size: 12px; color: #047857;">
+            (Indian Standard Time: ${teacherNewIST})
+          </p>
+        </div>
+
+        <p style="margin: 6px 0; font-size: 14px;"><strong>Duration:</strong> ${durationMinutes} minutes</p>
+        ${trackingCode ? `<p style="margin: 6px 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${roomUrl}" style="background-color: #3C096C; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 15px; display: inline-block;">
+          Open Studio Room &rarr;
+        </a>
+      </div>
+
+      <p style="color: #78716c; font-size: 13px; text-align: center; line-height: 1.5;">
+        An updated calendar invitation (.ics) is attached to this email.
+      </p>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Schedule Update Notification
+      </div>
+    </div>
+  `;
+
+  try {
+    await Promise.allSettled([
+      sendMail({
+        to: student.email,
+        subject: `📅 Class Rescheduled: ${displaySubjectTitle} with ${teacher.name}`,
+        attachments: [{ filename: "rescheduled-lesson.ics", content: icsBase64 }],
+        html: studentHtml,
+      }),
+      sendMail({
+        to: teacher.email,
+        subject: `📅 Class Rescheduled: ${displaySubjectTitle} with ${student.name}`,
+        attachments: [{ filename: "rescheduled-lesson.ics", content: icsBase64 }],
+        html: teacherHtml,
+      }),
+    ]);
+    return { success: true };
+  } catch (error) {
+    logger.error({ error, lessonId }, "Failed to send lesson reschedule emails");
+    return { success: false };
+  }
+}
+
+// ─── Lesson Cancelled Notification Email (Both Parties) ──────────────────────
+
+export interface LessonCancelledNotificationParams {
+  lessonId: string;
+  trackingCode?: string | null;
+  instrument: string;
+  courseTitle?: string | null;
+  startsAt: Date;
+  cancelledByName: string;
+  cancelledByRole: "STUDENT" | "TEACHER" | "ADMIN" | string;
+  reason?: string;
+  student: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+  teacher: {
+    name: string;
+    email: string;
+    timezone: string;
+  };
+}
+
+/**
+ * Dispatches cancellation notification emails to both student and teacher.
+ */
+export async function sendLessonCancelledNotificationEmails(
+  params: LessonCancelledNotificationParams,
+): Promise<{ success: boolean }> {
+  const {
+    lessonId,
+    trackingCode,
+    instrument,
+    courseTitle,
+    startsAt,
+    cancelledByName,
+    cancelledByRole,
+    reason,
+    student,
+    teacher,
+  } = params;
+
+  const displaySubjectTitle = courseTitle ? `${instrument} (${courseTitle})` : instrument;
+  const studentFormattedTime = formatInViewerTimezone(
+    startsAt,
+    student.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+  const teacherFormattedTime = formatInViewerTimezone(
+    startsAt,
+    teacher.timezone,
+    "EEEE, MMMM d, yyyy 'at' h:mm a zzz",
+  );
+  const istFormatted = formatToIST(startsAt, "MMM d, yyyy 'at' h:mm a 'IST'");
+
+  const studentHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader("Class Cancelled", {
+        subtitleColor: "#EA580C",
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${student.name}</strong>, your upcoming music class with <strong>${teacher.name}</strong> has been cancelled by <strong>${cancelledByName}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Instructor:</strong> ${teacher.name}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Scheduled Time:</strong> ${studentFormattedTime}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #78716c;">(IST: ${istFormatted})</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Cancelled By:</strong> ${cancelledByName} (${cancelledByRole.toLowerCase()})</p>
+        ${reason ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #9A3412;"><strong>Reason:</strong> ${reason}</p>` : ""}
+        ${trackingCode ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <p style="color: #57534e; font-size: 14px; margin: 15px 0; line-height: 1.5;">
+        Your class credit remains protected. You can browse other available slots or view your dashboard anytime to schedule your next session.
+      </p>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${appUrl}/student/dashboard" style="background-color: #3C096C; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block;">
+          Go to Student Dashboard &rarr;
+        </a>
+      </div>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Cancellation Alert
+      </div>
+    </div>
+  `;
+
+  const teacherHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader("Class Cancelled", {
+        subtitleColor: "#EA580C",
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${teacher.name}</strong>, your teaching session with student <strong>${student.name}</strong> has been cancelled by <strong>${cancelledByName}</strong>.
+      </p>
+
+      <div style="background-color: #fdfbf7; border: 1px solid #fed7aa; border-radius: 12px; padding: 18px; margin: 20px 0;">
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Discipline / Course:</strong> ${displaySubjectTitle}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Student:</strong> ${student.name}</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Scheduled Time:</strong> ${teacherFormattedTime}</p>
+        <p style="margin: 5px 0; font-size: 12px; color: #78716c;">(IST: ${istFormatted})</p>
+        <p style="margin: 5px 0; font-size: 14px;"><strong>Cancelled By:</strong> ${cancelledByName} (${cancelledByRole.toLowerCase()})</p>
+        ${reason ? `<p style="margin: 8px 0 0 0; font-size: 13px; color: #9A3412;"><strong>Reason:</strong> ${reason}</p>` : ""}
+        ${trackingCode ? `<p style="margin: 6px 0 0 0; font-size: 12px; color: #a8a29e; font-family: monospace;">Session Code: ${trackingCode}</p>` : ""}
+      </div>
+
+      <p style="color: #57534e; font-size: 14px; margin: 15px 0; line-height: 1.5;">
+        The time slot has been released back to your studio calendar.
+      </p>
+
+      <div style="text-align: center; margin: 28px 0;">
+        <a href="${appUrl}/teacher/dashboard" style="background-color: #3C096C; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block;">
+          Open Teacher Dashboard &rarr;
+        </a>
+      </div>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Cancellation Alert
+      </div>
+    </div>
+  `;
+
+  try {
+    await Promise.allSettled([
+      sendMail({
+        to: student.email,
+        subject: `Lesson Cancelled: ${displaySubjectTitle} with ${teacher.name}`,
+        html: studentHtml,
+      }),
+      sendMail({
+        to: teacher.email,
+        subject: `Lesson Cancelled: ${displaySubjectTitle} with ${student.name}`,
+        html: teacherHtml,
+      }),
+    ]);
+    return { success: true };
+  } catch (error) {
+    logger.error({ error, lessonId }, "Failed to send lesson cancellation notification emails");
+    return { success: false };
+  }
+}
+
+// ─── Chat New Message Notification Email ─────────────────────────────────────
+
+export interface NewChatMessageEmailParams {
+  recipient: {
+    name: string;
+    email: string;
+    role: "STUDENT" | "TEACHER" | "ADMIN" | string;
+  };
+  senderName: string;
+  senderRole?: string;
+  messagePreview: string;
+  messageType?: "TEXT" | "FILE" | "ASSIGNMENT" | string;
+  conversationId?: string;
+  lessonId?: string;
+}
+
+/**
+ * Sends an email alert when a user receives a new direct message or classroom chat message.
+ */
+export async function sendNewChatMessageEmail(
+  params: NewChatMessageEmailParams,
+): Promise<{ success: boolean }> {
+  const {
+    recipient,
+    senderName,
+    senderRole,
+    messagePreview,
+    messageType = "TEXT",
+    conversationId,
+    lessonId,
+  } = params;
+
+  const targetUrl = lessonId
+    ? `${appUrl}/lesson/${lessonId}`
+    : conversationId
+    ? `${appUrl}/${recipient.role.toLowerCase()}/dashboard/messages?conversationId=${conversationId}`
+    : `${appUrl}/dashboard`;
+
+  const actionText = lessonId ? "Open Live Classroom & Reply" : "View Message & Reply";
+
+  const messageTypeNotice =
+    messageType === "FILE"
+      ? "📎 Sent a file attachment"
+      : messageType === "ASSIGNMENT"
+      ? "🎼 Sent a music assignment"
+      : `"${messagePreview}"`;
+
+  const chatHtml = `
+    <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 600px; margin: 0 auto; padding: 28px 24px; color: #1c1917; background-color: #ffffff; border-radius: 16px; border: 1px solid #f0e6d6;">
+      ${renderEmailHeader("New Message Received", {
+        subtitleColor: "#7B2CBF",
+        subtitleWeight: "700",
+        subtitleSize: "15px",
+      })}
+
+      <p style="font-size: 15px; color: #374151; line-height: 1.5;">
+        Hello <strong>${recipient.name}</strong>, you have received a new message from <strong>${senderName}</strong>${senderRole ? ` (${senderRole.toLowerCase()})` : ""}:
+      </p>
+
+      <div style="background-color: #FAF5FF; border: 1px solid #E9D5FF; border-left: 4px solid #7B2CBF; border-radius: 8px; padding: 16px 20px; margin: 20px 0;">
+        <div style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #7B2CBF; font-weight: bold; margin-bottom: 6px;">
+          Message from ${senderName}:
+        </div>
+        <p style="margin: 0; font-size: 14px; line-height: 1.6; color: #2E1065; font-style: italic;">
+          ${messageTypeNotice}
+        </p>
+      </div>
+
+      <div style="text-align: center; margin: 28px 0 16px 0;">
+        <a href="${targetUrl}" style="background-color: #3C096C; color: #ffffff; padding: 13px 26px; text-decoration: none; border-radius: 10px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 2px 4px rgba(60,9,108,0.15);">
+          ${actionText} &rarr;
+        </a>
+      </div>
+
+      <p style="color: #a8a29e; font-size: 12px; text-align: center; line-height: 1.5; margin: 15px 0 0 0;">
+        Personal contact details and external links remain restricted in chat for safety.
+      </p>
+
+      <div style="border-top: 1px solid #f5f5f4; padding-top: 16px; margin-top: 24px; text-align: center; color: #a8a29e; font-size: 11px;">
+        Gandharva School of Music &middot; Messaging Notification
+      </div>
+    </div>
+  `;
+
+  try {
+    const sent = await sendMail({
+      to: recipient.email,
+      subject: `💬 New Message from ${senderName} on Gandharva Music`,
+      html: chatHtml,
+    });
+    return { success: !!sent };
+  } catch (error) {
+    logger.error(
+      { error, recipientEmail: recipient.email, senderName },
+      "Failed to send new chat message email",
+    );
+    return { success: false };
+  }
+}
+
 
 
 

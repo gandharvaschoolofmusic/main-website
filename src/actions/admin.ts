@@ -32,6 +32,10 @@ import { createNotification } from "@/actions/notifications";
 import { calculateLessonPayoutMinor } from "@/lib/teacher-payout";
 import { formatToIST, formatInViewerTimezone } from "@/lib/timezone";
 import { invalidateLastKnownGood } from "@/lib/db-resilience";
+import {
+  sendLessonRescheduledEmails,
+  sendLessonCancelledNotificationEmails,
+} from "@/lib/email";
 
 export type AdminActionResponse<T = unknown> = {
   success: boolean;
@@ -600,6 +604,16 @@ export async function rescheduleEnrollmentLessonAction(input: {
       updatePayload.cancelledAt = null;
     }
 
+    // Reset reminder logs so the newly scheduled time receives fresh reminders (24h, 12h, 1h, 10m)
+    let cleanAttObj: Record<string, any> = {};
+    if (typeof lesson.attendanceLogs === "object" && lesson.attendanceLogs !== null && !Array.isArray(lesson.attendanceLogs)) {
+      cleanAttObj = { ...lesson.attendanceLogs };
+    } else if (Array.isArray(lesson.attendanceLogs)) {
+      cleanAttObj = { sessions: lesson.attendanceLogs };
+    }
+    cleanAttObj.reminderLogs = [];
+    updatePayload.attendanceLogs = cleanAttObj;
+
     // Automatically set status to RESCHEDULED
     await db.lesson.update({
       where: { id: input.lessonId },
@@ -609,6 +623,32 @@ export async function rescheduleEnrollmentLessonAction(input: {
     const courseOrInstrument =
       lesson.enrollment?.course?.title || lesson.instrument || "Class";
     const teacherName = lesson.teacher?.name || "your faculty mentor";
+
+    // Dispatch email notifications to both student and teacher
+    if (lesson.student?.email && lesson.teacher?.email) {
+      sendLessonRescheduledEmails({
+        lessonId: lesson.id,
+        trackingCode: lesson.trackingCode,
+        instrument: lesson.instrument,
+        courseTitle: lesson.enrollment?.course?.title || null,
+        previousStartsAt: lesson.startsAt,
+        newStartsAt: startsAtDate,
+        durationMinutes: input.durationMinutes || lesson.durationMinutes,
+        rescheduledByName: "Academy Administration",
+        student: {
+          name: lesson.student.name || "Student",
+          email: lesson.student.email,
+          timezone: lesson.student.timezone || "Asia/Kolkata",
+        },
+        teacher: {
+          name: lesson.teacher.name || "Teacher",
+          email: lesson.teacher.email,
+          timezone: lesson.teacher.timezone || "Asia/Kolkata",
+        },
+      }).catch((emailErr) => {
+        logger.error({ emailErr, lessonId: lesson.id }, "Failed to send lesson reschedule emails");
+      });
+    }
 
     // 1. Send in-app notification to Student dashboard notification bell
     if (lesson.studentId) {
@@ -815,6 +855,57 @@ export async function updateLessonDateTimeAdminAction(input: {
       lesson.enrollment?.course?.title || lesson.instrument || "Class";
     const teacherName = lesson.teacher?.name || "faculty mentor";
 
+    // Dispatch email notifications for reschedule or cancellation
+    if (lesson.student?.email && lesson.teacher?.email) {
+      if (newStatus === LessonStatus.CANCELLED) {
+        sendLessonCancelledNotificationEmails({
+          lessonId: lesson.id,
+          trackingCode: lesson.trackingCode,
+          instrument: lesson.instrument,
+          courseTitle: lesson.enrollment?.course?.title || null,
+          startsAt: lesson.startsAt,
+          cancelledByName: admin.name || "Academy Administration",
+          cancelledByRole: "ADMIN",
+          reason: "Class status updated to Cancelled by Academy Administration",
+          student: {
+            name: lesson.student.name || "Student",
+            email: lesson.student.email,
+            timezone: lesson.student.timezone || "Asia/Kolkata",
+          },
+          teacher: {
+            name: lesson.teacher.name || "Teacher",
+            email: lesson.teacher.email,
+            timezone: lesson.teacher.timezone || "Asia/Kolkata",
+          },
+        }).catch((err) => logger.error({ err }, "Failed to send cancellation email"));
+      } else if (
+        newStatus === LessonStatus.RESCHEDULED ||
+        startsAtDate.getTime() !== lesson.startsAt.getTime()
+      ) {
+        sendLessonRescheduledEmails({
+          lessonId: lesson.id,
+          trackingCode: lesson.trackingCode,
+          instrument: lesson.instrument,
+          courseTitle: lesson.enrollment?.course?.title || null,
+          previousStartsAt: lesson.startsAt,
+          newStartsAt: startsAtDate,
+          durationMinutes:
+            (updateData.durationMinutes as number) || lesson.durationMinutes,
+          rescheduledByName: admin.name || "Academy Administration",
+          student: {
+            name: lesson.student.name || "Student",
+            email: lesson.student.email,
+            timezone: lesson.student.timezone || "Asia/Kolkata",
+          },
+          teacher: {
+            name: lesson.teacher.name || "Teacher",
+            email: lesson.teacher.email,
+            timezone: lesson.teacher.timezone || "Asia/Kolkata",
+          },
+        }).catch((err) => logger.error({ err }, "Failed to send reschedule email"));
+      }
+    }
+
     // In-app notifications
     if (lesson.studentId) {
       const studentTz = lesson.student?.timezone || "Asia/Kolkata";
@@ -895,6 +986,11 @@ export async function deleteOrCancelEnrollmentLessonAction(
 
     const lesson = await db.lesson.findUnique({
       where: { id: lessonId },
+      include: {
+        student: { select: { id: true, name: true, email: true, timezone: true } },
+        teacher: { select: { id: true, name: true, email: true, timezone: true } },
+        enrollment: { include: { course: { select: { title: true, instrument: true } } } },
+      },
     });
 
     if (!lesson) {
@@ -909,6 +1005,32 @@ export async function deleteOrCancelEnrollmentLessonAction(
         cancelledAt: new Date(),
       },
     });
+
+    // Dispatch cancellation email to both student and teacher
+    if (lesson.student?.email && lesson.teacher?.email) {
+      sendLessonCancelledNotificationEmails({
+        lessonId: lesson.id,
+        trackingCode: lesson.trackingCode,
+        instrument: lesson.instrument,
+        courseTitle: lesson.enrollment?.course?.title || null,
+        startsAt: lesson.startsAt,
+        cancelledByName: admin.name || "Academy Administration",
+        cancelledByRole: "ADMIN",
+        reason: "Class cancelled by academy administration",
+        student: {
+          name: lesson.student.name || "Student",
+          email: lesson.student.email,
+          timezone: lesson.student.timezone || "Asia/Kolkata",
+        },
+        teacher: {
+          name: lesson.teacher.name || "Teacher",
+          email: lesson.teacher.email,
+          timezone: lesson.teacher.timezone || "Asia/Kolkata",
+        },
+      }).catch((emailErr) => {
+        logger.error({ emailErr, lessonId: lesson.id }, "Failed to send cancellation emails for enrollment lesson");
+      });
+    }
 
     revalidatePath("/admin/enrollments");
     try {
@@ -1753,6 +1875,11 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
 
     const lesson = await db.lesson.findUnique({
       where: { id: lessonId },
+      include: {
+        student: { select: { id: true, name: true, email: true, timezone: true } },
+        teacher: { select: { id: true, name: true, email: true, timezone: true } },
+        enrollment: { include: { course: { select: { title: true, instrument: true } } } },
+      },
     });
 
     if (!lesson || lesson.status === LessonStatus.CANCELLED) {
@@ -1783,6 +1910,32 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
       }
     });
 
+    // Dispatch cancellation email to both student and teacher
+    if (lesson.student?.email && lesson.teacher?.email) {
+      sendLessonCancelledNotificationEmails({
+        lessonId: lesson.id,
+        trackingCode: lesson.trackingCode,
+        instrument: lesson.instrument,
+        courseTitle: lesson.enrollment?.course?.title || null,
+        startsAt: lesson.startsAt,
+        cancelledByName: "Academy Administration",
+        cancelledByRole: "ADMIN",
+        reason: "Class cancelled by academy administration",
+        student: {
+          name: lesson.student.name || "Student",
+          email: lesson.student.email,
+          timezone: lesson.student.timezone || "Asia/Kolkata",
+        },
+        teacher: {
+          name: lesson.teacher.name || "Teacher",
+          email: lesson.teacher.email,
+          timezone: lesson.teacher.timezone || "Asia/Kolkata",
+        },
+      }).catch((emailErr) => {
+        logger.error({ emailErr, lessonId: lesson.id }, "Failed to send cancellation emails via admin");
+      });
+    }
+
     revalidatePath("/admin/lessons");
     revalidatePath("/admin/students");
     revalidatePath("/teacher/dashboard");
@@ -1808,6 +1961,11 @@ export async function updateLessonStatusAdminAction(
 
     const lesson = await db.lesson.findUnique({
       where: { id: lessonId },
+      include: {
+        student: { select: { id: true, name: true, email: true, timezone: true } },
+        teacher: { select: { id: true, name: true, email: true, timezone: true } },
+        enrollment: { include: { course: { select: { title: true, instrument: true } } } },
+      },
     });
 
     if (!lesson) {
@@ -1861,6 +2019,31 @@ export async function updateLessonStatusAdminAction(
         },
       });
     });
+
+    if (newStatus === LessonStatus.CANCELLED && lesson.student?.email && lesson.teacher?.email) {
+      sendLessonCancelledNotificationEmails({
+        lessonId: lesson.id,
+        trackingCode: lesson.trackingCode,
+        instrument: lesson.instrument,
+        courseTitle: lesson.enrollment?.course?.title || null,
+        startsAt: lesson.startsAt,
+        cancelledByName: "Academy Administration",
+        cancelledByRole: "ADMIN",
+        reason: "Status changed to Cancelled by Academy Administration",
+        student: {
+          name: lesson.student.name || "Student",
+          email: lesson.student.email,
+          timezone: lesson.student.timezone || "Asia/Kolkata",
+        },
+        teacher: {
+          name: lesson.teacher.name || "Teacher",
+          email: lesson.teacher.email,
+          timezone: lesson.teacher.timezone || "Asia/Kolkata",
+        },
+      }).catch((emailErr) => {
+        logger.error({ emailErr, lessonId: lesson.id }, "Failed to send cancellation emails via admin status update");
+      });
+    }
 
     revalidatePath("/admin/students");
     revalidatePath("/admin/lessons");

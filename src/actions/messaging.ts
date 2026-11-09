@@ -7,6 +7,8 @@ import { revalidatePath } from "next/cache";
 import { logger } from "@/lib/logger";
 import { isAppError } from "@/lib/errors";
 import { MessageType, Role } from "@/types";
+import { NotificationType } from "@prisma/client";
+import { sendNewChatMessageEmail } from "@/lib/email";
 
 // ─── Types ───────────────────────────────────────────────────────────────────
 
@@ -398,6 +400,53 @@ export async function sendMessage(input: SendMessageInput) {
         return msg;
       });
 
+      // Dispatch notifications to recipient
+      const recipientId =
+        conversation.teacherId === user.id
+          ? conversation.studentId
+          : conversation.teacherId;
+
+      const recipient = await db.user.findUnique({
+        where: { id: recipientId },
+        select: { id: true, name: true, email: true, role: true },
+      });
+
+      if (recipient) {
+        const preview = piiResult.sanitizedText.slice(0, 150);
+        await db.notification
+          .create({
+            data: {
+              userId: recipient.id,
+              type: NotificationType.NEW_MESSAGE,
+              title: `New Message from ${user.name || "Musician"}`,
+              body: preview,
+              link: `/${recipient.role.toLowerCase()}/dashboard/messages?conversationId=${input.conversationId}`,
+            },
+          })
+          .catch(() => {});
+
+        if (recipient.email) {
+          sendNewChatMessageEmail({
+            recipient: {
+              name: recipient.name || "Musician",
+              email: recipient.email,
+              role: recipient.role,
+            },
+            senderName:
+              user.name || (user.role === Role.TEACHER ? "Instructor" : "Student"),
+            senderRole: user.role,
+            messagePreview: preview,
+            messageType: MessageType.TEXT,
+            conversationId: input.conversationId,
+          }).catch((err) => {
+            logger.error(
+              { err, recipientId: recipient.id },
+              "Failed to send chat email notification",
+            );
+          });
+        }
+      }
+
       revalidatePath("/teacher/dashboard/messages");
       revalidatePath("/student/dashboard/messages");
 
@@ -460,6 +509,53 @@ export async function sendMessage(input: SendMessageInput) {
 
         return msg;
       });
+
+      // Dispatch notifications to recipient
+      const recipientId =
+        conversation.teacherId === user.id
+          ? conversation.studentId
+          : conversation.teacherId;
+
+      const recipient = await db.user.findUnique({
+        where: { id: recipientId },
+        select: { id: true, name: true, email: true, role: true },
+      });
+
+      if (recipient) {
+        const preview = (sanitizedBody || input.fileName || "New attachment").slice(0, 150);
+        await db.notification
+          .create({
+            data: {
+              userId: recipient.id,
+              type: NotificationType.NEW_MESSAGE,
+              title: `New Message from ${user.name || "Musician"}`,
+              body: preview,
+              link: `/${recipient.role.toLowerCase()}/dashboard/messages?conversationId=${input.conversationId}`,
+            },
+          })
+          .catch(() => {});
+
+        if (recipient.email) {
+          sendNewChatMessageEmail({
+            recipient: {
+              name: recipient.name || "Musician",
+              email: recipient.email,
+              role: recipient.role,
+            },
+            senderName:
+              user.name || (user.role === Role.TEACHER ? "Instructor" : "Student"),
+            senderRole: user.role,
+            messagePreview: preview,
+            messageType: messageType,
+            conversationId: input.conversationId,
+          }).catch((err) => {
+            logger.error(
+              { err, recipientId: recipient.id },
+              "Failed to send chat email notification",
+            );
+          });
+        }
+      }
 
       revalidatePath("/teacher/dashboard/messages");
       revalidatePath("/student/dashboard/messages");

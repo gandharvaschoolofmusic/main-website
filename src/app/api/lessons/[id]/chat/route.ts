@@ -10,6 +10,7 @@ import { parseAttendanceLogs } from "@/lib/attendance";
 import { getLessonTrackingId } from "@/lib/lesson-tracking";
 import { JOIN_WINDOW_MINUTES_AFTER } from "@/types";
 import { formatInViewerTimezone } from "@/lib/timezone";
+import { sendNewChatMessageEmail } from "@/lib/email";
 
 interface RouteParams {
   params: Promise<{ id: string }>;
@@ -159,6 +160,8 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       where: { id: lessonId },
       include: {
         teacherProfile: true,
+        student: { select: { id: true, name: true, email: true } },
+        teacher: { select: { id: true, name: true, email: true } },
       },
     });
 
@@ -214,6 +217,60 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         chatLogs: updatedLogs as any,
       },
     });
+
+    // Notify the other party via email if they haven't joined the classroom yet
+    if (isAdmin) {
+      const recipients = [
+        { user: lesson.student, joined: !!lesson.studentJoinedAt, role: "STUDENT" },
+        { user: lesson.teacher, joined: !!lesson.teacherJoinedAt, role: "TEACHER" },
+      ];
+      for (const rec of recipients) {
+        if (!rec.joined && rec.user?.email) {
+          sendNewChatMessageEmail({
+            recipient: {
+              name: rec.user.name || rec.role,
+              email: rec.user.email,
+              role: rec.role,
+            },
+            senderName: resolvedName,
+            senderRole: resolvedRole,
+            messagePreview: rawMessage.slice(0, 150),
+            messageType: "TEXT",
+            lessonId: lesson.id,
+          }).catch((emailErr) => {
+            logger.warn(
+              { emailErr, lessonId: lesson.id },
+              "Non-blocking: Failed to send classroom chat email notification",
+            );
+          });
+        }
+      }
+    } else {
+      const partnerUser = isTeacher ? lesson.student : lesson.teacher;
+      const partnerJoined = isTeacher
+        ? !!lesson.studentJoinedAt
+        : !!lesson.teacherJoinedAt;
+
+      if (!partnerJoined && partnerUser?.email) {
+        sendNewChatMessageEmail({
+          recipient: {
+            name: partnerUser.name || (isTeacher ? "Student" : "Instructor"),
+            email: partnerUser.email,
+            role: isTeacher ? "STUDENT" : "TEACHER",
+          },
+          senderName: resolvedName,
+          senderRole: resolvedRole,
+          messagePreview: rawMessage.slice(0, 150),
+          messageType: "TEXT",
+          lessonId: lesson.id,
+        }).catch((emailErr) => {
+          logger.warn(
+            { emailErr, lessonId: lesson.id },
+            "Non-blocking: Failed to send classroom chat email notification",
+          );
+        });
+      }
+    }
 
     return NextResponse.json({ success: true, item: newEntry });
   } catch (error) {

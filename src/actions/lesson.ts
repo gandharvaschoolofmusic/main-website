@@ -3,7 +3,10 @@
 import { db } from "@/lib/db";
 import { requireUser, requireLessonParticipant } from "@/lib/auth-helpers";
 import { CancelLessonSchema, CancelLessonInput } from "@/schemas/lesson";
-import { sendLessonCancellationEmail } from "@/lib/email";
+import {
+  sendLessonCancellationEmail,
+  sendLessonCancelledNotificationEmails,
+} from "@/lib/email";
 import { isAppError, ConflictError } from "@/lib/errors";
 import { CANCELLATION_NOTICE_HOURS } from "@/types";
 import { logger } from "@/lib/logger";
@@ -103,33 +106,44 @@ export async function cancelLessonAction(
       "Lesson cancelled by participant",
     );
 
-    // Fetch recipient details to send notification email
-    const recipientId =
-      callerRole === "TEACHER" ? lesson.studentId : lesson.teacherId;
+    // Fetch student and teacher details to send cancellation notification emails
+    const [studentUser, teacherUser] = await Promise.all([
+      db.user.findUnique({
+        where: { id: lesson.studentId },
+        select: { name: true, email: true, timezone: true },
+      }),
+      db.user.findUnique({
+        where: { id: lesson.teacherId },
+        select: { name: true, email: true, timezone: true },
+      }),
+    ]);
 
-    const recipient = await db.user.findUnique({
-      where: { id: recipientId },
-      select: { name: true, email: true, timezone: true },
-    });
-
-    if (recipient && recipient.email) {
-      try {
-        await sendLessonCancellationEmail({
-          lessonId: lesson.id,
-          instrument: lesson.instrument,
-          startsAt: lesson.startsAt,
-          cancelledByName: user.name || (callerRole === "TEACHER" ? "Teacher" : "Student"),
-          cancelledByRole: callerRole,
-          recipient: {
-            name: recipient.name || "Musician",
-            email: recipient.email,
-            timezone: recipient.timezone || "UTC",
-          },
-          reason: reason || undefined,
-        });
-      } catch (emailErr) {
-        logger.error({ emailErr, lessonId: lesson.id }, "Failed to send cancellation email");
-      }
+    if (studentUser?.email && teacherUser?.email) {
+      sendLessonCancelledNotificationEmails({
+        lessonId: lesson.id,
+        trackingCode: lesson.trackingCode,
+        instrument: lesson.instrument,
+        startsAt: lesson.startsAt,
+        cancelledByName:
+          user.name || (callerRole === "TEACHER" ? "Teacher" : "Student"),
+        cancelledByRole: callerRole,
+        reason: reason || undefined,
+        student: {
+          name: studentUser.name || "Student",
+          email: studentUser.email,
+          timezone: studentUser.timezone || "Asia/Kolkata",
+        },
+        teacher: {
+          name: teacherUser.name || "Teacher",
+          email: teacherUser.email,
+          timezone: teacherUser.timezone || "Asia/Kolkata",
+        },
+      }).catch((emailErr) => {
+        logger.error(
+          { emailErr, lessonId: lesson.id },
+          "Failed to send cancellation notification emails",
+        );
+      });
     }
 
     revalidatePath("/student/dashboard");
