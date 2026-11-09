@@ -15,11 +15,11 @@ const globalForPrisma = globalThis as unknown as {
 const rawConnectionString = process.env.DATABASE_URL || "";
 let connectionString = rawConnectionString;
 
-// Automatically route Supabase pooler connections from port 5432 (Session mode) to port 6543 (Transaction mode)
+// Route Supabase pooler connections from port 5432 (Session mode) to port 6543 (Transaction mode) on Vercel
 // Session mode pooler (port 5432) has a strict cap of 15 connections (EMAXCONNSESSION) which crashes
 // in serverless environments (Vercel) and during concurrent navigation.
-// Transaction mode pooler (port 6543) supports scalable concurrent connections.
-if (connectionString.includes("pooler.supabase.com") && connectionString.includes(":5432")) {
+// In local development / CLI scripts, port 5432 is kept if 6543 is blocked by local firewalls/ISPs.
+if (process.env.VERCEL && connectionString.includes("pooler.supabase.com") && connectionString.includes(":5432")) {
   connectionString = connectionString.replace(":5432", ":6543");
 }
 
