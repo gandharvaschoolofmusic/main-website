@@ -1,4 +1,4 @@
-import { AudioPresets, LocalAudioTrack, Track, type AudioCaptureOptions, type Room } from "livekit-client";
+import { AudioPresets, LocalAudioTrack, Track, type AudioCaptureOptions, type Room, type TrackPublishDefaults } from "livekit-client";
 import { cleanDeviceLabel, getCleanDeviceList } from "./media-devices";
 import type { AudioMode } from "./audio-engine";
 
@@ -7,11 +7,11 @@ export type MicrophoneSettings = { mode: AudioMode; deviceId: string };
 export function microphoneOptions({ mode, deviceId }: MicrophoneSettings): AudioCaptureOptions {
   const speech = mode === "TALKING";
   return {
-    // An ideal default also preserves the other constraints when the SDK restarts capture.
-    deviceId: deviceId ? { exact: deviceId } : { ideal: "default" },
+    // Use ideal deviceId so disconnections or ID changes don't trigger OverconstrainedError
+    deviceId: deviceId ? { ideal: deviceId } : { ideal: "default" },
     echoCancellation: true,
-    noiseSuppression: speech,
-    autoGainControl: speech,
+    noiseSuppression: speech, // In Instrument Mode (PLAYING), suppression is off to preserve harmonics & singing notes
+    autoGainControl: speech,  // In Instrument Mode (PLAYING), AGC is off to prevent volume pumping on musical attacks
     channelCount: { ideal: speech ? 1 : 2 },
     sampleRate: { ideal: 48000 },
   };
@@ -31,12 +31,12 @@ export function microphoneTrack(room: Room) {
   return room.localParticipant.getTrackPublication(Track.Source.Microphone)?.audioTrack;
 }
 
-// Negotiate a music-capable sender once. Capture can then change between mono
-// speech and stereo music without invalidating the remote participant's subscription.
-const publishOptions = {
-  audioPreset: AudioPresets.musicHighQualityStereo,
-  forceStereo: true,
-  dtx: false,
+// 48kbps Opus full-band with DTX (silence detection) and RED (packet loss redundancy)
+// Ensures both speaking and singing/instruments are crystal clear without saturating Wi-Fi uplink.
+const publishOptions: TrackPublishDefaults = {
+  audioPreset: AudioPresets.music,
+  forceStereo: false,
+  dtx: true,
   red: true,
 };
 

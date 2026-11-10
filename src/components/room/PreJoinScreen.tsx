@@ -67,7 +67,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   const openPreview = useCallback(async (micId: string, camId: string, mode: AudioMode, restore = false, keepCamera = false) => {
     const request = ++previewRequest.current;
     setChangingPreview(!restore);
-    const input = (id: string) => id ? { deviceId: restore ? { ideal: id } : { exact: id } } : true;
+    const input = (id: string) => id ? { deviceId: { ideal: id } } : true;
     let acquired: MediaStream | undefined;
     try {
       micId = await resolveMicrophoneId(micId);

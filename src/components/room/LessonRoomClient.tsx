@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { Room } from "livekit-client";
+import { Room, type RoomOptions, AudioPresets, VideoPresets } from "livekit-client";
 import { preferPhoneSpeaker } from "@/lib/lesson-speaker";
 import "./meet-room.css";
 
@@ -25,6 +25,47 @@ interface LessonRoomClientProps {
     lessonSource?: string | null;
   };
 }
+
+const lessonRoomOptions: RoomOptions = {
+  adaptiveStream: true,
+  dynacast: true,
+  audioCaptureDefaults: {
+    echoCancellation: true,
+    noiseSuppression: true,
+    autoGainControl: true,
+    channelCount: 1,
+    sampleRate: 48000,
+  },
+  videoCaptureDefaults: {
+    resolution: VideoPresets.h720.resolution,
+  },
+  publishDefaults: {
+    simulcast: true,
+    videoSimulcastLayers: [
+      VideoPresets.h180,
+      VideoPresets.h360,
+    ],
+    videoCodec: "vp8",
+    backupCodec: true,
+    dtx: true,
+    red: true,
+    forceStereo: false,
+    audioPreset: AudioPresets.music,
+    videoEncoding: {
+      maxBitrate: 750_000,
+      maxFramerate: 24,
+      priority: "medium",
+    },
+    screenShareEncoding: {
+      maxBitrate: 1_200_000,
+      maxFramerate: 15,
+      priority: "medium",
+    },
+    degradationPreference: "maintain-framerate",
+    stopMicTrackOnMute: false,
+  },
+  disconnectOnPageLeave: true,
+};
 
 export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
   const router = useRouter();
@@ -67,7 +108,7 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     isVideoMuted: boolean;
   }, microphone?: MediaStreamTrack) => {
     previewMicrophone.current = microphone ?? null;
-    room.current ??= new Room();
+    room.current ??= new Room(lessonRoomOptions);
     // Use the Join gesture while the browser still permits starting playback.
     void room.current.startAudio().catch(() => {});
     setJoinedConfig(config);

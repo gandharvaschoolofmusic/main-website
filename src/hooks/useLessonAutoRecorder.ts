@@ -16,16 +16,17 @@ interface UseLessonAutoRecorderProps {
 function startSegment(stream: MediaStream, mimeType: string, chunks: Blob[], rotate: () => void) {
   const recorder = new MediaRecorder(stream, {
     mimeType: mimeType || undefined,
-    videoBitsPerSecond: 1_500_000,
-    audioBitsPerSecond: 96_000,
+    videoBitsPerSecond: 450_000,
+    audioBitsPerSecond: 48_000,
   });
   let bytes = 0;
   recorder.ondataavailable = ({ data }) => {
     if (data.size) chunks.push(data);
     bytes += data.size;
-    if (bytes >= 2_500_000 && recorder.state === "recording") rotate();
+    // Rotate safely at ~3.5 MB to stay under Vercel's 4.5 MB body limit without rapid cycling
+    if (bytes >= 3_500_000 && recorder.state === "recording") rotate();
   };
-  recorder.start(2000);
+  recorder.start(3000);
   return recorder;
 }
 
@@ -113,6 +114,7 @@ export function useLessonAutoRecorder({
             method: "POST",
             body: formData,
             signal: AbortSignal.timeout(60000),
+            priority: "low" as RequestPriority,
           });
           if (!res.ok) {
             const errData = await res.json().catch(() => ({}));
@@ -356,8 +358,8 @@ export function useLessonAutoRecorder({
     };
 
     const canvas = document.createElement("canvas");
-    canvas.width = 1280;
-    canvas.height = 720;
+    canvas.width = 854;
+    canvas.height = 480;
     const ctx = canvas.getContext("2d", { alpha: false });
     const cameras = new Map<string, { video: HTMLVideoElement; detach: () => void }>();
     const presentations = new Map<string, MediaStreamTrack>();

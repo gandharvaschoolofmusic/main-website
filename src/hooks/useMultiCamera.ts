@@ -370,10 +370,10 @@ export function useMultiCamera(room: Room | null, isVideoOff: boolean): MultiCam
           const mediaTrack = createDemoStudioStream();
           newTrack = new LocalVideoTrack(mediaTrack, undefined, false);
         } else {
-          // Hardware camera capture
+          // Hardware camera capture with ideal device ID to avoid OverconstrainedError
           newTrack = await createLocalVideoTrack({
-            deviceId: { exact: targetDeviceId },
-            resolution: VideoPresets.h720,
+            deviceId: { ideal: targetDeviceId },
+            resolution: VideoPresets.h540.resolution,
           });
         }
 
@@ -382,12 +382,18 @@ export function useMultiCamera(room: Room | null, isVideoOff: boolean): MultiCam
         setSecondaryCameraId(targetDeviceId);
         if (preset) setSecondaryAnglePreset(targetPreset);
 
-        // Publish to LiveKit Room if room is connected
+        // Publish to LiveKit Room if room is connected with capped bandwidth for secondary angle
         if (room && room.localParticipant) {
           await room.localParticipant.publishTrack(newTrack, {
             name: "secondary-camera",
             source: Track.Source.Camera,
-            videoCodec: "h264",
+            videoCodec: "vp8",
+            videoEncoding: {
+              maxBitrate: 450_000,
+              maxFramerate: 20,
+              priority: "low",
+            },
+            simulcast: false,
           });
         }
 
@@ -413,7 +419,13 @@ export function useMultiCamera(room: Room | null, isVideoOff: boolean): MultiCam
               await room.localParticipant.publishTrack(fallbackTrack, {
                 name: "secondary-camera",
                 source: Track.Source.Camera,
-                videoCodec: "h264",
+                videoCodec: "vp8",
+                videoEncoding: {
+                  maxBitrate: 350_000,
+                  maxFramerate: 15,
+                  priority: "low",
+                },
+                simulcast: false,
               });
             }
             setIsSecondaryCameraActive(true);

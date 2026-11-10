@@ -250,17 +250,37 @@ export async function startLessonRoomEgress(params: {
       output: { case: "s3", value: s3 },
     });
 
-    // 4. Start composite egress in 720p 30fps with dark theme layout
-    const egressInfo = await egressClient.startRoomCompositeEgress(
-      roomName,
-      fileOutput,
-      {
-        layout: "single-speaker",
-        audioOnly: false,
-        videoOnly: false,
-        encodingOptions: EncodingOptionsPreset.H264_720P_30,
-      },
-    );
+    // 4. Start composite egress in 720p 30fps with retry backoff for initial room creation
+    let egressInfo: EgressInfo | null = null;
+    let lastError: unknown = null;
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        egressInfo = await egressClient.startRoomCompositeEgress(
+          roomName,
+          fileOutput,
+          {
+            layout: "single-speaker",
+            audioOnly: false,
+            videoOnly: false,
+            encodingOptions: EncodingOptionsPreset.H264_720P_30,
+          },
+        );
+        break;
+      } catch (egressErr) {
+        lastError = egressErr;
+        const msg = egressErr instanceof Error ? egressErr.message : String(egressErr);
+        if ((msg.includes("does not exist") || msg.includes("not found")) && attempt < 2) {
+          logger.info({ roomName, attempt, msg }, "Room not yet registered on LiveKit Cloud, backing off 2s before retry...");
+          await new Promise((r) => setTimeout(r, 2000));
+        } else {
+          throw egressErr;
+        }
+      }
+    }
+
+    if (!egressInfo) {
+      throw lastError || new Error("Failed to start LiveKit Room Composite Egress");
+    }
 
     logger.info(
       { roomName, egressId: egressInfo.egressId, filepath },

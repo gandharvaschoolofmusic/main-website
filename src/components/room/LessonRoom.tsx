@@ -15,6 +15,7 @@ import {
   type Room,
   RoomEvent,
   Track,
+  VideoPresets,
 } from "livekit-client";
 import type { AudioMode } from "@/lib/audio-engine";
 import { useLessonMicrophone } from "@/hooks/useLessonMicrophone";
@@ -91,6 +92,11 @@ export function LessonRoom(props: LessonRoomProps) {
         token={token}
         serverUrl={serverUrl}
         connect={true}
+        connectOptions={{
+          autoSubscribe: true,
+          maxRetries: 10,
+          peerConnectionTimeout: 20_000,
+        }}
         audio={false} // The microphone controller applies the pre-join choice after connection.
         video={false} // Managed explicitly after engine is connected
         className="w-full h-full flex flex-col"
@@ -305,6 +311,7 @@ function LessonRoomContent({
             deviceId: initialConfig.videoDeviceId
               ? { ideal: initialConfig.videoDeviceId }
               : undefined,
+            resolution: VideoPresets.h720.resolution,
           });
         } catch (deviceErr: unknown) {
           const errObj = deviceErr as { name?: string; message?: string };
@@ -324,7 +331,9 @@ function LessonRoomContent({
 
           console.warn("Could not enable camera with preferred deviceId, trying default camera:", deviceErr);
           try {
-            await room.localParticipant.setCameraEnabled(true);
+            await room.localParticipant.setCameraEnabled(true, {
+              resolution: VideoPresets.h720.resolution,
+            });
           } catch (fallbackErr) {
             console.warn("Could not auto-enable camera on room connect:", fallbackErr);
             setIsVideoOff(true);
@@ -414,11 +423,14 @@ function LessonRoomContent({
           (initialConfig.videoDeviceId
             ? { ideal: initialConfig.videoDeviceId }
             : undefined),
+        resolution: VideoPresets.h720.resolution,
       });
     } catch (e) {
       console.warn("Could not toggle camera with preferred device, trying default:", e);
       try {
-        await room.localParticipant.setCameraEnabled(!nextOff);
+        await room.localParticipant.setCameraEnabled(!nextOff, {
+          resolution: VideoPresets.h720.resolution,
+        });
       } catch (err2) {
         console.error("Camera toggle failed completely:", err2);
       }
@@ -482,7 +494,10 @@ function LessonRoomContent({
   useEffect(() => {
     if (!room || !lesson.isTeacher) return;
     let cancelled = false;
-    const triggerRecording = async () => {
+    let retryTimer: NodeJS.Timeout | null = null;
+
+    const triggerRecording = async (retryCount = 0) => {
+      if (cancelled) return;
       try {
         const res = await fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" });
         if (cancelled) return;
@@ -493,18 +508,39 @@ function LessonRoomContent({
             return;
           }
         }
+        // Stagger retries to allow room & participant publishing to register on LiveKit Cloud
+        if (retryCount < 2) {
+          retryTimer = setTimeout(() => {
+            if (!cancelled) void triggerRecording(retryCount + 1);
+          }, 3500);
+          return;
+        }
         setRecordingMode("CLIENT_RECORDER");
       } catch {
+        if (retryCount < 2) {
+          retryTimer = setTimeout(() => {
+            if (!cancelled) void triggerRecording(retryCount + 1);
+          }, 3500);
+          return;
+        }
         if (!cancelled) setRecordingMode("CLIENT_RECORDER");
       }
     };
 
-    if (room.state === "connected") {
-      void triggerRecording();
-    } else {
-      room.once(RoomEvent.Connected, triggerRecording);
-    }
-    return () => { cancelled = true; room.off(RoomEvent.Connected, triggerRecording); };
+    // Stagger initial check by 2.5s so participants are connected and room is established
+    const initTimer = setTimeout(() => {
+      if (room.state === "connected") {
+        void triggerRecording();
+      } else {
+        room.once(RoomEvent.Connected, () => void triggerRecording());
+      }
+    }, 2500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(initTimer);
+      if (retryTimer) clearTimeout(retryTimer);
+    };
   }, [room, lesson.id, lesson.isTeacher]);
 
   const handleLeaveRoom = async () => {
