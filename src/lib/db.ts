@@ -19,7 +19,7 @@ let connectionString = rawConnectionString;
 // Session mode pooler (port 5432) has a strict cap of 15 connections (EMAXCONNSESSION) which crashes
 // in serverless environments (Vercel) and during concurrent navigation.
 // In local development / CLI scripts, port 5432 is kept if 6543 is blocked by local firewalls/ISPs.
-if (process.env.VERCEL && connectionString.includes("pooler.supabase.com") && connectionString.includes(":5432")) {
+if ((process.env.VERCEL || process.env.NODE_ENV === "production") && connectionString.includes("pooler.supabase.com") && connectionString.includes(":5432")) {
   connectionString = connectionString.replace(":5432", ":6543");
 }
 

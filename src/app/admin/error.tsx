@@ -36,8 +36,13 @@ export default function AdminError({
         </div>
 
         {error.digest && (
-          <div className="p-2.5 rounded-xl bg-bg-alt/60 border border-border-default/60 text-body/70 text-xs font-mono select-all">
-            Reference Digest: <span className="font-bold text-heading">{error.digest}</span>
+          <div className="p-3 rounded-xl bg-bg-alt/60 border border-border-default/60 text-left space-y-1.5 select-all">
+            <div className="text-body/70 text-xs font-mono">
+              Reference Digest: <span className="font-bold text-heading">{error.digest}</span>
+            </div>
+            <p className="text-[11px] text-body-muted leading-relaxed">
+              If database credentials or environment variables were updated recently, please ensure special characters in the password (e.g. <code className="font-mono bg-neutral-200/60 px-1 py-0.5 rounded text-heading">$</code>) are encoded as <code className="font-mono bg-neutral-200/60 px-1 py-0.5 rounded text-heading">%24</code>, and allow 1-2 minutes for the database pooler cache to synchronize.
+            </p>
           </div>
         )}
 
@@ -47,7 +52,7 @@ export default function AdminError({
             type="button"
             onClick={() => {
               reset();
-              window.location.reload();
+              window.location.href = window.location.pathname + "?refresh=" + Date.now();
             }}
             className="w-full sm:w-auto inline-flex items-center justify-center gap-2 px-5 py-2.5 rounded-xl bg-primary hover:bg-primary-dark text-white font-bold text-xs transition-all shadow-xs active:scale-[0.98] cursor-pointer"
           >
