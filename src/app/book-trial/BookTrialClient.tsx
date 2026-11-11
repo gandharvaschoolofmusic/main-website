@@ -413,6 +413,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
 
   const [isSendingOtp, startSendOtpTransition] = useTransition();
   const [isVerifyingOtp, startVerifyOtpTransition] = useTransition();
+  const isVerifyingRef = useRef(false);
   const [isPending, startTransition] = useTransition();
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
@@ -500,7 +501,6 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
   };
 
   const handleVerifyOtp = (codeOverride?: string) => {
-    setOtpError(null);
     const trimmedCode = (codeOverride || otpCode).trim();
 
     if (trimmedCode.length !== 6) {
@@ -508,37 +508,48 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       return;
     }
 
+    if (isVerifyingRef.current || isPhoneVerified) {
+      return;
+    }
+    isVerifyingRef.current = true;
+    setOtpError(null);
+
     const fullPhone = getFullPhoneNumber();
 
     startVerifyOtpTransition(async () => {
-      let idTokenToPass: string | undefined = undefined;
+      try {
+        let idTokenToPass: string | undefined = undefined;
 
-      if (firebaseConfirmation) {
-        const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
-        if (!confirmRes.success || !confirmRes.idToken) {
-          setOtpError(confirmRes.error || "Invalid verification code.");
-          setOtpCode("");
-          return;
+        if (firebaseConfirmation) {
+          const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
+          if (!confirmRes.success || !confirmRes.idToken) {
+            setOtpError(confirmRes.error || "Invalid verification code.");
+            return;
+          }
+          idTokenToPass = confirmRes.idToken;
+          setFirebaseIdToken(confirmRes.idToken);
         }
-        idTokenToPass = confirmRes.idToken;
-        setFirebaseIdToken(confirmRes.idToken);
-      }
 
-      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
-      if (!res.success) {
-        setOtpError(res.error || "Invalid or expired OTP code.");
-        setOtpCode("");
-      } else {
-        setIsPhoneVerified(true);
-        setVerifiedOtpCode(trimmedCode);
-        setOtpBanner(null);
-        setPhoneError(null);
-        setOtpError(null);
+        const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
+        if (!res.success) {
+          setOtpError(res.error || "Invalid or expired OTP code.");
+        } else {
+          setIsPhoneVerified(true);
+          setVerifiedOtpCode(trimmedCode);
+          setOtpBanner(null);
+          setPhoneError(null);
+          setOtpError(null);
+        }
+      } catch (err: any) {
+        setOtpError(err?.message || "Failed to verify OTP code.");
+      } finally {
+        isVerifyingRef.current = false;
       }
     });
   };
 
   const handleChangePhone = () => {
+    isVerifyingRef.current = false;
     setIsPhoneVerified(false);
     setOtpSent(false);
     setOtpCode("");
@@ -1021,9 +1032,9 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                             maxLength={6}
                             value={otpCode}
                             onChange={(e) => {
-                              const val = e.target.value.replace(/\D/g, "");
+                              const val = e.target.value.replace(/\D/g, "").slice(0, 6);
                               setOtpCode(val);
-                              if (val.length === 6) {
+                              if (val.length === 6 && !isVerifyingRef.current && !isPhoneVerified) {
                                 handleVerifyOtp(val);
                               }
                             }}

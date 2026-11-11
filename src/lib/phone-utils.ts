@@ -84,3 +84,46 @@ export function isValidPhoneNumber(phone: string): boolean {
   return /^\+[1-9]\d{6,14}$/.test(normalized);
 }
 
+/**
+ * Generates all plausible database representations of a phone number
+ * to ensure database queries (`where: { phone: { in: variations } }`)
+ * successfully locate accounts regardless of whether they were stored
+ * in strict E.164 (+91XXXXXXXXXX), domestic 10-digit (XXXXXXXXXX),
+ * prefix-without-plus (91XXXXXXXXXX), or raw input.
+ */
+export function getPhoneLookupVariations(rawPhone: string): string[] {
+  if (!rawPhone || !rawPhone.trim()) return [];
+
+  const rawTrimmed = rawPhone.trim();
+  const digitsOnly = rawPhone.replace(/\D/g, "");
+  const normalized = normalizePhoneNumber(rawPhone);
+
+  const variations = new Set<string>();
+
+  if (rawTrimmed) variations.add(rawTrimmed);
+  if (normalized) variations.add(normalized);
+  if (digitsOnly) variations.add(digitsOnly);
+
+  if (normalized.startsWith("+")) {
+    variations.add(normalized.slice(1)); // e.g. 919876543210
+  }
+
+  // India numbers (+91)
+  if (normalized.startsWith("+91") && normalized.length === 13) {
+    const tenDigits = normalized.slice(3); // e.g. 9876543210
+    variations.add(tenDigits);
+    variations.add(`91${tenDigits}`);
+    variations.add(`0${tenDigits}`);
+    variations.add(`+91${tenDigits}`);
+  } else if (/^\d{10}$/.test(digitsOnly)) {
+    // 10 digits without prefix
+    variations.add(digitsOnly);
+    variations.add(`+91${digitsOnly}`);
+    variations.add(`91${digitsOnly}`);
+    variations.add(`0${digitsOnly}`);
+  }
+
+  return Array.from(variations).filter(Boolean);
+}
+
+

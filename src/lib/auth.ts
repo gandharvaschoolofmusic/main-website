@@ -8,7 +8,11 @@ import { verifyPassword } from "@/lib/password";
 import { LoginSchema } from "@/schemas/auth";
 import type { Provider } from "next-auth/providers";
 
-import { normalizePhoneNumber, validateAndConsumePhoneOtp } from "@/lib/phone";
+import {
+  normalizePhoneNumber,
+  validateAndConsumePhoneOtp,
+  getPhoneLookupVariations,
+} from "@/lib/phone";
 import { verifyTwoFactorChallenge } from "@/lib/two-factor-token";
 
 const providers: Provider[] = [
@@ -76,8 +80,9 @@ const providers: Provider[] = [
           return null;
         }
 
+        const variations = getPhoneLookupVariations(phone);
         const user = await db.user.findFirst({
-          where: { phone },
+          where: { phone: { in: variations } },
           include: {
             teacherProfile: { select: { approvalStatus: true } },
           },
@@ -124,8 +129,9 @@ const providers: Provider[] = [
         });
       } else {
         const phone = normalizePhoneNumber(rawIdentifier);
+        const variations = getPhoneLookupVariations(phone);
         user = await db.user.findFirst({
-          where: { phone },
+          where: { phone: { in: variations } },
           include: {
             teacherProfile: { select: { approvalStatus: true } },
           },

@@ -42,6 +42,7 @@ import {
   createPhoneOtpToken,
   checkPhoneOtp,
   validateAndConsumePhoneOtp,
+  getPhoneLookupVariations,
 } from "@/lib/phone";
 
 import { isAppError } from "@/lib/errors";
@@ -125,8 +126,8 @@ export async function signupAction(
     }
 
     // 2. Check if phone already exists
-    const existingPhone = await db.user.findUnique({
-      where: { phone: normalizedPhone },
+    const existingPhone = await db.user.findFirst({
+      where: { phone: { in: getPhoneLookupVariations(normalizedPhone) } },
     });
 
     if (existingPhone) {
@@ -329,7 +330,7 @@ export async function sendPhoneOtpAction(
     AuthRateLimits.checkSendOtp(phone);
 
     const existingUser = await db.user.findFirst({
-      where: { phone },
+      where: { phone: { in: getPhoneLookupVariations(phone) } },
       select: {
         role: true,
         isActive: true,
@@ -907,7 +908,7 @@ export async function verifyOtpAndLoginAction(
     AuthRateLimits.checkVerifyOtp(phone);
 
     const user = await db.user.findFirst({
-      where: { phone },
+      where: { phone: { in: getPhoneLookupVariations(phone) } },
       select: {
         role: true,
         isActive: true,

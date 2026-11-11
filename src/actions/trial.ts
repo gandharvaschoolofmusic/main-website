@@ -7,7 +7,12 @@ import { TrialRequestStatus, Role, TrialStatus, NotificationType, EnrollmentStat
 import { revalidatePath } from "next/cache";
 import { z } from "zod";
 import { fromZonedTime } from "date-fns-tz";
-import { normalizePhoneNumber, isValidPhoneNumber, validateAndConsumePhoneOtp } from "@/lib/phone";
+import {
+  normalizePhoneNumber,
+  isValidPhoneNumber,
+  validateAndConsumePhoneOtp,
+  getPhoneLookupVariations,
+} from "@/lib/phone";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
 import { generateNextStudentId, generateNextTrialId } from "@/lib/id-generator";
 
@@ -151,10 +156,11 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
       }
 
       // Strict check: Check if phone number or email belongs to an already converted or enrolled student
+      const phoneVariations = getPhoneLookupVariations(normalizedPhone);
       const existingConvertedUser = await db.user.findFirst({
         where: {
           OR: [
-            { phone: normalizedPhone },
+            { phone: { in: phoneVariations } },
             { email: validated.studentEmail.toLowerCase().trim() },
           ],
         },
@@ -195,8 +201,8 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
       }
 
       // Check if phone number is already registered to another account
-      const existingPhoneUser = await db.user.findUnique({
-        where: { phone: normalizedPhone },
+      const existingPhoneUser = await db.user.findFirst({
+        where: { phone: { in: phoneVariations } },
       });
 
       if (existingPhoneUser) {

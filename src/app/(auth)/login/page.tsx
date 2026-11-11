@@ -95,6 +95,7 @@ export default function LoginPage() {
   const [isVerifyingFirebase, setIsVerifyingFirebase] = useState(false);
 
   const digitRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const isSubmittingRef = useRef(false);
 
   // OTP form submission
   const [otpLoginState, otpLoginFormAction, isOtpLoginPending] = useActionState(
@@ -285,7 +286,7 @@ export default function LoginPage() {
 
   const handleOtpFormSubmit = async (e?: React.FormEvent<HTMLFormElement>) => {
     if (e) e.preventDefault();
-    if (isVerifyingFirebase || isOtpLoginPending) return;
+    if (isSubmittingRef.current || isVerifyingFirebase || isOtpLoginPending) return;
 
     setOtpError(null);
     const code = otpDigits.join("");
@@ -294,12 +295,17 @@ export default function LoginPage() {
       return;
     }
 
+    isSubmittingRef.current = true;
     setIsVerifyingFirebase(true);
+
     try {
+      let idToken: string | undefined = undefined;
+
       if (firebaseConfirmation) {
         const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, code);
         if (!confirmRes.success || !confirmRes.idToken) {
           setIsVerifyingFirebase(false);
+          isSubmittingRef.current = false;
           setOtpError(confirmRes.error || "Invalid verification code. Please check the 6-digit code sent to your phone.");
           setOtpDigits(["", "", "", "", "", ""]);
           setIsShaking(true);
@@ -307,21 +313,27 @@ export default function LoginPage() {
           digitRefs.current[0]?.focus();
           return;
         }
-
-        const formData = new FormData();
-        formData.append("phone", getFullPhoneNumber());
-        formData.append("code", code);
-        formData.append("idToken", confirmRes.idToken);
-
-        await otpLoginFormAction(formData);
-      } else {
-        const formData = new FormData();
-        formData.append("phone", getFullPhoneNumber());
-        formData.append("code", code);
-        await otpLoginFormAction(formData);
+        idToken = confirmRes.idToken;
       }
+
+      const formData = new FormData();
+      formData.append("phone", getFullPhoneNumber());
+      formData.append("code", code);
+      if (idToken) {
+        formData.append("idToken", idToken);
+      }
+
+      startTransition(async () => {
+        try {
+          await otpLoginFormAction(formData);
+        } finally {
+          setIsVerifyingFirebase(false);
+          isSubmittingRef.current = false;
+        }
+      });
     } catch (err: any) {
       setIsVerifyingFirebase(false);
+      isSubmittingRef.current = false;
       setOtpError(err?.message || "Verification failed. Please try again.");
       setOtpDigits(["", "", "", "", "", ""]);
       setIsShaking(true);

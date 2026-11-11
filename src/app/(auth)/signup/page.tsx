@@ -89,6 +89,7 @@ export default function SignupPage() {
   const [isVerifyingOtp, startVerifyOtpTransition] = useTransition();
 
   const otpInputRef = useRef<HTMLInputElement>(null);
+  const isVerifyingRef = useRef(false);
 
   // Compute normalized full phone number
   const getFullPhoneNumber = () => {
@@ -222,7 +223,6 @@ export default function SignupPage() {
 
   // Handle Verify OTP
   const handleVerifyOtp = (codeOverride?: string) => {
-    setOtpError(null);
     const trimmedCode = (codeOverride || otpCode).trim();
 
     if (trimmedCode.length !== 6) {
@@ -230,37 +230,48 @@ export default function SignupPage() {
       return;
     }
 
+    if (isVerifyingRef.current || isPhoneVerified) {
+      return;
+    }
+    isVerifyingRef.current = true;
+    setOtpError(null);
+
     const fullPhone = getFullPhoneNumber();
 
     startVerifyOtpTransition(async () => {
-      let idTokenToPass: string | undefined = undefined;
+      try {
+        let idTokenToPass: string | undefined = undefined;
 
-      if (firebaseConfirmation) {
-        const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
-        if (!confirmRes.success || !confirmRes.idToken) {
-          setOtpError(confirmRes.error || "Invalid verification code.");
-          setOtpCode("");
-          otpInputRef.current?.focus();
-          return;
+        if (firebaseConfirmation) {
+          const confirmRes = await confirmFirebaseOtp(firebaseConfirmation, trimmedCode);
+          if (!confirmRes.success || !confirmRes.idToken) {
+            setOtpError(confirmRes.error || "Invalid verification code.");
+            otpInputRef.current?.focus();
+            return;
+          }
+          idTokenToPass = confirmRes.idToken;
+          setFirebaseIdToken(confirmRes.idToken);
         }
-        idTokenToPass = confirmRes.idToken;
-        setFirebaseIdToken(confirmRes.idToken);
-      }
 
-      const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
-      if (!res.success) {
-        setOtpError(res.error || "Invalid or expired OTP code.");
-        setOtpCode("");
-        otpInputRef.current?.focus();
-      } else {
-        setIsPhoneVerified(true);
-        setVerifiedOtpCode(trimmedCode);
-        setOtpBanner(null);
+        const res = await verifyPhoneOtpForSignupAction(fullPhone, trimmedCode, idTokenToPass);
+        if (!res.success) {
+          setOtpError(res.error || "Invalid or expired OTP code.");
+          otpInputRef.current?.focus();
+        } else {
+          setIsPhoneVerified(true);
+          setVerifiedOtpCode(trimmedCode);
+          setOtpBanner(null);
+        }
+      } catch (err: any) {
+        setOtpError(err?.message || "Failed to verify OTP code.");
+      } finally {
+        isVerifyingRef.current = false;
       }
     });
   };
 
   const handleChangePhone = () => {
+    isVerifyingRef.current = false;
     clearRecaptchaVerifier("signup-recaptcha-container");
     setIsPhoneVerified(false);
     setOtpSent(false);
@@ -727,9 +738,9 @@ export default function SignupPage() {
                           maxLength={6}
                           value={otpCode}
                           onChange={(e) => {
-                            const val = e.target.value.replace(/\D/g, "");
+                            const val = e.target.value.replace(/\D/g, "").slice(0, 6);
                             setOtpCode(val);
-                            if (val.length === 6) {
+                            if (val.length === 6 && !isVerifyingRef.current && !isPhoneVerified) {
                               handleVerifyOtp(val);
                             }
                           }}

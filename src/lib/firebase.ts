@@ -228,24 +228,45 @@ export async function confirmFirebaseOtp(
   confirmationResult: ConfirmationResult,
   verificationCode: string
 ): Promise<{ success: boolean; idToken?: string; error?: string }> {
-  try {
-    const userCredential = await confirmationResult.confirm(verificationCode);
-    const idToken = await userCredential.user.getIdToken();
+  // If already confirmed on this instance, immediately return the cached idToken
+  if ((confirmationResult as any)._cachedIdToken) {
     return {
       success: true,
-      idToken,
-    };
-  } catch (error: any) {
-    console.error("[Firebase] Error confirming verification code:", error);
-    let msg = error?.message || "Invalid verification code. Please check and try again.";
-    if (error?.code === "auth/invalid-verification-code") {
-      msg = "Invalid verification code. Please check the 6-digit code sent to your phone.";
-    } else if (error?.code === "auth/code-expired") {
-      msg = "Verification code has expired. Please request a new code.";
-    }
-    return {
-      success: false,
-      error: msg,
+      idToken: (confirmationResult as any)._cachedIdToken,
     };
   }
+
+  // If a verification is already currently in-flight on this confirmationResult, reuse the in-flight promise
+  if ((confirmationResult as any)._confirmPromise) {
+    return (confirmationResult as any)._confirmPromise;
+  }
+
+  const promise = (async () => {
+    try {
+      const userCredential = await confirmationResult.confirm(verificationCode);
+      const idToken = await userCredential.user.getIdToken();
+      (confirmationResult as any)._cachedIdToken = idToken;
+      return {
+        success: true,
+        idToken,
+      };
+    } catch (error: any) {
+      console.error("[Firebase] Error confirming verification code:", error);
+      let msg = error?.message || "Invalid verification code. Please check and try again.";
+      if (error?.code === "auth/invalid-verification-code") {
+        msg = "Invalid verification code. Please check the 6-digit code sent to your phone.";
+      } else if (error?.code === "auth/code-expired") {
+        msg = "Verification code has expired. Please request a new code.";
+      }
+      return {
+        success: false,
+        error: msg,
+      };
+    } finally {
+      (confirmationResult as any)._confirmPromise = null;
+    }
+  })();
+
+  (confirmationResult as any)._confirmPromise = promise;
+  return promise;
 }

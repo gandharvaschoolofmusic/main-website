@@ -7,8 +7,9 @@ export {
   formatInternationalE164,
   normalizePhoneNumber,
   isValidPhoneNumber,
+  getPhoneLookupVariations,
 } from "./phone-utils";
-import { normalizePhoneNumber } from "./phone-utils";
+import { normalizePhoneNumber, getPhoneLookupVariations } from "./phone-utils";
 
 /**
  * Generates a cryptographically random 6-digit numeric OTP code.
@@ -48,14 +49,15 @@ export async function createPhoneOtpToken(
   purpose: "LOGIN" | "SIGNUP",
 ): Promise<{ phone: string; code: string }> {
   const phone = normalizePhoneNumber(rawPhone);
+  const variations = getPhoneLookupVariations(phone);
   const code = generatePhoneOtp();
   const expires = new Date(Date.now() + 10 * 60 * 1000); // 10 minutes
 
-  // Invalidate previous unused tokens for this phone
+  // Invalidate previous expired tokens for this phone
   await db.phoneVerificationToken.updateMany({
     where: {
-      phone,
-      used: false,
+      phone: { in: variations },
+      expires: { lte: new Date() },
     },
     data: {
       used: true,
@@ -104,11 +106,12 @@ export async function checkPhoneOtp(
   }
 
   const trimmed = code.trim();
+  const variations = getPhoneLookupVariations(phone);
 
   // Find unexpired token for this phone & code or recent verified token
   const token = await db.phoneVerificationToken.findFirst({
     where: {
-      phone,
+      phone: { in: variations },
       OR: [
         { code: trimmed },
         { code: "FIREBASE_VERIFIED" },
@@ -141,6 +144,7 @@ export async function validateAndConsumePhoneOtp(
   idToken?: string,
 ): Promise<{ isValid: boolean; error?: string }> {
   const phone = normalizePhoneNumber(rawPhone);
+  const variations = getPhoneLookupVariations(phone);
 
   // If Firebase ID token is supplied, verify it
   if (idToken && idToken.trim()) {
@@ -155,7 +159,7 @@ export async function validateAndConsumePhoneOtp(
   // 1. Check for active unconsumed token
   const activeToken = await db.phoneVerificationToken.findFirst({
     where: {
-      phone,
+      phone: { in: variations },
       code: trimmed,
       used: false,
       expires: { gt: new Date() },
@@ -175,7 +179,7 @@ export async function validateAndConsumePhoneOtp(
   // 2. Check for recent token in this session (unexpired, verified via OTP or Firebase)
   const recentToken = await db.phoneVerificationToken.findFirst({
     where: {
-      phone,
+      phone: { in: variations },
       OR: [
         { code: trimmed },
         { code: "FIREBASE_VERIFIED" },

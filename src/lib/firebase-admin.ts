@@ -36,14 +36,24 @@ export async function verifyFirebasePhoneToken(
         process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID ||
         process.env.FIREBASE_PROJECT_ID;
 
+      const tokenPhoneClean = tokenPhone ? tokenPhone.replace(/\D/g, "") : "";
+      const expectedPhoneClean = normalizedExpectedPhone.replace(/\D/g, "");
+      const isPhoneMatch =
+        Boolean(tokenPhone) &&
+        (tokenPhone === normalizedExpectedPhone ||
+          tokenPhoneClean === expectedPhoneClean ||
+          (tokenPhoneClean.length >= 10 &&
+            expectedPhoneClean.length >= 10 &&
+            tokenPhoneClean.endsWith(expectedPhoneClean.slice(-10))));
+
       if (
         tokenPhone &&
-        tokenPhone === normalizedExpectedPhone &&
+        isPhoneMatch &&
         payload.exp > now &&
         (!projectId || payload.aud === projectId)
       ) {
-        // Fire-and-forget DB update so we don't block the user's login response
-        markPhoneAsVerifiedInDb(normalizedExpectedPhone).catch(() => {});
+        // Await DB update so subsequent server actions guarantee finding the record
+        await markPhoneAsVerifiedInDb(normalizedExpectedPhone);
         return { isValid: true, phone: tokenPhone };
       }
     }
@@ -87,8 +97,18 @@ export async function verifyFirebasePhoneToken(
         ? normalizePhoneNumber(user.phoneNumber)
         : null;
 
-      if (tokenPhone && tokenPhone === normalizedExpectedPhone) {
-        markPhoneAsVerifiedInDb(normalizedExpectedPhone).catch(() => {});
+      const tokenPhoneClean = tokenPhone ? tokenPhone.replace(/\D/g, "") : "";
+      const expectedPhoneClean = normalizedExpectedPhone.replace(/\D/g, "");
+      const isPhoneMatch =
+        Boolean(tokenPhone) &&
+        (tokenPhone === normalizedExpectedPhone ||
+          tokenPhoneClean === expectedPhoneClean ||
+          (tokenPhoneClean.length >= 10 &&
+            expectedPhoneClean.length >= 10 &&
+            tokenPhoneClean.endsWith(expectedPhoneClean.slice(-10))));
+
+      if (tokenPhone && isPhoneMatch) {
+        await markPhoneAsVerifiedInDb(normalizedExpectedPhone);
         return { isValid: true, phone: tokenPhone };
       } else if (!tokenPhone) {
         return {
