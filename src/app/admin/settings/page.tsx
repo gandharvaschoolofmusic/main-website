@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { AdminSettingsForm } from "./AdminSettingsForm";
+import { AdminDeviceSessionsPanel } from "./AdminDeviceSessionsPanel";
+import { getAdminDeviceSessionsList } from "@/lib/admin-device-session";
 import { SplitHeading } from "@/components/ui/SplitHeading";
 
 export const metadata = {
@@ -58,6 +60,13 @@ export default async function AdminSettingsPage() {
     console.error("[AdminSettingsPage] Failed to load cached settings, using fallback:", err);
   }
 
+  let initialSessions: import("@/lib/admin-device-session").DeviceSessionInfo[] = [];
+  try {
+    initialSessions = await getAdminDeviceSessionsList(adminUser.id, adminUser.sessionId);
+  } catch (err) {
+    console.error("[AdminSettingsPage] Failed to load admin device sessions:", err);
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -77,6 +86,13 @@ export default async function AdminSettingsPage() {
       </div>
 
       <AdminSettingsForm initialSettings={initialSettings} twoFactorData={twoFactorData} />
+
+      <div className="max-w-2xl pt-2">
+        <AdminDeviceSessionsPanel
+          initialSessions={initialSessions}
+          twoFactorEnabled={twoFactorData.enabled}
+        />
+      </div>
     </div>
   );
 }

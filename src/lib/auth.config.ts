@@ -142,6 +142,14 @@ export const authConfig: NextAuthConfig = {
         token.emailVerified = user.emailVerified;
         token.timezone = user.timezone;
         token.picture = user.image;
+        if (!token.sessionId) {
+          token.sessionId = user.sessionId || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
+        }
+      }
+
+      // Ensure every token has a stable sessionId
+      if (!token.sessionId) {
+        token.sessionId = typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36);
       }
 
       if (trigger === "update" && session) {
@@ -162,6 +170,7 @@ export const authConfig: NextAuthConfig = {
         session.user.emailVerified = (token.emailVerified as Date) ?? null;
         session.user.timezone = (token.timezone as string) ?? "UTC";
         session.user.image = (token.picture as string) ?? null;
+        session.user.sessionId = (token.sessionId as string) || undefined;
       }
       return session;
     },

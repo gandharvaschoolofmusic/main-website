@@ -43,6 +43,21 @@ export const getCurrentUser = cache(async () => {
       return null;
     }
 
+    // Check if an admin's device session has been revoked
+    if (session.user.role === Role.ADMIN && session.user.sessionId) {
+      try {
+        const revokedSession = await db.adminDeviceSession.findUnique({
+          where: { sessionId: session.user.sessionId },
+          select: { isRevoked: true },
+        });
+        if (revokedSession?.isRevoked) {
+          return null;
+        }
+      } catch {
+        // Fall through on transient DB read error
+      }
+    }
+
     try {
       const dbUser = await getDbUser(session.user.id);
 
@@ -59,6 +74,7 @@ export const getCurrentUser = cache(async () => {
           timezone: dbUser.timezone || session.user.timezone || "UTC",
           customId: dbUser.customId,
           emailVerified: dbUser.emailVerified,
+          sessionId: session.user.sessionId,
         };
       }
     } catch {

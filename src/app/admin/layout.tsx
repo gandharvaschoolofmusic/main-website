@@ -1,7 +1,9 @@
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { Role } from "@prisma/client";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { AdminSidebar } from "@/components/dashboard/AdminSidebar";
+import { syncAdminDeviceSession } from "@/lib/admin-device-session";
 
 export const metadata = {
   title: "Admin Portal | Gandharva School of Music",
@@ -23,6 +25,25 @@ export default async function AdminPortalLayout({
 
   if (user.role !== Role.ADMIN) {
     redirect("/dashboard");
+  }
+
+  // Record or touch active device session for security audit & session management
+  if (user.sessionId) {
+    try {
+      const headerList = await headers();
+      const userAgent = headerList.get("user-agent");
+      const ip = headerList.get("x-forwarded-for") || headerList.get("x-real-ip");
+      const country = headerList.get("x-vercel-ip-country") || headerList.get("cf-ipcountry");
+      await syncAdminDeviceSession({
+        userId: user.id,
+        sessionId: user.sessionId,
+        userAgent,
+        ip,
+        country,
+      });
+    } catch (err) {
+      // Non-blocking session touch
+    }
   }
 
   return (

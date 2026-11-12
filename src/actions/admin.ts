@@ -3612,6 +3612,87 @@ export async function resetAdminTwoFactorAction(currentPassword: string): Promis
   }
 }
 
+/**
+ * Fetch all active admin login devices and sessions for settings security panel.
+ */
+export async function getAdminDeviceSessionsAction(): Promise<AdminActionResponse<{
+  sessions: import("@/lib/admin-device-session").DeviceSessionInfo[];
+  twoFactorEnabled: boolean;
+}>> {
+  try {
+    const user = await requireRole(Role.ADMIN);
+
+    const admin = await db.user.findUnique({
+      where: { id: user.id },
+      select: { twoFactorEnabled: true, twoFactorSecret: true },
+    });
+
+    const sessions = await (await import("@/lib/admin-device-session")).getAdminDeviceSessionsList(
+      user.id,
+      user.sessionId
+    );
+
+    return {
+      success: true,
+      data: {
+        sessions,
+        twoFactorEnabled: !!(admin?.twoFactorEnabled && admin?.twoFactorSecret),
+      },
+    };
+  } catch (error) {
+    logger.error({ error }, "Failed to fetch admin device sessions");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to fetch device sessions.",
+    };
+  }
+}
+
+/**
+ * Revoke/remove a specific device login session.
+ * Requires verification with Google Authenticator (TOTP code).
+ */
+export async function revokeAdminDeviceSessionAction(
+  targetSessionId: string,
+  totpCode: string
+): Promise<AdminActionResponse> {
+  try {
+    const user = await requireRole(Role.ADMIN);
+
+    if (!targetSessionId) {
+      return { success: false, error: "Target device session ID is required." };
+    }
+
+    if (!totpCode || totpCode.trim().length === 0) {
+      return { success: false, error: "Please enter your 6-digit Google Authenticator code." };
+    }
+
+    const { revokeAdminDeviceSession } = await import("@/lib/admin-device-session");
+    const result = await revokeAdminDeviceSession({
+      adminUserId: user.id,
+      targetSessionId,
+      totpCode,
+    });
+
+    if (!result.success) {
+      return { success: false, error: result.error || "Failed to revoke device session." };
+    }
+
+    revalidatePath("/admin/settings");
+    return {
+      success: true,
+      message: result.message || "Device session removed successfully.",
+    };
+  } catch (error) {
+    logger.error({ error, targetSessionId }, "Failed to revoke admin device session");
+    return {
+      success: false,
+      error: error instanceof Error ? error.message : "Failed to revoke device session.",
+    };
+  }
+}
+
+
 
 
 

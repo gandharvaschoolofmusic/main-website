@@ -8,6 +8,7 @@ declare module "next-auth" {
       role: Role;
       emailVerified: Date | null;
       timezone: string;
+      sessionId?: string;
     } & DefaultSession["user"];
   }
 
@@ -16,6 +17,7 @@ declare module "next-auth" {
     role?: Role;
     emailVerified?: Date | null;
     timezone?: string;
+    sessionId?: string;
   }
 }
 
@@ -25,5 +27,6 @@ declare module "next-auth/jwt" {
     role?: Role;
     emailVerified?: Date | null;
     timezone?: string;
+    sessionId?: string;
   }
 }

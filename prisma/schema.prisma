@@ -48,6 +48,7 @@ model User {
   resourcesUploaded       Resource[]                @relation("TeacherResources")
   resourcesReceived       ResourceShare[]           @relation("StudentReceivedResources")
   sessions                Session[]
+  adminDeviceSessions     AdminDeviceSession[]
   trialStatus             StudentTrialStatus?
   supportTickets          SupportTicket[]
   teacherProfile          TeacherProfile?
@@ -79,6 +80,27 @@ model Session {
   userId       String
   expires      DateTime
   user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+/// Tracks active admin login sessions with device metadata for security audit.
+/// Linked to the JWT session via a stable sessionId stored in the JWT token.
+model AdminDeviceSession {
+  id           String   @id @default(cuid())
+  userId       String
+  sessionId    String   @unique // matches JWT token's `sub` + `iat` combo as a stable key
+  deviceName   String?
+  browser      String?
+  os           String?
+  ip           String?
+  country      String?
+  loginAt      DateTime @default(now()) @db.Timestamptz(6)
+  lastSeenAt   DateTime @default(now()) @updatedAt @db.Timestamptz(6)
+  isRevoked    Boolean  @default(false)
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([sessionId])
+  @@index([isRevoked])
 }
 
 model VerificationToken {
