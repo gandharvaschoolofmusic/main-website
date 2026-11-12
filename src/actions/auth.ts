@@ -454,6 +454,7 @@ export type LoginActionData = {
   formattedSecret?: string;
   tempSecret?: string;
   backupCodes?: string[];
+  redirectTo?: string;
 };
 
 export async function loginAction(
@@ -496,7 +497,7 @@ export async function loginAction(
     } else {
       const phone = normalizePhoneNumber(identifier);
       user = await db.user.findFirst({
-        where: { phone },
+        where: { phone: { in: getPhoneLookupVariations(phone) } },
         select: {
           id: true,
           email: true,
@@ -598,13 +599,15 @@ export async function loginAction(
         : "/student/dashboard";
 
     await signIn("credentials", {
-      identifier,
+      identifier: user?.email || identifier,
       password,
+      redirect: false,
       redirectTo: target,
     });
 
     return {
       success: true,
+      data: { redirectTo: target },
       message: "Logged in successfully!",
     };
   } catch (error) {
@@ -888,7 +891,7 @@ export async function confirmAdminTwoFactorSetupAction(
 export async function verifyOtpAndLoginAction(
   prevState: unknown,
   formData: FormData,
-): Promise<ActionResponse> {
+): Promise<ActionResponse<{ redirectTo?: string }>> {
   const rawPhone = (formData.get("phone") as string) || "";
   const code = (formData.get("code") as string) || "";
   const idToken = (formData.get("idToken") as string) || undefined;
@@ -954,11 +957,13 @@ export async function verifyOtpAndLoginAction(
       code: parsed.data.code,
       idToken,
       authType: "otp",
+      redirect: false,
       redirectTo: target,
     });
 
     return {
       success: true,
+      data: { redirectTo: target },
       message: "Logged in successfully!",
     };
   } catch (error) {

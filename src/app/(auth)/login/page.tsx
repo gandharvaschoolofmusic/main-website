@@ -65,6 +65,13 @@ export default function LoginPage() {
   const [copiedKey, setCopiedKey] = useState(false);
   const [resetToPassword, setResetToPassword] = useState(false);
 
+  // Redirect on successful Password login (hard navigation commits auth cookies and flushes stale chunks)
+  useEffect(() => {
+    if (pwdState?.success && pwdState.data?.redirectTo) {
+      window.location.href = pwdState.data.redirectTo;
+    }
+  }, [pwdState]);
+
   // Redirect on successful Admin 2FA verification (hard navigation guarantees session cookies are committed)
   useEffect(() => {
     if (twoFactorState?.success) {
@@ -102,6 +109,13 @@ export default function LoginPage() {
     verifyOtpAndLoginAction,
     { success: false },
   );
+
+  // Redirect on successful OTP login
+  useEffect(() => {
+    if (otpLoginState?.success && (otpLoginState as any)?.data?.redirectTo) {
+      window.location.href = (otpLoginState as any).data.redirectTo;
+    }
+  }, [otpLoginState]);
 
   // Automatically clear OTP inputs and shake when an error occurs
   useEffect(() => {
@@ -323,14 +337,11 @@ export default function LoginPage() {
         formData.append("idToken", idToken);
       }
 
-      startTransition(async () => {
-        try {
-          await otpLoginFormAction(formData);
-        } finally {
-          setIsVerifyingFirebase(false);
-          isSubmittingRef.current = false;
-        }
+      startTransition(() => {
+        otpLoginFormAction(formData);
       });
+      setIsVerifyingFirebase(false);
+      isSubmittingRef.current = false;
     } catch (err: any) {
       setIsVerifyingFirebase(false);
       isSubmittingRef.current = false;
