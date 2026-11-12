@@ -181,6 +181,12 @@ export async function replyToTicketAction(input: ReplyTicketInput) {
           where: { id: input.ticketId },
           data: { status: TicketStatus.OPEN },
         });
+      } else if (user.role === Role.ADMIN && ticket.status === TicketStatus.OPEN) {
+        // If an admin replies to an OPEN ticket, transition it to IN_PROGRESS
+        await tx.supportTicket.update({
+          where: { id: input.ticketId },
+          data: { status: TicketStatus.IN_PROGRESS },
+        });
       }
     });
 

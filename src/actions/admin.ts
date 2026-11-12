@@ -36,6 +36,7 @@ import {
   sendLessonRescheduledEmails,
   sendLessonCancelledNotificationEmails,
 } from "@/lib/email";
+import { restoreLessonAllocationTx, consumeLessonAllocationTx } from "@/lib/quota-reconciliation";
 
 export type AdminActionResponse<T = unknown> = {
   success: boolean;
@@ -775,17 +776,14 @@ export async function updateLessonDateTimeAdminAction(input: {
     if (newStatus === LessonStatus.CANCELLED && lesson.status !== LessonStatus.CANCELLED) {
       updateData.cancelledBy = admin.id;
       updateData.cancelledAt = new Date();
-      if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
-        await db.enrollment.update({
-          where: { id: lesson.enrollmentId },
-          data: { sessionsRemaining: { increment: 1 } },
+      await db.$transaction(async (tx) => {
+        await restoreLessonAllocationTx(tx, {
+          id: lesson.id,
+          studentId: lesson.studentId,
+          lessonSource: lesson.lessonSource,
+          enrollmentId: lesson.enrollmentId,
         });
-      } else if (lesson.lessonSource === LessonSource.TRIAL) {
-        await db.studentTrialStatus.updateMany({
-          where: { studentId: lesson.studentId },
-          data: { lessonsUsed: { decrement: 1 } },
-        });
-      }
+      });
     }
 
     // If moving from COMPLETED or CANCELLED to an active upcoming status (SCHEDULED/RESCHEDULED), clean past exit flags
@@ -803,20 +801,14 @@ export async function updateLessonDateTimeAdminAction(input: {
 
     // If moving from CANCELLED to an active status, re-consume quota if available
     if (lesson.status === LessonStatus.CANCELLED && newStatus !== LessonStatus.CANCELLED) {
-      if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
-        const enr = await db.enrollment.findUnique({ where: { id: lesson.enrollmentId } });
-        if (enr && enr.sessionsRemaining > 0) {
-          await db.enrollment.update({
-            where: { id: lesson.enrollmentId },
-            data: { sessionsRemaining: { decrement: 1 } },
-          });
-        }
-      } else if (lesson.lessonSource === LessonSource.TRIAL) {
-        await db.studentTrialStatus.updateMany({
-          where: { studentId: lesson.studentId },
-          data: { lessonsUsed: { increment: 1 } },
+      await db.$transaction(async (tx) => {
+        await consumeLessonAllocationTx(tx, {
+          id: lesson.id,
+          studentId: lesson.studentId,
+          lessonSource: lesson.lessonSource,
+          enrollmentId: lesson.enrollmentId,
         });
-      }
+      });
     }
 
     // Update the lesson directly in the database
@@ -1095,6 +1087,11 @@ export async function saveFullEnrollmentPlanAction(input: {
 
     let targetEnrollmentId = input.enrollmentId;
 
+    const targetStatus = input.status || EnrollmentStatus.ACTIVE;
+    const isCompletedStatus = targetStatus === EnrollmentStatus.COMPLETED;
+    const isTerminatedStatus =
+      targetStatus === EnrollmentStatus.CANCELLED || targetStatus === EnrollmentStatus.REFUNDED;
+
     if (targetEnrollmentId) {
       await db.enrollment.update({
         where: { id: targetEnrollmentId },
@@ -1102,7 +1099,8 @@ export async function saveFullEnrollmentPlanAction(input: {
           courseId: course.id,
           teacherId: input.teacherId || null,
           sessionsRemaining: totalSessions,
-          status: input.status || EnrollmentStatus.ACTIVE,
+          status: targetStatus,
+          completedAt: isCompletedStatus ? new Date() : null,
           adminNotes: input.adminNotes !== undefined ? input.adminNotes : undefined,
           customFeeMinorUnits:
             input.paymentFeeRupees !== undefined
@@ -1110,6 +1108,22 @@ export async function saveFullEnrollmentPlanAction(input: {
               : undefined,
         },
       });
+
+      // If enrollment cancelled or refunded, cancel all future scheduled lessons
+      if (isTerminatedStatus) {
+        await db.lesson.updateMany({
+          where: {
+            enrollmentId: targetEnrollmentId,
+            status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+            startsAt: { gte: new Date() },
+          },
+          data: {
+            status: LessonStatus.CANCELLED,
+            cancelledBy: "ADMIN",
+            cancelledAt: new Date(),
+          },
+        });
+      }
     } else {
       const created = await db.enrollment.create({
         data: {
@@ -1117,7 +1131,8 @@ export async function saveFullEnrollmentPlanAction(input: {
           courseId: course.id,
           teacherId: input.teacherId || null,
           sessionsRemaining: totalSessions,
-          status: input.status || EnrollmentStatus.ACTIVE,
+          status: targetStatus,
+          completedAt: isCompletedStatus ? new Date() : null,
           adminNotes: input.adminNotes || "Created from Enrollment Planner",
           customFeeMinorUnits:
             input.paymentFeeRupees !== undefined
@@ -1896,18 +1911,13 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
         },
       });
 
-      // Restore allocation
-      if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
-        await tx.enrollment.update({
-          where: { id: lesson.enrollmentId },
-          data: { sessionsRemaining: { increment: 1 } },
-        });
-      } else if (lesson.lessonSource === LessonSource.TRIAL) {
-        await tx.studentTrialStatus.updateMany({
-          where: { studentId: lesson.studentId, lessonsUsed: { gt: 0 } },
-          data: { lessonsUsed: { decrement: 1 } },
-        });
-      }
+      // Restore allocation safely (maintains active enrollment status and trial ACTIVE status)
+      await restoreLessonAllocationTx(tx, {
+        id: lesson.id,
+        studentId: lesson.studentId,
+        lessonSource: lesson.lessonSource,
+        enrollmentId: lesson.enrollmentId,
+      });
     });
 
     // Dispatch cancellation email to both student and teacher
@@ -1979,34 +1989,21 @@ export async function updateLessonStatusAdminAction(
     await db.$transaction(async (tx) => {
       // 1. Quota adjustment: If moving to CANCELLED from another status, restore session quota
       if (newStatus === LessonStatus.CANCELLED && lesson.status !== LessonStatus.CANCELLED) {
-        if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
-          await tx.enrollment.update({
-            where: { id: lesson.enrollmentId },
-            data: { sessionsRemaining: { increment: 1 } },
-          });
-        } else if (lesson.lessonSource === LessonSource.TRIAL) {
-          await tx.studentTrialStatus.updateMany({
-            where: { studentId: lesson.studentId, lessonsUsed: { gt: 0 } },
-            data: { lessonsUsed: { decrement: 1 } },
-          });
-        }
+        await restoreLessonAllocationTx(tx, {
+          id: lesson.id,
+          studentId: lesson.studentId,
+          lessonSource: lesson.lessonSource,
+          enrollmentId: lesson.enrollmentId,
+        });
       }
       // If moving away from CANCELLED, re-consume session quota if available
       else if (lesson.status === LessonStatus.CANCELLED && newStatus !== LessonStatus.CANCELLED) {
-        if (lesson.lessonSource === LessonSource.ENROLLMENT && lesson.enrollmentId) {
-          const enr = await tx.enrollment.findUnique({ where: { id: lesson.enrollmentId } });
-          if (enr && enr.sessionsRemaining > 0) {
-            await tx.enrollment.update({
-              where: { id: lesson.enrollmentId },
-              data: { sessionsRemaining: { decrement: 1 } },
-            });
-          }
-        } else if (lesson.lessonSource === LessonSource.TRIAL) {
-          await tx.studentTrialStatus.updateMany({
-            where: { studentId: lesson.studentId },
-            data: { lessonsUsed: { increment: 1 } },
-          });
-        }
+        await consumeLessonAllocationTx(tx, {
+          id: lesson.id,
+          studentId: lesson.studentId,
+          lessonSource: lesson.lessonSource,
+          enrollmentId: lesson.enrollmentId,
+        });
       }
 
       // 2. Update lesson status
@@ -2399,16 +2396,67 @@ export async function cancelTrialRequestAction(trialRequestId: string): Promise<
   try {
     await requireRole(Role.ADMIN);
 
-    await db.trialRequest.update({
+    const trial = await db.trialRequest.findUnique({
       where: { id: trialRequestId },
-      data: { status: TrialRequestStatus.CANCELLED },
+      include: { allottedLesson: true },
+    });
+
+    if (!trial) {
+      return { success: false, error: "Trial request not found." };
+    }
+
+    if (trial.status === TrialRequestStatus.CANCELLED) {
+      return { success: true, message: "Trial request is already cancelled." };
+    }
+
+    const wasAllotted = trial.status === TrialRequestStatus.ALLOTTED;
+
+    await db.$transaction(async (tx) => {
+      // 1. Mark trial request as cancelled
+      await tx.trialRequest.update({
+        where: { id: trialRequestId },
+        data: { status: TrialRequestStatus.CANCELLED },
+      });
+
+      // 2. Cancel linked scheduled lesson if exists
+      if (trial.allottedLessonId) {
+        await tx.lesson.updateMany({
+          where: {
+            id: trial.allottedLessonId,
+            status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+          },
+          data: {
+            status: LessonStatus.CANCELLED,
+            cancelledBy: "ADMIN",
+            cancelledAt: new Date(),
+          },
+        });
+      }
+
+      // 3. Refund trial quota if it was allotted
+      if (wasAllotted) {
+        const trialStatus = await tx.studentTrialStatus.findUnique({
+          where: { studentId: trial.studentId },
+        });
+        if (trialStatus && trialStatus.lessonsUsed > 0) {
+          const nextUsed = Math.max(0, trialStatus.lessonsUsed - 1);
+          await tx.studentTrialStatus.update({
+            where: { studentId: trial.studentId },
+            data: {
+              lessonsUsed: nextUsed,
+              status: nextUsed < trialStatus.lessonsGranted ? TrialStatus.ACTIVE : trialStatus.status,
+            },
+          });
+        }
+      }
     });
 
     revalidatePath("/admin/trials");
+    revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     revalidatePath("/student/dashboard");
 
-    return { success: true };
+    return { success: true, message: "Trial request cancelled and quota refunded successfully." };
   } catch (error) {
     logger.error({ error }, "Error cancelling trial request");
     return { success: false, error: "Failed to cancel trial request." };
@@ -2435,7 +2483,7 @@ export async function updateTrialLeadStatusAction(input: {
 
     const currentLead = await db.trialRequest.findUnique({
       where: { id: input.trialRequestId },
-      select: { isConverted: true },
+      select: { isConverted: true, status: true, allottedLessonId: true, studentId: true },
     });
 
     if (currentLead?.isConverted) {
@@ -2506,6 +2554,37 @@ export async function updateTrialLeadStatusAction(input: {
         where: { id: updated.allottedLessonId },
         data: { status: input.lessonStatus as any },
       }).catch(() => {});
+    }
+
+    // If cancelled from an allotted state, ensure linked lesson is cancelled and trial quota refunded
+    if (input.status === TrialRequestStatus.CANCELLED && currentLead?.status === TrialRequestStatus.ALLOTTED) {
+      if (updated.allottedLessonId) {
+        await db.lesson.updateMany({
+          where: {
+            id: updated.allottedLessonId,
+            status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+          },
+          data: {
+            status: LessonStatus.CANCELLED,
+            cancelledBy: "ADMIN",
+            cancelledAt: new Date(),
+          },
+        });
+      }
+
+      const trialStatus = await db.studentTrialStatus.findUnique({
+        where: { studentId: updated.studentId },
+      });
+      if (trialStatus && trialStatus.lessonsUsed > 0) {
+        const nextUsed = Math.max(0, trialStatus.lessonsUsed - 1);
+        await db.studentTrialStatus.update({
+          where: { studentId: updated.studentId },
+          data: {
+            lessonsUsed: nextUsed,
+            status: nextUsed < trialStatus.lessonsGranted ? TrialStatus.ACTIVE : trialStatus.status,
+          },
+        });
+      }
     }
 
     revalidatePath("/admin/trials");
@@ -3068,7 +3147,9 @@ export async function updateTeacherApprovalAction(input: {
       updateData.payoutPerSession = Math.max(0, Math.floor(input.payoutDayRate));
     }
 
-    if (input.isPublished !== undefined && input.isPublished !== null) {
+    if (input.status === TeacherApprovalStatus.REJECTED || input.status === TeacherApprovalStatus.PENDING) {
+      updateData.isPublished = false;
+    } else if (input.isPublished !== undefined && input.isPublished !== null) {
       updateData.isPublished = Boolean(input.isPublished);
     }
 

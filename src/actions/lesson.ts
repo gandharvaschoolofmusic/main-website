@@ -11,6 +11,7 @@ import { isAppError, ConflictError } from "@/lib/errors";
 import { CANCELLATION_NOTICE_HOURS } from "@/types";
 import { logger } from "@/lib/logger";
 import { revalidatePath } from "next/cache";
+import { restoreLessonAllocationTx } from "@/lib/quota-reconciliation";
 
 export type CancelLessonResponse = {
   success: boolean;
@@ -81,14 +82,27 @@ export async function cancelLessonAction(
       (startsAt.getTime() - now.getTime()) / (1000 * 60 * 60);
     const isUnder24Hours = hoursNotice < CANCELLATION_NOTICE_HOURS;
 
-    // Update lesson status to CANCELLED atomically
-    const updateResult = await db.lesson.updateMany({
-      where: { id: lesson.id, status: "SCHEDULED" },
-      data: {
-        status: "CANCELLED",
-        cancelledBy: user.id,
-        cancelledAt: now,
-      },
+    // Update lesson status to CANCELLED atomically and restore quota (trial quota or enrollment sessions)
+    const updateResult = await db.$transaction(async (tx) => {
+      const res = await tx.lesson.updateMany({
+        where: { id: lesson.id, status: "SCHEDULED" },
+        data: {
+          status: "CANCELLED",
+          cancelledBy: user.id,
+          cancelledAt: now,
+        },
+      });
+
+      if (res.count > 0) {
+        await restoreLessonAllocationTx(tx, {
+          id: lesson.id,
+          studentId: lesson.studentId,
+          lessonSource: lesson.lessonSource,
+          enrollmentId: lesson.enrollmentId,
+        });
+      }
+
+      return res;
     });
 
     if (updateResult.count === 0) {

@@ -9,6 +9,7 @@ import {
   CourseEmiStatus,
   CourseRequestStatus,
   NotificationType,
+  TrialStatus,
 } from "@prisma/client";
 import { revalidatePath } from "next/cache";
 import { notifyAdmins, createNotification } from "@/actions/notifications";
@@ -228,7 +229,7 @@ export async function adminApproveCourseRequestAction(input: {
         },
       });
 
-      // Mark request approved
+      // Mark request approved and ensure student's trial quota is closed
       const updatedRequest = await tx.courseEnrollmentRequest.update({
         where: { id: request.id },
         data: {
@@ -237,6 +238,12 @@ export async function adminApproveCourseRequestAction(input: {
           enrollmentId: enrollment.id,
           adminNotes: input.adminNotes?.trim() || null,
         },
+      });
+
+      // Enrolled students cannot claim free trials; ensure quota status is sealed
+      await tx.studentTrialStatus.updateMany({
+        where: { studentId: request.studentId },
+        data: { status: TrialStatus.EXHAUSTED },
       });
 
       return { enrollment, updatedRequest };

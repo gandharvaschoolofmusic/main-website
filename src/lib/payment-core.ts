@@ -1,5 +1,5 @@
 import { db } from "@/lib/db";
-import { PaymentStatus, EnrollmentStatus, Role, LessonStatus, LessonSource } from "@/types";
+import { PaymentStatus, EnrollmentStatus, Role, LessonStatus, LessonSource, TrialStatus } from "@/types";
 import { createRazorpayOrder, verifyRazorpayPaymentSignature, RAZORPAY_CONFIG } from "@/lib/razorpay";
 import { logger } from "@/lib/logger";
 import { isAppError } from "@/lib/errors";
@@ -263,6 +263,12 @@ export async function processSuccessfulPaymentWebhook(params: {
             status: EnrollmentStatus.ACTIVE,
             teacherId: null, // Admin allots dedicated teacher and schedules 1-on-1 lessons per student
           },
+        });
+
+        // Seal student's trial quota now that they are an enrolled paying student
+        await tx.studentTrialStatus.updateMany({
+          where: { studentId: payment.studentId },
+          data: { status: TrialStatus.EXHAUSTED },
         });
 
         // Note: Lessons are scheduled individually per student by the academy admin
