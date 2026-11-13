@@ -133,7 +133,7 @@ export default async function TeacherStudentsPage() {
 
   // Process enrolled students
   for (const enr of enrollments) {
-    const totalSessions = enr.course.sessionCount;
+    const totalSessions = enr.course?.sessionCount || 0;
     const completedSessions = (enr.lessons || []).filter(
       (l: any) => l.status === "COMPLETED",
     ).length;

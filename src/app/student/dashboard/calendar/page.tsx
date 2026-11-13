@@ -146,48 +146,56 @@ export default async function StudentCalendarPage() {
 
   const formattedLessons: CalendarLesson[] = dbLessons.map((l) => {
     const startsAtDate = new Date(l.startsAt);
+    const isStartsValid = !isNaN(startsAtDate.getTime());
 
     return {
       id: l.id,
-      instrument: l.instrument,
-      startsAt: startsAtDate.toISOString(),
-      durationMinutes: l.durationMinutes,
+      instrument: l.instrument || "Music",
+      startsAt: isStartsValid ? startsAtDate.toISOString() : new Date().toISOString(),
+      durationMinutes: l.durationMinutes || 60,
       status: l.status,
       lessonSource: l.lessonSource,
-      teacherName: l.teacher.name || "Teacher",
-      teacherProfileId: l.teacherProfile.id,
-      formattedTime: formatInViewerTimezone(
-        startsAtDate,
-        studentTimezone,
-        "h:mm a",
-      ),
-      timezoneAbbr: getTimezoneAbbr(startsAtDate, studentTimezone),
+      teacherName: l.teacher?.name || "Teacher",
+      teacherProfileId: l.teacherProfile?.id || "",
+      formattedTime: isStartsValid
+        ? formatInViewerTimezone(
+            startsAtDate,
+            studentTimezone,
+            "h:mm a",
+          )
+        : "TBD",
+      timezoneAbbr: isStartsValid ? getTimezoneAbbr(startsAtDate, studentTimezone) : "UTC",
     };
   });
 
-  const formattedEvents = dbRegistrations.map((reg) => {
-    const ev = reg.event;
-    const startsAtDate = new Date(ev.startsAt);
+  const formattedEvents = dbRegistrations
+    .filter((reg) => reg?.event)
+    .map((reg) => {
+      const ev = reg.event;
+      const startsAtDate = new Date(ev.startsAt);
+      const isStartsValid = !isNaN(startsAtDate.getTime());
 
-    return {
-      id: ev.id,
-      title: ev.title,
-      description: ev.description,
-      type: ev.type,
-      startsAt: startsAtDate.toISOString(),
-      durationMinutes: ev.durationMinutes,
-      capacity: ev.capacity,
-      formattedTime: formatInViewerTimezone(
-        startsAtDate,
-        studentTimezone,
-        "h:mm a",
-      ),
-      timezoneAbbr: getTimezoneAbbr(startsAtDate, studentTimezone),
-      teacherName: ev.teacher?.name || null,
-      teacherEmail: ev.teacher?.email || null,
-      teacherInstruments: ev.teacher?.teacherProfile?.instruments || [],
-    };
-  });
+      return {
+        id: ev.id,
+        title: ev.title || "Masterclass",
+        description: ev.description,
+        type: ev.type,
+        startsAt: isStartsValid ? startsAtDate.toISOString() : new Date().toISOString(),
+        durationMinutes: ev.durationMinutes || 60,
+        capacity: ev.capacity,
+        formattedTime: isStartsValid
+          ? formatInViewerTimezone(
+              startsAtDate,
+              studentTimezone,
+              "h:mm a",
+            )
+          : "TBD",
+        timezoneAbbr: isStartsValid ? getTimezoneAbbr(startsAtDate, studentTimezone) : "UTC",
+        teacherName: ev.teacher?.name || null,
+        teacherEmail: ev.teacher?.email || null,
+        teacherInstruments: ev.teacher?.teacherProfile?.instruments || [],
+      };
+    });
 
   return (
     <div className="space-y-6">

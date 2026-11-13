@@ -105,32 +105,40 @@ export default async function TeacherDashboardPage() {
 
   const formattedLessons: TeacherDashboardLesson[] = allLessons.map((l: any) => {
     const startsAtDate = new Date(l.startsAt);
-    const endsAtDate = new Date(
-      startsAtDate.getTime() + l.durationMinutes * 60_000,
-    );
+    const isStartsValid = !isNaN(startsAtDate.getTime());
+    const endsAtDate = isStartsValid
+      ? new Date(startsAtDate.getTime() + (l.durationMinutes || 60) * 60_000)
+      : new Date();
+
+    const isTeacherJoinedValid = l.teacherJoinedAt && !isNaN(new Date(l.teacherJoinedAt).getTime());
+    const isStudentJoinedValid = l.studentJoinedAt && !isNaN(new Date(l.studentJoinedAt).getTime());
+    const isCancelledValid = l.cancelledAt && !isNaN(new Date(l.cancelledAt).getTime());
+
     return {
       id: l.id,
-      instrument: l.instrument,
-      startsAt: startsAtDate.toISOString(),
-      endsAt: endsAtDate.toISOString(),
-      durationMinutes: l.durationMinutes,
+      instrument: l.instrument || "Music",
+      startsAt: isStartsValid ? startsAtDate.toISOString() : new Date().toISOString(),
+      endsAt: !isNaN(endsAtDate.getTime()) ? endsAtDate.toISOString() : new Date().toISOString(),
+      durationMinutes: l.durationMinutes || 60,
       status: l.status,
       lessonSource: l.lessonSource as "TRIAL" | "ENROLLMENT",
       studentTimezone: l.student?.timezone || "UTC",
       courseTitle: l.enrollment?.course?.title,
       groupRoomId: l.groupRoomId,
-      formattedTime: formatInViewerTimezone(
-        startsAtDate,
-        user.timezone || "UTC",
-        "EEE, MMM d, yyyy 'at' h:mm a",
-      ),
-      timezoneAbbr: getTimezoneAbbr(startsAtDate, user.timezone || "UTC"),
+      formattedTime: isStartsValid
+        ? formatInViewerTimezone(
+            startsAtDate,
+            user.timezone || "UTC",
+            "EEE, MMM d, yyyy 'at' h:mm a",
+          )
+        : "Date TBD",
+      timezoneAbbr: isStartsValid ? getTimezoneAbbr(startsAtDate, user.timezone || "UTC") : "UTC",
       studentName: l.student?.name || "Student",
       studentEmail: l.student?.email || "",
-      teacherJoinedAt: l.teacherJoinedAt ? new Date(l.teacherJoinedAt).toISOString() : null,
-      studentJoinedAt: l.studentJoinedAt ? new Date(l.studentJoinedAt).toISOString() : null,
+      teacherJoinedAt: isTeacherJoinedValid ? new Date(l.teacherJoinedAt).toISOString() : null,
+      studentJoinedAt: isStudentJoinedValid ? new Date(l.studentJoinedAt).toISOString() : null,
       cancelledBy: l.cancelledBy,
-      cancelledAt: l.cancelledAt ? new Date(l.cancelledAt).toISOString() : null,
+      cancelledAt: isCancelledValid ? new Date(l.cancelledAt).toISOString() : null,
       recordingUrl: l.recordingUrl,
     };
   });

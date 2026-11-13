@@ -83,15 +83,23 @@ export function fromISTInputToUtc(istDateTimeStr: string): Date {
  * Defaults to readable time with timezone abbreviation (e.g., "2:00 PM EDT").
  */
 export function formatInViewerTimezone(
-  date: Date,
+  date: Date | string | number | null | undefined,
   timezone: string,
   formatStr = "h:mm a zzz",
 ): string {
+  if (!date) return "";
+  const d = typeof date === "object" && date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "";
+
   try {
-    return formatInTimeZone(date, timezone, formatStr);
+    return formatInTimeZone(d, timezone, formatStr);
   } catch {
-    // Fallback if invalid timezone passed
-    return formatInTimeZone(date, "UTC", formatStr);
+    try {
+      // Fallback if invalid timezone passed
+      return formatInTimeZone(d, "UTC", formatStr);
+    } catch {
+      return "";
+    }
   }
 }
 
@@ -122,9 +130,16 @@ export function projectTeacherSlotToUtc(
  * Get the short timezone abbreviation for a given date instant and IANA timezone.
  * e.g., "EDT", "EST", "CET", "CEST", "IST".
  */
-export function getTimezoneAbbr(date: Date, timezone: string): string {
+export function getTimezoneAbbr(
+  date: Date | string | number | null | undefined,
+  timezone: string
+): string {
+  if (!date) return "UTC";
+  const d = typeof date === "object" && date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "UTC";
+
   try {
-    return formatInTimeZone(date, timezone, "zzz");
+    return formatInTimeZone(d, timezone, "zzz");
   } catch {
     return "UTC";
   }
@@ -133,11 +148,22 @@ export function getTimezoneAbbr(date: Date, timezone: string): string {
 /**
  * Get the current date in YYYY-MM-DD format in a specific timezone.
  */
-export function getLocalDateString(date: Date, timezone: string): string {
+export function getLocalDateString(
+  date: Date | string | number | null | undefined,
+  timezone: string
+): string {
+  if (!date) return "";
+  const d = typeof date === "object" && date instanceof Date ? date : new Date(date);
+  if (isNaN(d.getTime())) return "";
+
   try {
-    return formatInTimeZone(date, timezone, "yyyy-MM-dd");
+    return formatInTimeZone(d, timezone, "yyyy-MM-dd");
   } catch {
-    return formatInTimeZone(date, "UTC", "yyyy-MM-dd");
+    try {
+      return formatInTimeZone(d, "UTC", "yyyy-MM-dd");
+    } catch {
+      return "";
+    }
   }
 }
 

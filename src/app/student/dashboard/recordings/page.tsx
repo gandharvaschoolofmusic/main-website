@@ -179,14 +179,16 @@ export default async function StudentRecordingsPage() {
       instrument: l.instrument || l.enrollment?.course?.instrument || "Music",
       courseTitle,
       courseSlug: l.enrollment?.course?.slug || null,
-      startsAt: new Date(l.startsAt).toISOString(),
+      startsAt: !isNaN(new Date(l.startsAt).getTime())
+        ? new Date(l.startsAt).toISOString()
+        : new Date().toISOString(),
       durationMinutes: l.durationMinutes || 60,
       status: l.status,
       teacher: {
-        id: l.teacher.id,
-        name: l.teacher.name || "Faculty Teacher",
-        email: l.teacher.email || "",
-        image: l.teacher.image || null,
+        id: l.teacher?.id || "",
+        name: l.teacher?.name || "Faculty Teacher",
+        email: l.teacher?.email || "",
+        image: l.teacher?.image || null,
       },
       recordings: parts,
       primaryRecordingUrl: primaryUrl,

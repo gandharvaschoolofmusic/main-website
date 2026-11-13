@@ -135,47 +135,63 @@ export default async function TeacherCalendarPage() {
     endMinute: r.endMinute,
   }));
 
-  const exceptions = (profile?.availabilityExceptions || []).map((e: any) => ({
-    id: e.id,
-    date: new Date(e.date).toISOString().split("T")[0],
-    isBlocked: e.isBlocked,
-    startMinute: e.startMinute,
-    endMinute: e.endMinute,
-  }));
+  const exceptions = (profile?.availabilityExceptions || []).map((e: any) => {
+    const d = new Date(e.date);
+    const dateStr = !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "";
+    return {
+      id: e.id,
+      date: dateStr,
+      isBlocked: e.isBlocked,
+      startMinute: e.startMinute,
+      endMinute: e.endMinute,
+    };
+  });
 
-  const lessons = (profile?.lessonsAsTeacher || []).map((l: any) => ({
-    id: l.id,
-    startsAt: new Date(l.startsAt).toISOString(),
-    durationMinutes: l.durationMinutes,
-    instrument: l.instrument,
-    studentName: l.student?.name || "Student",
-    lessonSource: l.lessonSource as "TRIAL" | "ENROLLMENT",
-    status: l.status,
-    formattedTime: formatInViewerTimezone(
-      new Date(l.startsAt),
-      teacherTimezone,
-      "h:mm a",
-    ),
-  }));
+  const lessons = (profile?.lessonsAsTeacher || []).map((l: any) => {
+    const d = new Date(l.startsAt);
+    const isValid = !isNaN(d.getTime());
+    return {
+      id: l.id,
+      startsAt: isValid ? d.toISOString() : new Date().toISOString(),
+      durationMinutes: l.durationMinutes || 60,
+      instrument: l.instrument || "Music",
+      studentName: l.student?.name || "Student",
+      lessonSource: l.lessonSource as "TRIAL" | "ENROLLMENT",
+      status: l.status,
+      formattedTime: isValid
+        ? formatInViewerTimezone(
+            d,
+            teacherTimezone,
+            "h:mm a",
+          )
+        : "TBD",
+    };
+  });
 
-  const formattedEvents = dbEvents.map((ev: any) => ({
-    id: ev.id,
-    title: ev.title,
-    description: ev.description,
-    type: ev.type,
-    startsAt: new Date(ev.startsAt).toISOString(),
-    durationMinutes: ev.durationMinutes,
-    capacity: ev.capacity,
-    formattedTime: formatInViewerTimezone(
-      new Date(ev.startsAt),
-      teacherTimezone,
-      "h:mm a",
-    ),
-    registrations: ev.registrations.map((r: any) => ({
-      studentName: r.student?.name || "Student",
-      studentEmail: r.student?.email,
-    })),
-  }));
+  const formattedEvents = dbEvents.map((ev: any) => {
+    const d = new Date(ev.startsAt);
+    const isValid = !isNaN(d.getTime());
+    return {
+      id: ev.id,
+      title: ev.title || "Masterclass",
+      description: ev.description,
+      type: ev.type,
+      startsAt: isValid ? d.toISOString() : new Date().toISOString(),
+      durationMinutes: ev.durationMinutes || 60,
+      capacity: ev.capacity,
+      formattedTime: isValid
+        ? formatInViewerTimezone(
+            d,
+            teacherTimezone,
+            "h:mm a",
+          )
+        : "TBD",
+      registrations: (ev.registrations || []).map((r: any) => ({
+        studentName: r.student?.name || "Student",
+        studentEmail: r.student?.email || "",
+      })),
+    };
+  });
 
   return (
     <div className="space-y-6">

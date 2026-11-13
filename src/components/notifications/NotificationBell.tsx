@@ -41,7 +41,9 @@ export type NotificationItem = {
 };
 
 function formatRelativeTime(dateInput: Date | string): string {
+  if (!dateInput) return "Recently";
   const date = new Date(dateInput);
+  if (isNaN(date.getTime())) return "Recently";
   const now = new Date();
   const diffSec = Math.max(0, Math.floor((now.getTime() - date.getTime()) / 1000));
 

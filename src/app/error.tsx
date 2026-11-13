@@ -144,12 +144,12 @@ export default function Error({
           >
             Try Again
           </button>
-          <Link
+          <a
             href="/dashboard"
             className="w-full sm:w-auto px-5 py-2.5 rounded-lg bg-primary hover:bg-primary-hover text-white font-medium text-sm transition-all text-center"
           >
             Go to Dashboard
-          </Link>
+          </a>
         </div>
       </div>
     </div>

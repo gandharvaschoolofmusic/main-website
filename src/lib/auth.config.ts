@@ -1,5 +1,6 @@
 import type { NextAuthConfig } from "next-auth";
 import { Role } from "@prisma/client";
+import { NextResponse } from "next/server";
 
 export const authConfig: NextAuthConfig = {
   trustHost: true,
@@ -59,8 +60,10 @@ export const authConfig: NextAuthConfig = {
             ? "/admin"
             : role === "TEACHER"
             ? "/teacher/dashboard"
-            : "/student/dashboard";
-        return Response.redirect(getRedirectUrl(target));
+            : role === "STUDENT"
+            ? "/student/dashboard"
+            : "/dashboard";
+        return NextResponse.redirect(getRedirectUrl(target));
       }
 
       // 2. If unauthenticated user accesses protected route, deny (redirects to /login)
@@ -68,32 +71,17 @@ export const authConfig: NextAuthConfig = {
         return false;
       }
 
-      // 3. Role protection
-      if (isLoggedIn) {
-        if (isAdminRoute && role !== "ADMIN") {
-          const target =
-            role === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
-          return Response.redirect(getRedirectUrl(target));
-        }
-        if (isTeacherRoute && role !== "TEACHER") {
-          const target = role === "ADMIN" ? "/admin" : "/student/dashboard";
-          return Response.redirect(getRedirectUrl(target));
-        }
-        if (isStudentRoute && role !== "STUDENT") {
-          const target = role === "ADMIN" ? "/admin" : "/teacher/dashboard";
-          return Response.redirect(getRedirectUrl(target));
-        }
-        if (isDashboardRoute) {
-          const target =
-            role === "ADMIN"
-              ? "/admin"
-              : role === "TEACHER"
-              ? "/teacher/dashboard"
-              : "/student/dashboard";
-          return Response.redirect(getRedirectUrl(target));
+      // 3. Edge-level defense: non-admin users cannot access admin portal
+      if (isLoggedIn && isAdminRoute) {
+        if (role && role !== "ADMIN") {
+          return NextResponse.redirect(getRedirectUrl("/dashboard"));
         }
       }
 
+      // 4. For /dashboard, /student, and /teacher routes:
+      // Allow request to proceed to Server Component layouts (StudentDashboardLayout, TeacherDashboardLayout, DashboardRedirectPage)
+      // which query the live database via getCurrentUser() and handle role-based redirection natively
+      // with Next.js redirect(), ensuring flawless RSC flight stream handling without "unexpected response" router crashes.
       return true;
     },
 

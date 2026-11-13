@@ -98,31 +98,40 @@ export default async function StudentDashboardPage() {
     trialRequests.find((t: any) => t.status === TrialRequestStatus.PENDING) || null;
   const isConverted = trialRequests.some((t: any) => t.isConverted);
 
+  const pendingTrialReqDate = pendingTrialRequest?.requestedStartsAt
+    ? new Date(pendingTrialRequest.requestedStartsAt)
+    : null;
+  const isPendingReqDateValid = pendingTrialReqDate && !isNaN(pendingTrialReqDate.getTime());
+
   const formattedLessons: StudentDashboardLesson[] = dbLessons.map((l) => {
     const startsAtDate = new Date(l.startsAt);
-    const endsAtDate = new Date(
-      startsAtDate.getTime() + l.durationMinutes * 60_000,
-    );
+    const isStartsValid = !isNaN(startsAtDate.getTime());
+    const endsAtDate = isStartsValid
+      ? new Date(startsAtDate.getTime() + (l.durationMinutes || 60) * 60_000)
+      : new Date();
+    const isCancelledValid = l.cancelledAt && !isNaN(new Date(l.cancelledAt).getTime());
 
     return {
       id: l.id,
-      instrument: l.instrument,
-      startsAt: startsAtDate.toISOString(),
-      endsAt: endsAtDate.toISOString(),
-      durationMinutes: l.durationMinutes,
+      instrument: l.instrument || "Music",
+      startsAt: isStartsValid ? startsAtDate.toISOString() : new Date().toISOString(),
+      endsAt: !isNaN(endsAtDate.getTime()) ? endsAtDate.toISOString() : new Date().toISOString(),
+      durationMinutes: l.durationMinutes || 60,
       status: l.status,
       lessonSource: l.lessonSource,
-      formattedTime: formatInViewerTimezone(
-        startsAtDate,
-        studentTimezone,
-        "EEE, MMM d, yyyy 'at' h:mm a",
-      ),
-      timezoneAbbr: getTimezoneAbbr(startsAtDate, studentTimezone),
+      formattedTime: isStartsValid
+        ? formatInViewerTimezone(
+            startsAtDate,
+            studentTimezone,
+            "EEE, MMM d, yyyy 'at' h:mm a",
+          )
+        : "Date TBD",
+      timezoneAbbr: isStartsValid ? getTimezoneAbbr(startsAtDate, studentTimezone) : "UTC",
       teacherName: l.teacher?.name || "Teacher",
       teacherProfileId: l.teacherProfile?.id || "",
       trackingCode: getLessonTrackingId(l),
       cancelledBy: l.cancelledBy,
-      cancelledAt: l.cancelledAt?.toISOString() || null,
+      cancelledAt: isCancelledValid ? new Date(l.cancelledAt).toISOString() : null,
       recordingUrl: l.recordingUrl,
     };
   });
@@ -145,7 +154,7 @@ export default async function StudentDashboardPage() {
                   id: pendingTrialRequest.id,
                   instrument: pendingTrialRequest.instrument,
                   ageGroup: pendingTrialRequest.ageGroup,
-                  requestedStartsAt: new Date(pendingTrialRequest.requestedStartsAt).toISOString(),
+                  requestedStartsAt: isPendingReqDateValid ? pendingTrialReqDate.toISOString() : new Date().toISOString(),
                   preferredTimeSlot: pendingTrialRequest.preferredTimeSlot,
                   notes: pendingTrialRequest.studentNotes,
                 }

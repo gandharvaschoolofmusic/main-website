@@ -58,13 +58,16 @@ export default async function TeacherDashboardAvailabilityPage() {
     })) || [];
 
   const exceptions =
-    profile?.availabilityExceptions?.map((e: any) => ({
-      id: e.id,
-      date: new Date(e.date).toISOString().split("T")[0],
-      isBlocked: e.isBlocked,
-      startMinute: e.startMinute,
-      endMinute: e.endMinute,
-    })) || [];
+    profile?.availabilityExceptions?.map((e: any) => {
+      const d = new Date(e.date);
+      return {
+        id: e.id,
+        date: !isNaN(d.getTime()) ? d.toISOString().split("T")[0] : "",
+        isBlocked: e.isBlocked,
+        startMinute: e.startMinute,
+        endMinute: e.endMinute,
+      };
+    }) || [];
 
   const isPublished = !!profile?.isPublished;
   const hasBio = !!profile?.bio && profile.bio.trim().length >= 20;

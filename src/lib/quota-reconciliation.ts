@@ -144,3 +144,4 @@ export async function consumeLessonAllocationTx(
     return { consumedType: "NONE", success: false };
   }
 }
+
