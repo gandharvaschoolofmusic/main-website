@@ -19,6 +19,7 @@ import {
 } from "livekit-client";
 import type { AudioMode } from "@/lib/audio-engine";
 import { useLessonMicrophone } from "@/hooks/useLessonMicrophone";
+import { useLessonAudioPlayback } from "@/hooks/useLessonAudioPlayback";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
 import { MeetRoomUI } from "./MeetRoomUI";
 
@@ -220,6 +221,7 @@ function LessonRoomContent({
   const room = useRoomContext();
 
   const mic = useLessonMicrophone(room, initialConfig);
+  useLessonAudioPlayback(room);
   const [isVideoOff, setIsVideoOff] = useState(Boolean(initialConfig.isVideoMuted));
   const [isScreenSharing, setIsScreenSharing] = useState(false);
   const [isLeaving, setIsLeaving] = useState(false);

@@ -7,8 +7,9 @@ export type MicrophoneSettings = { mode: AudioMode; deviceId: string };
 export function microphoneOptions({ mode, deviceId }: MicrophoneSettings): AudioCaptureOptions {
   const speech = mode === "TALKING";
   return {
-    // Use ideal deviceId so disconnections or ID changes don't trigger OverconstrainedError
-    deviceId: deviceId ? { ideal: deviceId } : { ideal: "default" },
+    // Explicit choices must not silently capture a different (possibly silent) input.
+    // Joining with a stale saved ID falls back in enableLessonMicrophone below.
+    deviceId: deviceId ? { exact: deviceId } : { ideal: "default" },
     echoCancellation: true,
     noiseSuppression: speech, // In Instrument Mode (PLAYING), suppression is off to preserve harmonics & singing notes
     autoGainControl: speech,  // In Instrument Mode (PLAYING), AGC is off to prevent volume pumping on musical attacks
@@ -66,7 +67,7 @@ export async function enableLessonMicrophone(
       signal.throwIfAborted();
       if (selected.deviceId !== deviceId) selected = { ...selected, deviceId };
       const track = microphoneTrack(room);
-      if (track && (track.mediaStreamTrack.readyState === "ended" || selected !== applied)) {
+      if (track && (track.mediaStreamTrack.readyState === "ended" || track.mediaStreamTrack.muted || selected !== applied)) {
         await track.restartTrack(microphoneOptions(selected));
         signal.throwIfAborted();
       }

@@ -5,7 +5,7 @@ import { useLocalParticipant } from "@livekit/components-react";
 import { RoomEvent, TrackEvent, type Room } from "livekit-client";
 import type { AudioMode } from "@/lib/audio-engine";
 import {
-  enableLessonMicrophone, resolveMicrophoneId, restartLessonMicrophone,
+  enableLessonMicrophone, microphoneTrack, resolveMicrophoneId, restartLessonMicrophone,
   type MicrophoneSettings,
 } from "@/lib/lesson-microphone";
 
@@ -24,6 +24,8 @@ export function useLessonMicrophone(room: Room, initial: {
   const queue = useRef(Promise.resolve());
   const changing = useRef(false);
   const lifetime = useRef<AbortController | null>(null);
+  const wanted = useRef(!initial.isAudioMuted);
+  const hasCaptured = useRef(false);
 
   const run = useCallback((action: (signal: AbortSignal) => Promise<void>) => {
     const signal = lifetime.current?.signal;
@@ -58,6 +60,7 @@ export function useLessonMicrophone(room: Room, initial: {
     const actual = await enableLessonMicrophone(room, requested, signal, applied.current, preview);
     if (signal.aborted) return;
     selected.current = applied.current = actual;
+    hasCaptured.current = true;
     setSettings(actual);
   }, [room, initial.previewMicrophone]);
 
@@ -106,13 +109,57 @@ export function useLessonMicrophone(room: Room, initial: {
     return () => { track.off(TrackEvent.Restarted, recovered); };
   }, [publication, change]);
 
+  useEffect(() => {
+    let pending = false;
+    let retry: ReturnType<typeof setTimeout> | undefined;
+    const needsRecovery = () => {
+      const track = microphoneTrack(room);
+      return wanted.current && hasCaptured.current && room.state === "connected" &&
+        (!track || track.isMuted || track.mediaStreamTrack.readyState === "ended" || track.mediaStreamTrack.muted);
+    };
+    const recover = () => {
+      if (pending || !needsRecovery()) return;
+      pending = true;
+      // Serialize with settings changes and recheck: the SDK or a user mute may
+      // have resolved the interruption while this operation was waiting.
+      void run(async signal => {
+        if (needsRecovery()) await enable(signal);
+      }).catch(() => {}).finally(() => { pending = false; });
+    };
+    const visible = () => {
+      if (document.visibilityState === "visible") recover();
+    };
+    const track = publication?.audioTrack;
+    const muted = () => {
+      if (changing.current || track?.mediaStreamTrack.readyState !== "ended") return;
+      // The SDK mutes after its own device-restart attempt fails. Give the OS
+      // one bounded retry; subsequent retries require a device or page event.
+      clearTimeout(retry);
+      retry = setTimeout(recover, 500);
+    };
+    track?.on(TrackEvent.Muted, muted);
+    room.on(RoomEvent.Reconnected, recover);
+    navigator.mediaDevices?.addEventListener("devicechange", recover);
+    document.addEventListener("visibilitychange", visible);
+    window.addEventListener("pageshow", visible);
+    return () => {
+      clearTimeout(retry);
+      track?.off(TrackEvent.Muted, muted);
+      room.off(RoomEvent.Reconnected, recover);
+      navigator.mediaDevices?.removeEventListener("devicechange", recover);
+      document.removeEventListener("visibilitychange", visible);
+      window.removeEventListener("pageshow", visible);
+    };
+  }, [room, publication, run, enable]);
+
   return {
     settings, enabled, busy, error,
     selectMode: (mode: AudioMode) => change({ mode }),
     selectDevice: (deviceId: string) => change({ deviceId }),
     toggle: () => run(async signal => {
-      if (room.localParticipant.isMicrophoneEnabled) await room.localParticipant.setMicrophoneEnabled(false);
-      else await enable(signal);
+      wanted.current = !room.localParticipant.isMicrophoneEnabled;
+      if (wanted.current) await enable(signal);
+      else await room.localParticipant.setMicrophoneEnabled(false);
     }),
   };
 }

@@ -3,6 +3,7 @@ import { createRoot } from "react-dom/client";
 import { Room, RoomEvent, Track } from "livekit-client";
 import { LiveKitRoom, RoomAudioRenderer } from "@livekit/components-react";
 import { useLessonMicrophone } from "../../src/hooks/useLessonMicrophone";
+import { useLessonAudioPlayback } from "../../src/hooks/useLessonAudioPlayback";
 import { useLessonAutoRecorder } from "../../src/hooks/useLessonAutoRecorder";
 import { getCleanDeviceList } from "../../src/lib/media-devices";
 import { resolveMicrophoneId } from "../../src/lib/lesson-microphone";
@@ -25,11 +26,16 @@ async function until(check, description) {
 const sound = new AudioContext();
 const requests = [];
 let failNextCapture;
+let failedCapturesRemaining = 0;
 navigator.mediaDevices.getUserMedia = async ({ audio }) => {
   if (!audio) throw new Error("Audio-only test");
   const id = audio.deviceId?.exact || "default";
   requests.push({ id, noiseSuppression: audio.noiseSuppression, echoCancellation: audio.echoCancellation });
   if (id === "missing") throw new DOMException("Device not found", "NotFoundError");
+  if (failedCapturesRemaining > 0) {
+    failedCapturesRemaining--;
+    throw new DOMException("Device temporarily unavailable", "NotReadableError");
+  }
   if (failNextCapture) {
     const name = failNextCapture;
     failNextCapture = undefined;
@@ -77,6 +83,7 @@ const controllers = new Map();
 const previewMicrophone = { current: null };
 let showSettings;
 function Peer({ room, name }) {
+  useLessonAudioPlayback(room);
   const [settingsOpen, setSettingsOpen] = useState(false);
   useEffect(() => { if (name === "student") showSettings = setSettingsOpen; }, [name]);
   const sessionRecorder = useLessonAutoRecorder({ room, lessonId: "audio-smoke", enabled: name === "teacher", partnerName: "Student", instrument: "Voice" });
@@ -242,6 +249,22 @@ async function check() {
     await hear(student, "student", "teacher");
     if (teacher.localParticipant.getTrackPublication(Track.Source.Microphone).track.mediaStreamTrack !== preview) throw Error("Teacher mic was reopened on join");
     checks.push("student hears the teacher on the same microphone opened in preview");
+    const incoming = document.querySelector("#student audio");
+    incoming.pause();
+    if (!student.canPlaybackAudio) throw Error("Test requires a paused element with an optimistic playback status");
+    document.dispatchEvent(new Event("visibilitychange"));
+    await hear(student, "student", "teacher");
+    checks.push("returning to the lesson resumes paused incoming audio");
+    const play = incoming.play;
+    incoming.pause();
+    incoming.play = () => Promise.reject(new DOMException("Gesture required", "NotAllowedError"));
+    await student.startAudio().catch(() => {});
+    if (student.canPlaybackAudio) throw Error("Autoplay rejection was not exposed");
+    incoming.play = play;
+    document.body.click();
+    await hear(student, "student", "teacher");
+    if (!student.canPlaybackAudio) throw Error("Playback status did not recover on interaction");
+    checks.push("a blocked playback attempt recovers on the next interaction");
     await checkSpeaker();
     // Restore the real system output before subsequent SDK subscriptions.
     await student.switchActiveDevice("audiooutput", "");
@@ -298,6 +321,10 @@ async function check() {
     await mic().selectMode("PLAYING");
     await mic().selectDevice("");
     if (teacher.localParticipant.isMicrophoneEnabled || requests.length !== count) throw new Error("Muted switch opened mic");
+    navigator.mediaDevices.dispatchEvent(new Event("devicechange"));
+    document.dispatchEvent(new Event("visibilitychange"));
+    await delay(750);
+    if (teacher.localParticipant.isMicrophoneEnabled || requests.length !== count) throw new Error("Recovery unmuted a deliberately muted participant");
     await mic().toggle();
     await hear(student, "student", "teacher");
     if (teacher.localParticipant.getTrackPublication(Track.Source.Microphone).trackSid !== sid) throw new Error("Lost publication");
@@ -309,6 +336,16 @@ async function check() {
     await until(() => mic().settings.deviceId === "" && requests.at(-1)?.noiseSuppression === false, "USB removal lost music mode");
     await hear(student, "student", "teacher");
     checks.push("USB disconnect recovered on default input in music mode");
+    const interrupted = teacher.localParticipant.getTrackPublication(Track.Source.Microphone).audioTrack.mediaStreamTrack;
+    // The SDK's restart and our bounded retry both fail while the device is busy.
+    failedCapturesRemaining = 3;
+    interrupted.stop();
+    interrupted.dispatchEvent(new Event("ended"));
+    await until(() => failedCapturesRemaining === 0 && mic().error && !mic().busy, "Interrupted microphone did not report exhausted recovery");
+    navigator.mediaDevices.dispatchEvent(new Event("devicechange"));
+    await hear(student, "student", "teacher");
+    if (mic().settings.mode !== "PLAYING" || requests.at(-1).noiseSuppression !== false) throw Error("Recovered microphone lost music settings");
+    checks.push("a microphone recovers when a previously busy device becomes available, preserving music mode");
     const resumed = new Promise(resolve => student.once(RoomEvent.Reconnected, resolve));
     await student.simulateScenario("full-reconnect");
     await resumed;
