@@ -2,7 +2,7 @@ import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import Link from "next/link";
 import Image from "next/image";
-import { BookOpen } from "lucide-react";
+import { BookOpen, Pencil } from "lucide-react";
 import { Role, EnrollmentStatus, TrialRequestStatus } from "@prisma/client";
 import { formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
 import {
@@ -195,15 +195,31 @@ export default async function StudentDashboardPage() {
             <span className="text-xs font-bold uppercase tracking-wider text-accent-dark">
               Sessions and Classes
             </span>
-            <SplitHeading
-              as="h1"
-              firstClause="Upcoming"
-              accentClause="Lessons"
-              size="lg"
-              className="mt-0.5"
-            />
-            <p className="text-xs sm:text-sm text-body mt-1">
-              Displaying all times in your local timezone:{" "}
+            <div className="flex items-center gap-2 mt-0.5">
+              <SplitHeading
+                as="h1"
+                firstClause="Upcoming"
+                accentClause="Lessons"
+                size="lg"
+                className="mt-0"
+              />
+            </div>
+            {/* Student name with quick-edit link */}
+            <div className="flex items-center gap-1.5 mt-1">
+              <p className="text-xs sm:text-sm text-heading font-semibold">
+                {user.name || "Student"}
+              </p>
+              <Link
+                href="/student/dashboard/profile"
+                className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary hover:text-primary/80 bg-primary/8 hover:bg-primary/12 px-1.5 py-0.5 rounded-md transition-colors"
+                title="Change your name in Profile"
+              >
+                <Pencil className="w-2.5 h-2.5" />
+                <span>Edit Name</span>
+              </Link>
+            </div>
+            <p className="text-xs text-body mt-0.5">
+              Timezone:{" "}
               <strong className="text-heading font-semibold">{studentTimezone}</strong>
             </p>
           </div>

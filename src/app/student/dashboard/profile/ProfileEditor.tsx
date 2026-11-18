@@ -15,6 +15,7 @@ import {
   MapPin,
   Globe,
   ShieldCheck,
+  Pencil,
 } from "lucide-react";
 import { AvatarUpload } from "@/components/profile/AvatarUpload";
 import {
@@ -169,7 +170,7 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
         {profileSuccess && (
           <div className="p-3.5 rounded-2xl bg-success-muted border border-success/30 text-xs text-success font-medium flex items-center gap-2.5 animate-fade-in shadow-xs">
             <Check className="w-4 h-4 text-success shrink-0" />
-            <span>Profile and guardian details updated successfully!</span>
+            <span>Profile updated successfully! Your name and details have been saved.</span>
           </div>
         )}
         {profileError && (
@@ -224,17 +225,26 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
             {/* Full Name & Email */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-bold text-heading mb-1.5">
-                  Full Name *
-                </label>
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-bold text-heading">
+                    Full Name *
+                  </label>
+                  <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-primary bg-primary/8 px-2 py-0.5 rounded-md">
+                    <Pencil className="w-2.5 h-2.5" />
+                    Editable
+                  </span>
+                </div>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="Enter full name"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-border-default text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all"
+                  placeholder="Enter your full name"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-primary/30 text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all shadow-xs"
                 />
+                <p className="mt-1 text-[10px] text-body-muted">
+                  This name appears on your lessons, certificates, and profile across the platform.
+                </p>
               </div>
 
               <div>

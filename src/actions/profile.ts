@@ -52,9 +52,11 @@ export async function updateProfileAction(input: UpdateProfileInput) {
     if (user.role === "TEACHER") {
       revalidatePath("/teacher/dashboard/profile");
       revalidatePath("/teacher/dashboard");
+      revalidatePath("/teacher", "layout");
     } else {
       revalidatePath("/student/dashboard/profile");
       revalidatePath("/student/dashboard");
+      revalidatePath("/student", "layout");
     }
 
     return { success: true };
@@ -425,9 +427,11 @@ export async function verifyEmailUpdateAction({
     if (user.role === "TEACHER") {
       revalidatePath("/teacher/dashboard/profile");
       revalidatePath("/teacher/dashboard");
+      revalidatePath("/teacher", "layout");
     } else {
       revalidatePath("/student/dashboard/profile");
       revalidatePath("/student/dashboard");
+      revalidatePath("/student", "layout");
     }
 
     return {
