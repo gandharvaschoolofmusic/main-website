@@ -641,16 +641,22 @@ export async function loginAction(
     const errText = error instanceof Error ? error.message : String(error);
     logger.error({ error, errText }, "Unexpected error in loginAction");
 
-    if (
-      errText.includes("database") ||
+    const isConnectionError =
       errText.includes("Can't reach database") ||
       errText.includes("ECONNREFUSED") ||
       errText.includes("TLS connection") ||
-      errText.includes("P1011")
-    ) {
+      errText.includes("P1011") ||
+      errText.includes("connection refused") ||
+      errText.includes("connection timed out") ||
+      errText.includes("ETIMEDOUT") ||
+      errText.includes("ENOTFOUND") ||
+      errText.includes("socket hang up") ||
+      errText.includes("Connection terminated unexpectedly");
+
+    if (isConnectionError) {
       return {
         success: false,
-        error: "Unable to connect to the database. Please verify your DATABASE_URL network connection.",
+        error: "We're having trouble reaching our servers right now. Please wait a moment and try again.",
       };
     }
 

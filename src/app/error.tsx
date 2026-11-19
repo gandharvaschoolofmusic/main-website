@@ -33,19 +33,32 @@ export default function Error({
       error?.message?.includes("Minified React error #418") ||
       error?.message?.includes("Minified React error #423") ||
       error?.message?.includes("Minified React error #425") ||
+      error?.message?.includes("ChunkLoad") ||
+      error?.message?.includes("Loading CSS chunk") ||
       (error?.message?.includes("441") && error?.digest);
 
     if (isRecoverableError) {
       try {
-        const reloadKey = "gandharva_auto_recovery_" + (error?.digest || "generic");
+        // Use a time-bucketed key (5-minute window) so if the deployment is fixed,
+        // users can retry without manually clearing sessionStorage.
+        const bucket = Math.floor(Date.now() / (5 * 60 * 1000));
+        const reloadKey = "gandharva_auto_recovery_" + (error?.digest || "generic") + "_" + bucket;
         const hasAttempted = sessionStorage.getItem(reloadKey);
         if (!hasAttempted) {
+          // Clear any stale recovery keys from previous buckets before reloading
+          Object.keys(sessionStorage).forEach((key) => {
+            if (key.startsWith("gandharva_auto_recovery_") && key !== reloadKey) {
+              sessionStorage.removeItem(key);
+            }
+          });
           sessionStorage.setItem(reloadKey, "true");
           window.location.reload();
           return;
         }
       } catch {
-        // SessionStorage unavailable
+        // SessionStorage unavailable — just reload once unconditionally
+        window.location.reload();
+        return;
       }
     }
   }, [error]);
@@ -53,7 +66,7 @@ export default function Error({
   const handleReload = () => {
     setIsReloading(true);
     try {
-      // Clear all recovery flags on manual reload
+      // Clear all recovery flags so the auto-reload can fire again on next visit
       Object.keys(sessionStorage).forEach((key) => {
         if (key.startsWith("gandharva_auto_recovery_")) {
           sessionStorage.removeItem(key);
