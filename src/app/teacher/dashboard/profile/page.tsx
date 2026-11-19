@@ -22,7 +22,7 @@ export default async function TeacherProfilePage() {
   }
 
   if (currentUser.role === Role.ADMIN) {
-    redirect("/admin/users");
+    redirect("/admin/settings");
   }
 
   const dbUser = await db.user.findUnique({

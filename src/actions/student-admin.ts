@@ -66,7 +66,6 @@ export async function createStudentAction(input: {
     });
 
     revalidatePath("/admin/students");
-    revalidatePath("/admin/users");
 
     return {
       success: true,

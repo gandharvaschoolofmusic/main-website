@@ -248,7 +248,7 @@ export async function signupAction(
           type: NotificationType.NEW_STUDENT_SIGNUP,
           title: "New Student Joined",
           body: `${newUser.name || "A new student"} (${newUser.email}) enrolled on Gandharva.`,
-          link: "/admin/users",
+          link: "/admin/students",
         });
         await createNotification({
           userId: newUser.id,
@@ -265,7 +265,6 @@ export async function signupAction(
     // Invalidate admin and student caches immediately so the new user appears instantly
     try {
       revalidatePath("/admin/students");
-      revalidatePath("/admin/users");
       revalidatePath("/admin/teachers");
       revalidatePath("/admin");
       revalidateTag("admin-students", "max");

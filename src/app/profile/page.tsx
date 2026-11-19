@@ -14,7 +14,7 @@ export default async function ProfileRedirectPage() {
   }
 
   if (user.role === Role.ADMIN) {
-    redirect("/admin/users");
+    redirect("/admin/settings");
   }
 
   redirect("/student/dashboard/profile");

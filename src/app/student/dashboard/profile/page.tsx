@@ -22,7 +22,7 @@ export default async function StudentProfilePage() {
   }
 
   if (sessionUser.role === Role.ADMIN) {
-    redirect("/admin/users");
+    redirect("/admin/settings");
   }
 
   let user: {

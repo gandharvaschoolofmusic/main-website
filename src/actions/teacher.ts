@@ -640,7 +640,7 @@ export async function updateTeacherPaymentDetailsAction(data: {
     );
     revalidatePath("/teacher/dashboard/profile");
     revalidatePath("/teacher/dashboard/earnings");
-    revalidatePath("/admin/users");
+    revalidatePath("/admin/teachers");
 
     return {
       success: true,
@@ -780,7 +780,7 @@ export async function uploadTeacherPaymentQrAction(
     );
     revalidatePath("/teacher/dashboard/profile");
     revalidatePath("/teacher/dashboard/earnings");
-    revalidatePath("/admin/users");
+    revalidatePath("/admin/teachers");
 
     return {
       success: true,
@@ -851,7 +851,7 @@ export async function removeTeacherPaymentQrAction(
 
     revalidatePath("/teacher/dashboard/profile");
     revalidatePath("/teacher/dashboard/earnings");
-    revalidatePath("/admin/users");
+    revalidatePath("/admin/teachers");
 
     return { success: true };
   } catch (error) {

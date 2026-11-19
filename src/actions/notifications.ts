@@ -79,7 +79,7 @@ export async function getNotifications(limit = 30) {
             type: NotificationType.NEW_STUDENT_SIGNUP,
             title: "New Student Enrolled",
             body: `${s.name || s.email} joined Gandharva School of Music.`,
-            link: "/admin/users",
+            link: "/admin/students",
             isRead: false,
           });
         }
@@ -160,11 +160,16 @@ export async function getNotifications(limit = 30) {
     }
   }
 
-  return db.notification.findMany({
+  const notifications = await db.notification.findMany({
     where: { userId },
     orderBy: { createdAt: "desc" },
     take: limit,
   });
+  // Keep previously stored signup notifications usable after the page removal.
+  return notifications.map(notification => ({
+    ...notification,
+    link: notification.link === "/admin/users" ? "/admin/students" : notification.link,
+  }));
 }
 
 // ─── Unread count ────────────────────────────────────────────────────────────

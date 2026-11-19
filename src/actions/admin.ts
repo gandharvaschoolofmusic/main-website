@@ -23,7 +23,6 @@ import {
 } from "@prisma/client";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { generateBackupCodes } from "@/lib/totp";
-import { normalizePhoneNumber, isValidPhoneNumber } from "@/lib/phone";
 import { revalidatePath, revalidateTag } from "next/cache";
 import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
@@ -1224,154 +1223,6 @@ export async function saveFullEnrollmentPlanAction(input: {
     logger.error({ error, input }, "Error saving full enrollment plan");
     const errMsg = error instanceof Error ? error.message : "Failed to save enrollment.";
     return { success: false, error: errMsg };
-  }
-}
-
-// ─── 3. Users Management ─────────────────────────────────────────────────────
-
-export async function updateUserAdminAction(input: {
-  userId: string;
-  name?: string;
-  phone?: string | null;
-  role?: Role;
-  isActive?: boolean;
-  newPassword?: string;
-  trialCount?: number;
-  payoutPerSession?: number;
-  payoutDayRate?: number;
-  payoutNightRate?: number;
-  teacherApprovalStatus?: TeacherApprovalStatus;
-  rejectionReason?: string;
-}): Promise<AdminActionResponse> {
-  try {
-    await requireRole(Role.ADMIN);
-
-    const updateData: Record<string, unknown> = {};
-    if (input.name !== undefined) updateData.name = input.name.trim();
-    if (input.role !== undefined) updateData.role = input.role;
-    if (input.isActive !== undefined) updateData.isActive = input.isActive;
-    if (input.newPassword) {
-      updateData.passwordHash = await hashPassword(input.newPassword);
-    }
-
-    if (input.phone !== undefined) {
-      if (input.phone && input.phone.trim()) {
-        const normalized = normalizePhoneNumber(input.phone);
-        if (!isValidPhoneNumber(normalized)) {
-          return {
-            success: false,
-            error: "Invalid phone number format. Please include country code (e.g. +91 98765 43210).",
-          };
-        }
-
-        const existing = await db.user.findFirst({
-          where: {
-            phone: normalized,
-            NOT: { id: input.userId },
-          },
-        });
-
-        if (existing) {
-          return {
-            success: false,
-            error: "This phone number is already registered to another user.",
-          };
-        }
-
-        updateData.phone = normalized;
-        updateData.phoneVerified = new Date();
-      } else {
-        updateData.phone = null;
-        updateData.phoneVerified = null;
-      }
-    }
-
-    await db.$transaction(async (tx) => {
-      if (Object.keys(updateData).length > 0) {
-        await tx.user.update({
-          where: { id: input.userId },
-          data: updateData,
-        });
-      }
-
-      // If adjusting trial count for a student
-      if (input.trialCount !== undefined) {
-        await tx.studentTrialStatus.upsert({
-          where: { studentId: input.userId },
-          create: {
-            studentId: input.userId,
-            lessonsGranted: input.trialCount,
-            lessonsUsed: 0,
-          },
-          update: {
-            lessonsGranted: input.trialCount,
-          },
-        });
-      }
-
-      // If adjusting payoutPerSession, day/night rates or approvalStatus for a teacher
-      if (
-        input.payoutPerSession !== undefined ||
-        input.payoutDayRate !== undefined ||
-        input.payoutNightRate !== undefined ||
-        input.teacherApprovalStatus !== undefined
-      ) {
-        const teacherProfileData: Record<string, unknown> = {};
-        if (input.payoutPerSession !== undefined) {
-          teacherProfileData.payoutPerSession = input.payoutPerSession;
-        }
-        if (input.payoutDayRate !== undefined) {
-          teacherProfileData.payoutDayRate = input.payoutDayRate;
-        }
-        if (input.payoutNightRate !== undefined) {
-          teacherProfileData.payoutNightRate = input.payoutNightRate;
-        }
-        if (input.teacherApprovalStatus !== undefined) {
-          teacherProfileData.approvalStatus = input.teacherApprovalStatus;
-          if (input.teacherApprovalStatus === TeacherApprovalStatus.APPROVED) {
-            teacherProfileData.approvedAt = new Date();
-            teacherProfileData.rejectedAt = null;
-            teacherProfileData.rejectionReason = null;
-          } else if (input.teacherApprovalStatus === TeacherApprovalStatus.REJECTED) {
-            teacherProfileData.rejectedAt = new Date();
-            teacherProfileData.approvedAt = null;
-            teacherProfileData.rejectionReason = input.rejectionReason?.trim() || "Administrative review: requirements not met.";
-            teacherProfileData.isPublished = false;
-          } else if (input.teacherApprovalStatus === TeacherApprovalStatus.PENDING) {
-            teacherProfileData.approvedAt = null;
-            teacherProfileData.rejectedAt = null;
-            teacherProfileData.rejectionReason = null;
-            teacherProfileData.isPublished = false;
-          }
-        }
-
-        await tx.teacherProfile.upsert({
-          where: { userId: input.userId },
-          create: {
-            userId: input.userId,
-            payoutPerSession: input.payoutPerSession ?? (input.payoutDayRate ?? 30000),
-            payoutDayRate: input.payoutDayRate ?? 30000,
-            payoutNightRate: input.payoutNightRate ?? 50000,
-            instruments: ["Piano"],
-            approvalStatus: input.teacherApprovalStatus ?? TeacherApprovalStatus.PENDING,
-            approvedAt: input.teacherApprovalStatus === TeacherApprovalStatus.APPROVED ? new Date() : null,
-            rejectedAt: input.teacherApprovalStatus === TeacherApprovalStatus.REJECTED ? new Date() : null,
-            rejectionReason: input.teacherApprovalStatus === TeacherApprovalStatus.REJECTED ? input.rejectionReason?.trim() || null : null,
-          },
-          update: teacherProfileData,
-        });
-      }
-    });
-
-    logger.info({ userId: input.userId }, "User updated by admin");
-    revalidatePath("/admin/users");
-    revalidatePath("/admin/teachers");
-    revalidatePath("/teacher/dashboard");
-
-    return { success: true };
-  } catch (error) {
-    logger.error({ error }, "Error updating user via admin");
-    return { success: false, error: "Failed to update user." };
   }
 }
 
@@ -3192,7 +3043,6 @@ export async function updateTeacherApprovalAction(input: {
     }
 
     revalidatePath("/admin/teachers");
-    revalidatePath("/admin/users");
     revalidatePath("/admin");
     revalidatePath(`/teachers/${profile.id}`);
     revalidatePath("/teacher/dashboard");
