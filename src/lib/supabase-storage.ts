@@ -17,7 +17,7 @@ export type StorageUploadResult = {
 
 let cachedSupabase: SupabaseClient | null = null;
 
-function getSupabaseClient(): SupabaseClient | null {
+export function getSupabaseClient(): SupabaseClient | null {
   if (cachedSupabase) return cachedSupabase;
 
   const url =

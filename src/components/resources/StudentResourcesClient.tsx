@@ -18,7 +18,10 @@ import {
   MessageCircle,
   GraduationCap,
   HardDrive,
+  Video,
 } from "lucide-react";
+import { isResourceVideo } from "@/lib/resource-video";
+import { ResourceVideoPlayer } from "./ResourceVideoPlayer";
 import { markResourceViewedAction } from "@/actions/resources";
 import { ResourceCategory } from "@prisma/client";
 
@@ -104,6 +107,7 @@ function getCategoryLabel(category: ResourceCategory) {
 }
 
 function getFileIcon(fileName: string, mimeType?: string | null) {
+  if (isResourceVideo(fileName, mimeType)) return <Video className="w-5 h-5 text-primary" />;
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   if (["mp3", "wav", "m4a", "ogg", "aac"].includes(ext) || mimeType?.startsWith("audio/")) {
     return <Music className="w-5 h-5 text-purple-600" />;
@@ -131,9 +135,8 @@ export function StudentResourcesClient({
   const [, startTransition] = useTransition();
 
   // Mark resource as viewed
-  const handleMarkViewed = (shareId: string, fileUrl: string) => {
-    // Open in Google Drive
-    window.open(fileUrl, "_blank", "noopener,noreferrer");
+  const handleMarkViewed = (shareId: string, fileUrl?: string) => {
+    if (fileUrl) window.open(fileUrl, "_blank", "noopener,noreferrer");
 
     // Update local state
     setResources((prev) =>
@@ -156,7 +159,7 @@ export function StudentResourcesClient({
 
       const matchesSearch = titleMatch || teacherMatch || notesMatch || courseMatch;
       const matchesCat =
-        selectedCategory === "ALL" || item.resource.category === selectedCategory;
+        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(item.resource.fileName, item.resource.mimeType) : item.resource.category === selectedCategory);
 
       return matchesSearch && matchesCat;
     });
@@ -183,7 +186,7 @@ export function StudentResourcesClient({
             Learning Resources & Practice Materials
           </h1>
           <p className="text-xs sm:text-sm text-body mt-1.5 max-w-2xl leading-relaxed">
-            Sheet music, recorded audio guides, and personalized lesson notes sent directly by your maestros. Access all files securely via Supabase Cloud.
+            Watch demonstration videos and explore sheet music, audio guides, and practice notes shared by your teachers.
           </p>
         </div>
 
@@ -223,6 +226,7 @@ export function StudentResourcesClient({
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
           {[
             { id: "ALL", label: `All (${totalReceived})` },
+            { id: "VIDEO", label: "Videos" },
             { id: "SHEET_MUSIC", label: "Sheets" },
             { id: "AUDIO_LESSON", label: "Audio" },
             { id: "LESSON_NOTES", label: "Notes" },
@@ -386,14 +390,14 @@ export function StudentResourcesClient({
                     )}
                   </div>
 
-                  <button
+                  {isResourceVideo(res.fileName, res.mimeType) ? <ResourceVideoPlayer id={res.id} title={res.title} onPlay={() => { if (!item.isViewed) handleMarkViewed(item.id); }} /> : <button
                     type="button"
                     onClick={() => handleMarkViewed(item.id, res.fileUrl)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:bg-primary-hover active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold shadow-sm transition-all btn-tactile cursor-pointer"
                   >
                     <span>Open File</span>
                     <ExternalLink className="w-3.5 h-3.5" />
-                  </button>
+                  </button>}
                 </div>
               </div>
             );

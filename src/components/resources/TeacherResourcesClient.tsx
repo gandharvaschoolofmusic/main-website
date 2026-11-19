@@ -25,7 +25,11 @@ import {
   Info,
   Calendar,
   Layers,
+  Video,
 } from "lucide-react";
+import { isResourceVideo, RESOURCE_FILE_ACCEPT, validateResourceVideo } from "@/lib/resource-video";
+import { uploadResourceVideo } from "@/lib/upload-resource-video";
+import { ResourceVideoPlayer } from "./ResourceVideoPlayer";
 import {
   uploadResourceAction,
   deleteResourceAction,
@@ -114,6 +118,7 @@ function getCategoryLabel(category: ResourceCategory) {
 }
 
 function getFileIcon(fileName: string, mimeType?: string | null) {
+  if (isResourceVideo(fileName, mimeType)) return <Video className="w-5 h-5 text-primary" />;
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
   if (["mp3", "wav", "m4a", "ogg", "aac"].includes(ext) || mimeType?.startsWith("audio/")) {
     return <Music className="w-5 h-5 text-purple-600" />;
@@ -151,6 +156,7 @@ export function TeacherResourcesClient({
   const [uploadCategory, setUploadCategory] = useState<ResourceCategory>("SHEET_MUSIC");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
 
   // Share modal state
   const [sharingResource, setSharingResource] = useState<TeacherResourceItem | null>(null);
@@ -170,7 +176,7 @@ export function TeacherResourcesClient({
         (res.description && res.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCat =
-        selectedCategory === "ALL" || res.category === selectedCategory;
+        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(res.fileName, res.mimeType) : res.category === selectedCategory);
 
       return matchesSearch && matchesCat;
     });
@@ -180,6 +186,9 @@ export function TeacherResourcesClient({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(isResourceVideo(file.name, file.type) ? validateResourceVideo(file.name, file.size) : null);
+      setUploadProgress(null);
+      if (isResourceVideo(file.name, file.type)) setUploadCategory("OTHER");
       setSelectedFile(file);
       if (!uploadTitle) {
         // Auto-generate a readable title from file name
@@ -213,7 +222,9 @@ export function TeacherResourcesClient({
     formData.append("file", selectedFile);
 
     startTransition(async () => {
-      const res = await uploadResourceAction(formData);
+      const res = isResourceVideo(selectedFile.name, selectedFile.type)
+        ? await uploadResourceVideo(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
+        : await uploadResourceAction(formData).catch(() => ({ success: false, error: "Upload interrupted. Please try again.", data: undefined }));
       if (!res.success) {
         setUploadError(res.error || "Upload failed. Please check file size and credentials.");
       } else {
@@ -496,6 +507,7 @@ export function TeacherResourcesClient({
         <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-1">
           {[
             { id: "ALL", label: "All" },
+            { id: "VIDEO", label: "Videos" },
             { id: "SHEET_MUSIC", label: "Sheets" },
             { id: "AUDIO_LESSON", label: "Audio" },
             { id: "LESSON_NOTES", label: "Notes" },
@@ -532,7 +544,7 @@ export function TeacherResourcesClient({
           <p className="text-xs text-body-muted mt-1 max-w-sm">
             {searchQuery || selectedCategory !== "ALL"
               ? "Try adjusting your search terms or category filter."
-              : "Upload classical sheet music, vocal warm-up MP3s, or practice notes to share with your students."}
+              : "Upload demonstration videos, sheet music, audio, or practice notes to share with your students."}
           </p>
           {!(searchQuery || selectedCategory !== "ALL") && (
             <button
@@ -620,7 +632,7 @@ export function TeacherResourcesClient({
                 {/* Card Action Footer */}
                 <div className="mt-5 pt-3.5 border-t border-border-default/60 flex items-center justify-between gap-2">
                   {/* Google Drive Link */}
-                  <a
+                  {isResourceVideo(item.fileName, item.mimeType) ? <ResourceVideoPlayer id={item.id} title={item.title} /> : <a
                     href={item.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -628,7 +640,7 @@ export function TeacherResourcesClient({
                   >
                     <span>Open File</span>
                     <ExternalLink className="w-3 h-3" />
-                  </a>
+                  </a>}
 
                   {/* Actions */}
                   <div className="flex items-center gap-1.5">
@@ -661,7 +673,7 @@ export function TeacherResourcesClient({
       {/* ─── Modal 1: Upload New Resource ──────────────────────────────────── */}
       {isUploadOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-xs animate-in fade-in duration-150">
-          <div className="relative w-full max-w-lg rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-border-default overflow-hidden animate-in zoom-in-95 duration-150">
+          <div className="relative w-full max-w-lg max-h-[90dvh] overflow-y-auto rounded-3xl bg-white p-6 sm:p-7 shadow-2xl border border-border-default animate-in zoom-in-95 duration-150">
             {/* Modal Header */}
             <div className="flex items-center justify-between pb-3.5 border-b border-border-default">
               <div className="flex items-center gap-2.5">
@@ -673,7 +685,7 @@ export function TeacherResourcesClient({
                     Upload Learning Resource
                   </h3>
                   <p className="text-[11px] text-body-muted">
-                    Stored securely on Supabase Cloud
+                    Videos up to 250 MB · Other files up to 25 MB
                   </p>
                 </div>
               </div>
@@ -681,6 +693,8 @@ export function TeacherResourcesClient({
               <button
                 type="button"
                 onClick={() => setIsUploadOpen(false)}
+                disabled={isPending}
+                aria-label="Close upload"
                 className="p-1 rounded-lg text-body-muted hover:text-heading hover:bg-neutral-100 transition-colors"
               >
                 <X className="w-5 h-5" />
@@ -688,7 +702,7 @@ export function TeacherResourcesClient({
             </div>
 
             {uploadError && (
-              <div className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
+              <div role="alert" className="mt-4 p-3 rounded-xl bg-rose-50 border border-rose-200 text-xs text-rose-700 flex items-start gap-2">
                 <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
                 <span>{uploadError}</span>
               </div>
@@ -715,11 +729,14 @@ export function TeacherResourcesClient({
               {/* File Dropzone */}
               <div>
                 <label className="block text-xs font-semibold text-heading mb-1.5">
-                  Select File (Max 25MB)
+                  Select file or video
                 </label>
                 <div className="relative rounded-2xl border-2 border-dashed border-border-default hover:border-primary/50 bg-bg-alt/10 hover:bg-bg-alt/25 transition-colors p-5 text-center cursor-pointer">
                   <input
                     type="file"
+                    accept={RESOURCE_FILE_ACCEPT}
+                    aria-label="Select learning material"
+                    disabled={isPending}
                     required
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
@@ -743,7 +760,7 @@ export function TeacherResourcesClient({
                           Drop file here or click to browse
                         </p>
                         <p className="text-[10px] text-body-muted mt-0.5">
-                          PDF sheet music, MP3/WAV audio, DOCX notes, MP4, etc.
+                          MP4, WebM, MOV, M4V, PDF, audio, and notes. MP4 is recommended for video.
                         </p>
                       </div>
                     )}
@@ -801,10 +818,16 @@ export function TeacherResourcesClient({
               </div>
 
               {/* Submit Buttons */}
+              {isPending && uploadProgress !== null && <div role="status" className="space-y-2 text-xs text-body">
+                <div className="flex justify-between"><span>{uploadProgress === 100 ? "Saving your video…" : "Uploading video…"}</span><span>{uploadProgress}%</span></div>
+                <progress max={100} value={uploadProgress} aria-label="Video upload progress" className="h-2 w-full accent-primary" />
+                <p className="text-body-muted">Keep this page open until the upload finishes.</p>
+              </div>}
               <div className="pt-2 flex items-center justify-end gap-2.5">
                 <button
                   type="button"
                   onClick={() => setIsUploadOpen(false)}
+                  disabled={isPending}
                   className="px-4 py-2 rounded-xl text-xs font-semibold text-body hover:text-heading hover:bg-neutral-100 transition-colors"
                 >
                   Cancel
