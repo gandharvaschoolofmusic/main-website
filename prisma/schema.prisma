@@ -748,6 +748,7 @@ enum TrialRequestStatus {
   PENDING
   ALLOTTED
   CANCELLED
+  NOT_CONVERTED
 }
 
 enum TeacherPayoutStatus {

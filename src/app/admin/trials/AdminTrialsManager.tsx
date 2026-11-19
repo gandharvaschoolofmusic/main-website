@@ -124,7 +124,7 @@ export interface TimelineActivityRecord {
   date: string;
   title: string;
   description?: string;
-  status: "NEW" | "CONTACTED" | "CONFIRMED" | "COMPLETED" | "FOLLOW_UP" | "CONVERTED";
+  status: "NEW" | "CONTACTED" | "CONFIRMED" | "COMPLETED" | "FOLLOW_UP" | "CONVERTED" | "NOT_CONVERTED";
 }
 
 interface ParsedStudentNotes {
@@ -187,9 +187,11 @@ export type TrialLeadStageKey =
   | "CONFIRMED"
   | "COMPLETED"
   | "FOLLOW_UP"
-  | "CONVERTED";
+  | "CONVERTED"
+  | "NOT_CONVERTED";
 
 export function getLeadStageKey(lead: AdminTrialRequestItem): TrialLeadStageKey {
+  if (lead.status === TrialRequestStatus.NOT_CONVERTED) return "NOT_CONVERTED";
   if (lead.isConverted) return "CONVERTED";
   if (lead.followUpAt && lead.lessonStatus === "COMPLETED") return "FOLLOW_UP";
   if (lead.lessonStatus === "COMPLETED") return "COMPLETED";
@@ -280,6 +282,8 @@ function getCountdownPill(targetIso: string, isMounted = true): { label: string;
 function getLeadStepIndex(lead: AdminTrialRequestItem): number {
   const stage = getLeadStageKey(lead);
   switch (stage) {
+    case "NOT_CONVERTED":
+      return -1;
     case "CONVERTED":
       return 5;
     case "FOLLOW_UP":
@@ -314,12 +318,12 @@ export function AdminTrialsManager({
   }, []);
   const [requests, setRequests] = useState<AdminTrialRequestItem[]>(initialRequests);
   const [selectedLeadId, setSelectedLeadId] = useState<string>(
-    initialRequests[0]?.id || ""
+    initialRequests.find(lead => lead.status !== TrialRequestStatus.NOT_CONVERTED)?.id || ""
   );
 
   // Filters
   const [searchQuery, setSearchQuery] = useState("");
-  const [pipelineStageFilter, setPipelineStageFilter] = useState("ALL");
+  const [pipelineStageFilter, setPipelineStageFilter] = useState("ALL_ACTIVE");
   const [courseInterestFilter, setCourseInterestFilter] = useState("ALL");
   const [assignedTeacherFilter, setAssignedTeacherFilter] = useState("ALL");
   const [trialDateFilter, setTrialDateFilter] = useState("NEXT_30_DAYS");
@@ -417,7 +421,7 @@ export function AdminTrialsManager({
 
   // Selected Lead Inspector Object
   const selectedLead = useMemo(() => {
-    return requests.find((r) => r.id === selectedLeadId) || requests[0] || null;
+    return requests.find((r) => r.id === selectedLeadId) || requests.find((r) => r.status !== TrialRequestStatus.NOT_CONVERTED) || null;
   }, [requests, selectedLeadId]);
 
   // Active Lead inside Drawer
@@ -431,7 +435,9 @@ export function AdminTrialsManager({
       setDrawerTeacherId(drawerLead.allottedTeacherId || "");
       const parsed = parseStudentNotes(drawerLead.studentNotes);
       setDrawerNotes(parsed.plainNotes || "");
-      if (drawerLead.isConverted) {
+      if (drawerLead.status === TrialRequestStatus.NOT_CONVERTED) {
+        setDrawerStatusSelection("NOT_CONVERTED");
+      } else if (drawerLead.isConverted) {
         setDrawerStatusSelection("CONVERTED");
       } else if (drawerLead.lessonStatus === "COMPLETED") {
         setDrawerStatusSelection("COMPLETED");
@@ -464,6 +470,7 @@ export function AdminTrialsManager({
     let completedCount = 0;
     let followUpCount = 0;
     let convertedCount = 0;
+    let notConvertedCount = 0;
 
     requests.forEach((r) => {
       const stage = getLeadStageKey(r);
@@ -473,6 +480,7 @@ export function AdminTrialsManager({
       else if (stage === "COMPLETED") completedCount++;
       else if (stage === "FOLLOW_UP") followUpCount++;
       else if (stage === "CONVERTED") convertedCount++;
+      else if (stage === "NOT_CONVERTED") notConvertedCount++;
     });
 
     return {
@@ -482,7 +490,8 @@ export function AdminTrialsManager({
       completedCount,
       followUpCount,
       convertedCount,
-      activeCount: requests.length - convertedCount,
+      notConvertedCount,
+      activeCount: requests.length - convertedCount - notConvertedCount,
       total: requests.length,
     };
   }, [requests]);
@@ -497,7 +506,7 @@ export function AdminTrialsManager({
       (r) => r.status === TrialRequestStatus.PENDING && !r.isContacted && !r.isConverted
     );
     const newToday = requests.filter(
-      (r) => new Date(r.createdAt) >= startOfToday && !r.isConverted
+      (r) => new Date(r.createdAt) >= startOfToday && !r.isConverted && r.status !== TrialRequestStatus.NOT_CONVERTED
     ).length;
 
     const contacted = requests.filter(
@@ -507,7 +516,7 @@ export function AdminTrialsManager({
       (r) => r.status === TrialRequestStatus.ALLOTTED && r.lessonStatus !== "COMPLETED" && !r.isConverted
     );
     const trialComplete = requests.filter(
-      (r) => r.lessonStatus === "COMPLETED" && !r.isConverted
+      (r) => r.lessonStatus === "COMPLETED" && !r.isConverted && r.status !== TrialRequestStatus.NOT_CONVERTED
     );
     const converted = requests.filter((r) => r.isConverted);
 
@@ -561,7 +570,7 @@ export function AdminTrialsManager({
         const stage = getLeadStageKey(r);
         if (pipelineStageFilter === "ALL_ACTIVE") {
           // All active in-progress stages (excluding converted students)
-          if (r.isConverted || stage === "CONVERTED") return false;
+          if (r.isConverted || stage === "CONVERTED" || stage === "NOT_CONVERTED") return false;
         } else if (
           pipelineStageFilter === "NEW_LEADS" ||
           pipelineStageFilter === "NEW"
@@ -583,6 +592,8 @@ export function AdminTrialsManager({
           if (stage !== "FOLLOW_UP") return false;
         } else if (pipelineStageFilter === "CONVERTED") {
           if (stage !== "CONVERTED") return false;
+        } else if (pipelineStageFilter === "NOT_CONVERTED") {
+          if (stage !== "NOT_CONVERTED") return false;
         }
       }
 
@@ -1063,9 +1074,32 @@ export function AdminTrialsManager({
   // Step 3 Drawer: Save Changes button in Details tab
   const handleDrawerSaveChanges = () => {
     if (!drawerLead) return;
+    if (drawerLead.status === TrialRequestStatus.NOT_CONVERTED) return;
 
     const parsed = parseStudentNotes(drawerLead.studentNotes);
     parsed.plainNotes = drawerNotes;
+    if (drawerStatusSelection === "NOT_CONVERTED") {
+      parsed.activities.push({ id: crypto.randomUUID(), date: new Date().toISOString(), title: "Not Converted · Closed", status: "NOT_CONVERTED" });
+      const notes = serializeStudentNotes(parsed);
+      startTransition(async () => {
+        try {
+          const result = await updateTrialLeadStatusAction({ trialRequestId: drawerLead.id, status: TrialRequestStatus.NOT_CONVERTED, studentNotes: notes });
+          if (!result.success) {
+            setStatusMessage({ type: "error", text: result.error || "Could not close this booking. Please try again." });
+            return;
+          }
+          setRequests(previous => previous.map(lead => lead.id === drawerLead.id
+            ? { ...lead, status: TrialRequestStatus.NOT_CONVERTED, followUpAt: null, studentNotes: notes } : lead));
+          setIsDrawerOpen(false);
+          setDrawerLeadId(null);
+          setSelectedLeadId("");
+          setStatusMessage({ type: "success", text: "Trial booking closed as Not Converted." });
+        } catch {
+          setStatusMessage({ type: "error", text: "Could not close this booking. Please try again." });
+        }
+      });
+      return;
+    }
     const serializedNotes = serializeStudentNotes(parsed);
 
     const assignedTeacher = teachers.find((t) => t.id === drawerTeacherId);
@@ -1136,6 +1170,7 @@ export function AdminTrialsManager({
 
   // Open Allotment Modal
   const openAllotModal = (lead: AdminTrialRequestItem) => {
+    if (lead.status === TrialRequestStatus.NOT_CONVERTED) return;
     setAllotTargetLeadId(lead.id);
     setSelectedLeadId(lead.id);
     setAllotTeacherId(
@@ -1214,6 +1249,7 @@ export function AdminTrialsManager({
 
   // 1-Click Convert to Enrolled Student (Directly converts and moves to Enrollment section)
   const handleDirectConvert = (lead: AdminTrialRequestItem) => {
+    if (lead.status === TrialRequestStatus.NOT_CONVERTED) return;
     if (lead.isConverted) {
       router.push(`/admin/enrollments?studentId=${lead.studentId}&trialId=${lead.id}`);
       return;
@@ -1356,6 +1392,9 @@ export function AdminTrialsManager({
 
   // Render Status Badge
   const renderStatusBadge = (lead: AdminTrialRequestItem) => {
+    if (lead.status === TrialRequestStatus.NOT_CONVERTED) {
+      return <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-neutral-100 text-neutral-700">Not Converted · Closed</span>;
+    }
     if (lead.isConverted) {
       return (
         <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider bg-purple-50 text-purple-700 border border-purple-200">
@@ -1778,6 +1817,7 @@ export function AdminTrialsManager({
             <option value="TRIAL_COMPLETE">Trial Completed ({stageCounts.completedCount})</option>
             <option value="FOLLOW_UP">Needs Follow-up ({stageCounts.followUpCount})</option>
             <option value="CONVERTED">Enrolled / Converted ({stageCounts.convertedCount})</option>
+            <option value="NOT_CONVERTED">Not Converted / Closed ({stageCounts.notConvertedCount})</option>
           </select>
         </div>
 
@@ -1923,7 +1963,7 @@ export function AdminTrialsManager({
                             <div className="text-xs font-medium text-heading">
                               {req.allottedTeacherName}
                             </div>
-                          ) : (
+                          ) : req.status === TrialRequestStatus.NOT_CONVERTED ? <span className="text-xs text-body/60">—</span> : (
                             <button
                               type="button"
                               onClick={(e) => {
@@ -1943,7 +1983,7 @@ export function AdminTrialsManager({
 
                         <td className="py-3.5 px-4 text-right">
                           <div className="flex items-center justify-end gap-1.5">
-                            {req.isConverted ? (
+                            {req.status === TrialRequestStatus.NOT_CONVERTED ? <span className="text-xs text-body/60">Closed</span> : req.isConverted ? (
                               <span className="px-2 py-0.5 rounded-md bg-emerald-50 text-emerald-700 text-[10px] font-bold border border-emerald-200">
                                 Enrolled
                               </span>
@@ -2028,6 +2068,7 @@ export function AdminTrialsManager({
                   type="button"
                   disabled={isPending}
                   onClick={() => handleDirectConvert(selectedLead)}
+                  hidden={selectedLead.status === TrialRequestStatus.NOT_CONVERTED}
                   className="w-full py-2.5 px-4 rounded-xl bg-[#3C096C] hover:bg-[#2D0752] text-white text-xs font-bold flex items-center justify-center gap-2 transition-all shadow-xs active:scale-[0.98] cursor-pointer disabled:opacity-50"
                 >
                   {isPending ? (
@@ -2069,7 +2110,7 @@ export function AdminTrialsManager({
                   <span>Email</span>
                 </a>
 
-                {selectedLead.isConverted ? (
+                {selectedLead.isConverted || selectedLead.status === TrialRequestStatus.NOT_CONVERTED ? (
                   <a
                     href={selectedLead.studentPhone ? `https://wa.me/${selectedLead.studentPhone.replace(/[^0-9]/g, "")}` : "#"}
                     target="_blank"
@@ -2260,7 +2301,7 @@ export function AdminTrialsManager({
                     {/* Vertical connecting track line */}
                     <div className="absolute left-[17px] top-3.5 bottom-3.5 w-0.5 bg-neutral-200" />
 
-                    {PIPELINE_STEPS.map((step, idx) => {
+                    {drawerLead.status === TrialRequestStatus.NOT_CONVERTED ? <p className="rounded-xl bg-neutral-100 p-3 text-xs text-body">Not Converted · This booking is closed. Its details and activity history are kept for reference.</p> : PIPELINE_STEPS.map((step, idx) => {
                       const currentActiveIdx = getLeadStepIndex(drawerLead);
                       const isCurrent = currentActiveIdx === idx;
                       const isPassed = currentActiveIdx > idx;
@@ -2430,6 +2471,7 @@ export function AdminTrialsManager({
                       <div className="relative">
                         <select
                           value={drawerTeacherId}
+                          disabled={drawerLead.status === TrialRequestStatus.NOT_CONVERTED}
                           onChange={(e) => setDrawerTeacherId(e.target.value)}
                           className="w-full appearance-none rounded-xl border border-neutral-200/90 bg-white px-3 py-2 text-xs text-heading focus:outline-none focus:border-blue-600 transition-colors pr-8"
                         >
@@ -2452,6 +2494,7 @@ export function AdminTrialsManager({
                       <textarea
                         rows={2}
                         value={drawerNotes}
+                        disabled={drawerLead.status === TrialRequestStatus.NOT_CONVERTED}
                         onChange={(e) => setDrawerNotes(e.target.value)}
                         placeholder="Add notes..."
                         className="w-full rounded-xl border border-neutral-200/90 bg-white p-2.5 text-xs text-heading focus:outline-none focus:border-blue-600 transition-colors resize-none"
@@ -2472,7 +2515,8 @@ export function AdminTrialsManager({
                       </div>
                       <div className="relative">
                         <select
-                          disabled={drawerLead.isConverted}
+                          disabled={isPending || drawerLead.isConverted || drawerLead.status === TrialRequestStatus.NOT_CONVERTED}
+                          aria-label="Trial booking status"
                           value={drawerLead.isConverted ? "CONVERTED" : drawerStatusSelection}
                           onChange={(e) => {
                             if (e.target.value === "CONVERTED") {
@@ -2493,6 +2537,7 @@ export function AdminTrialsManager({
                           <option value="COMPLETED">COMPLETED</option>
                           <option value="FOLLOW_UP">FOLLOW-UP</option>
                           <option value="CONVERTED">CONVERTED (Click to Convert)</option>
+                          <option value="NOT_CONVERTED">NOT CONVERTED — Close booking</option>
                         </select>
                         <ChevronDown className="w-4 h-4 text-body/50 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
@@ -2627,6 +2672,7 @@ export function AdminTrialsManager({
                   type="button"
                   disabled={isPending}
                   onClick={handleDrawerSaveChanges}
+                  hidden={drawerLead.status === TrialRequestStatus.NOT_CONVERTED}
                   className="py-2 px-5 rounded-xl bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs shadow-xs flex items-center gap-1.5 transition-all active:scale-[0.98]"
                 >
                   {isPending ? (
@@ -2639,6 +2685,7 @@ export function AdminTrialsManager({
               ) : drawerTab === "followups" ? (
                 <button
                   type="button"
+                  disabled={drawerLead.status === TrialRequestStatus.NOT_CONVERTED}
                   onClick={() => {
                     setFollowUpTargetLeadId(drawerLead.id);
                     setIsAddFollowUpModalOpen(true);

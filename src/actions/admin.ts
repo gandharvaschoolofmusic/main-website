@@ -2104,6 +2104,9 @@ export async function allotTrialTeacherAction(input: {
     if (!trialRequest) {
       return { success: false, error: "Trial request not found." };
     }
+    if (trialRequest.status === TrialRequestStatus.NOT_CONVERTED) {
+      return { success: false, error: "This trial booking is closed as Not Converted." };
+    }
 
     const teacher = await db.user.findUnique({
       where: { id: input.teacherId, role: Role.TEACHER },
@@ -2337,6 +2340,29 @@ export async function updateTrialLeadStatusAction(input: {
       select: { isConverted: true, status: true, allottedLessonId: true, studentId: true },
     });
 
+    if (!currentLead) return { success: false, error: "Trial booking not found." };
+    if (currentLead.status === TrialRequestStatus.NOT_CONVERTED) {
+      return input.status === TrialRequestStatus.NOT_CONVERTED
+        ? { success: true }
+        : { success: false, error: "This trial booking is closed as Not Converted." };
+    }
+    if (input.status === TrialRequestStatus.NOT_CONVERTED) {
+      // Closing a sales lead does not cancel its lesson, refund attendance, or
+      // change the student's account. Only close the lead and clear reminders.
+      const closed = await db.trialRequest.updateMany({
+        where: { id: input.trialRequestId, isConverted: false },
+        data: {
+          status: TrialRequestStatus.NOT_CONVERTED,
+          followUpAt: null,
+          ...(input.studentNotes !== undefined ? { studentNotes: input.studentNotes } : {}),
+        },
+      });
+      if (!closed.count) return { success: false, error: "An enrolled student cannot be marked Not Converted." };
+      revalidatePath("/admin/trials");
+      revalidatePath("/admin");
+      return { success: true, message: "Trial booking closed as Not Converted." };
+    }
+
     if (currentLead?.isConverted) {
       // Once converted through trial portal, status cannot be reverted to uncontacted or pending
       if (input.isConverted === false || input.isContacted === false || (input.status && input.status === TrialRequestStatus.PENDING)) {
@@ -2389,7 +2415,7 @@ export async function updateTrialLeadStatusAction(input: {
     }
 
     const updated = await db.trialRequest.update({
-      where: { id: input.trialRequestId },
+      where: { id: input.trialRequestId, status: { not: TrialRequestStatus.NOT_CONVERTED } },
       data: updateData,
     });
 
@@ -2465,14 +2491,18 @@ export async function convertTrialToEnrollmentAction(input: {
       return { success: false, error: "Trial lead not found." };
     }
 
-    // Mark trial request as converted ONLY (universal rule: no auto-allotting courses)
-    await db.trialRequest.update({
-      where: { id: trialRequest.id },
+    if (trialRequest.status === TrialRequestStatus.NOT_CONVERTED) {
+      return { success: false, error: "This trial booking is closed as Not Converted." };
+    }
+    // Guard the write too, in case another administrator closes the lead meanwhile.
+    const converted = await db.trialRequest.updateMany({
+      where: { id: trialRequest.id, status: { not: TrialRequestStatus.NOT_CONVERTED } },
       data: {
         isConverted: true,
         convertedAt: new Date(),
       },
     });
+    if (!converted.count) return { success: false, error: "This trial booking has been closed. Refresh the page." };
 
     await db.studentTrialStatus.updateMany({
       where: { studentId: trialRequest.studentId },
