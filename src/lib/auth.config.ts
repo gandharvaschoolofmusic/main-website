@@ -54,11 +54,11 @@ export const authConfig: NextAuthConfig = {
       };
 
       // 1. If user is logged in and visits auth pages, redirect to dashboard
-      if (isLoggedIn && isAuthRoute) {
+      // Middleware cannot check admin revocations in the database. Let admins
+      // reach sign-in even with an old cookie instead of looping back to /admin.
+      if (isLoggedIn && isAuthRoute && role !== "ADMIN") {
         const target =
-          role === "ADMIN"
-            ? "/admin"
-            : role === "TEACHER"
+          role === "TEACHER"
             ? "/teacher/dashboard"
             : role === "STUDENT"
             ? "/student/dashboard"
@@ -130,9 +130,9 @@ export const authConfig: NextAuthConfig = {
         token.emailVerified = user.emailVerified;
         token.timezone = user.timezone;
         token.picture = user.image;
-        if (!token.sessionId) {
-          token.sessionId = user.sessionId || (typeof crypto !== "undefined" && crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2) + Date.now().toString(36));
-        }
+        // A successful authentication starts a new session, never revives a
+        // revoked one from the same browser. Refreshes keep this ID unchanged.
+        token.sessionId = crypto.randomUUID();
       }
 
       // Ensure every token has a stable sessionId

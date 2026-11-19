@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useTransition } from "react";
+import { signOut } from "next-auth/react";
 import {
   getAdminDeviceSessionsAction,
   revokeAdminDeviceSessionAction,
@@ -89,11 +90,15 @@ export function AdminDeviceSessionsPanel({
     try {
       const res = await revokeAdminDeviceSessionAction(targetSession.sessionId, totpCode);
       if (res.success) {
+        if (targetSession.isCurrent) {
+          await signOut({ callbackUrl: "/login" });
+          return;
+        }
         // Remove revoked session from state
         setSessions((prev) => prev.filter((s) => s.sessionId !== targetSession.sessionId));
         setMessage({
           type: "success",
-          text: `Device access revoked for "${targetSession.deviceName || targetSession.browser}". That device has been disconnected.`,
+          text: `Signed out of "${targetSession.deviceName || targetSession.browser}". You can sign in again on that device anytime.`,
         });
         setTargetSession(null);
         setTotpCode("");
@@ -101,7 +106,7 @@ export function AdminDeviceSessionsPanel({
         setRevokeError(res.error || "Verification failed. Please check your Google Authenticator code.");
       }
     } catch (err: any) {
-      setRevokeError(err?.message || "Failed to revoke session.");
+      setRevokeError(err?.message || "Failed to sign out device.");
     } finally {
       setIsRevoking(false);
     }
@@ -189,9 +194,9 @@ export function AdminDeviceSessionsPanel({
         <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-200 text-xs text-amber-900 flex items-start gap-2.5">
           <ShieldAlert className="w-4 h-4 shrink-0 text-amber-700 mt-0.5" />
           <div className="space-y-0.5">
-            <p className="font-bold">Google Authenticator Required For Revocation</p>
+            <p className="font-bold">Google Authenticator Required For Sign Out</p>
             <p className="text-[11px] text-amber-800 leading-relaxed">
-              To revoke or remove device access, two-factor authentication must be active on your account. Please complete your 2FA setup in the section above.
+              To sign out a device, two-factor authentication must be active on your account. Please complete your 2FA setup in the section above.
             </p>
           </div>
         </div>
@@ -269,7 +274,7 @@ export function AdminDeviceSessionsPanel({
                     className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 text-xs font-bold border border-rose-200 transition-all cursor-pointer shadow-2xs"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    <span>{session.isCurrent ? "Revoke (Sign Out)" : "Remove Device"}</span>
+                    <span>{session.isCurrent ? "Sign Out This Device" : "Sign Out Device"}</span>
                   </button>
                 </div>
               </div>
@@ -288,7 +293,7 @@ export function AdminDeviceSessionsPanel({
                   <ShieldAlert className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-bold text-heading">Verify Device Revocation</h3>
+                  <h3 className="text-base font-bold text-heading">Sign Out Device</h3>
                   <p className="text-xs text-body-muted">Two-Factor Authentication Check</p>
                 </div>
               </div>
@@ -312,7 +317,7 @@ export function AdminDeviceSessionsPanel({
             </div>
 
             <p className="text-xs text-body leading-relaxed">
-              To confirm that you want to disconnect this device, open{" "}
+              This only signs out the current session. You can sign in again on this device anytime. To confirm, open{" "}
               <strong className="text-heading">Google Authenticator</strong> and enter the 6-digit verification code below:
             </p>
 
@@ -359,7 +364,7 @@ export function AdminDeviceSessionsPanel({
                   className="px-4 py-2.5 rounded-xl text-xs font-bold bg-rose-600 hover:bg-rose-700 text-white transition-all cursor-pointer disabled:opacity-50 inline-flex items-center gap-1.5 shadow-2xs"
                 >
                   {isRevoking ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
-                  <span>Revoke Device Access</span>
+                  <span>Sign Out Device</span>
                 </button>
               </div>
             </form>

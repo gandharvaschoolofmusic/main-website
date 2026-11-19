@@ -3639,10 +3639,11 @@ export async function revokeAdminDeviceSessionAction(
       return { success: false, error: result.error || "Failed to revoke device session." };
     }
 
-    revalidatePath("/admin/settings");
+    // The client updates the list and clears its cookie if signing itself out.
+    // Re-rendering this page first would redirect that client mid-action.
     return {
       success: true,
-      message: result.message || "Device session removed successfully.",
+      message: result.message || "Device signed out successfully.",
     };
   } catch (error) {
     logger.error({ error, targetSessionId }, "Failed to revoke admin device session");

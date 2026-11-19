@@ -1,5 +1,6 @@
 import NextAuth from "next-auth";
 import { authConfig } from "@/lib/auth.config";
+import { validateSessionJwt } from "@/lib/auth-jwt";
 import Credentials from "next-auth/providers/credentials";
 import Google from "next-auth/providers/google";
 import { PrismaAdapter } from "@auth/prisma-adapter";
@@ -183,6 +184,7 @@ if (process.env.AUTH_GOOGLE_ID && process.env.AUTH_GOOGLE_SECRET) {
 
 export const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
+  callbacks: { ...authConfig.callbacks, jwt: validateSessionJwt },
   adapter: PrismaAdapter(db),
   session: {
     strategy: "jwt",

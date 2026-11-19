@@ -188,7 +188,7 @@ export async function revokeAdminDeviceSession({
     if (!admin.twoFactorEnabled || !admin.twoFactorSecret) {
       return {
         success: false,
-        error: "Google Authenticator 2FA must be configured on your account before revoking devices.",
+        error: "Google Authenticator 2FA must be configured on your account before signing out devices.",
       };
     }
 
@@ -233,7 +233,7 @@ export async function revokeAdminDeviceSession({
     }
 
     // Revoke the session in database
-    await db.adminDeviceSession.updateMany({
+    const revoked = await db.adminDeviceSession.updateMany({
       where: {
         sessionId: targetSessionId,
         userId: adminUserId,
@@ -243,9 +243,13 @@ export async function revokeAdminDeviceSession({
       },
     });
 
+    if (!revoked.count) {
+      return { success: false, error: "Device session not found. Refresh the device list and try again." };
+    }
+
     return {
       success: true,
-      message: "Device access revoked successfully. That device has been disconnected.",
+      message: "Device signed out successfully. You can sign in again on that device anytime.",
     };
   } catch (err: any) {
     logger.error({ err, adminUserId, targetSessionId }, "Error revoking device session");
