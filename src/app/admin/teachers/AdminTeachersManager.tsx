@@ -7,7 +7,6 @@ import { formatToIST } from "@/lib/timezone";
 import {
   Globe,
   Upload,
-  UserPlus,
   Search,
   ChevronRight,
   ChevronDown,
@@ -629,15 +628,6 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
             <span>Export Roster</span>
           </button>
 
-          {/* Invite Faculty button */}
-          <button
-            type="button"
-            onClick={() => showToast("Faculty invitation link copied to clipboard.")}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#3C096C] hover:bg-[#2F0755] text-white text-xs font-bold transition-all shadow-xs active:scale-95"
-          >
-            <UserPlus className="w-4 h-4 text-white" />
-            <span>Invite Faculty</span>
-          </button>
         </div>
       </div>
 

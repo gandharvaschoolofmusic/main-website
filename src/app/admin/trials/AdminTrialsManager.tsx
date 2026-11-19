@@ -2537,7 +2537,7 @@ export function AdminTrialsManager({
                           <option value="COMPLETED">COMPLETED</option>
                           <option value="FOLLOW_UP">FOLLOW-UP</option>
                           <option value="CONVERTED">CONVERTED (Click to Convert)</option>
-                          <option value="NOT_CONVERTED">NOT CONVERTED — Close booking</option>
+                          <option value="NOT_CONVERTED">NOT-CONVERTED</option>
                         </select>
                         <ChevronDown className="w-4 h-4 text-body/50 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
