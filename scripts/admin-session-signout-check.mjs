@@ -13,7 +13,7 @@ const mocks = {
     user:{findUnique:async()=>s.admin},
     adminDeviceSession:{
       findUnique:async({where})=>s.rows.get(where.sessionId)||null,
-      updateMany:async({where,data})=>{const row=s.rows.get(where.sessionId);if(!row||row.userId!==where.userId)return {count:0};Object.assign(row,data);return {count:1};},
+      updateMany:async({where,data})=>{const row=s.rows.get(where.sessionId);if(!row||(where.userId!==undefined&&row.userId!==where.userId)||(where.isRevoked!==undefined&&row.isRevoked!==where.isRevoked)||(where.lastSeenAt&&row.lastSeenAt>where.lastSeenAt.lte))return {count:0};Object.assign(row,data);return {count:1};},
       upsert:async({where,create,update})=>{const row=s.rows.get(where.sessionId);if(row){Object.assign(row,update);return row;}s.rows.set(where.sessionId,create);return create;}
     }
   };`,
@@ -41,6 +41,15 @@ try {
   const track = token => syncAdminDeviceSession({userId:"admin-a",sessionId:token.sessionId,userAgent:"Same browser",ip:"192.0.2.1"});
   await track(oldToken);
   await track(otherToken);
+  const oldLoginAt=state.rows.get(oldToken.sessionId).loginAt;
+  const staleTime=new Date(Date.now()-120_000);
+  state.rows.get(oldToken.sessionId).lastSeenAt=staleTime;
+  await validateSessionJwt({token:{...oldToken}});
+  const refreshedTime=state.rows.get(oldToken.sessionId).lastSeenAt;
+  assert.ok(refreshedTime>staleTime,"Active session refreshes last seen");
+  await validateSessionJwt({token:{...oldToken}});
+  assert.equal(state.rows.get(oldToken.sessionId).lastSeenAt,refreshedTime,"Heartbeat writes are throttled");
+  assert.equal(state.rows.get(oldToken.sessionId).loginAt,oldLoginAt,"Original login time is preserved");
   const revoke = (sessionId,totpCode="123456")=>revokeAdminDeviceSession({adminUserId:"admin-a",targetSessionId:sessionId,totpCode});
   assert.equal((await revoke(oldToken.sessionId,"000000")).success,false);
   assert.equal((await validateSessionJwt({token:{...oldToken}})).sessionId,oldToken.sessionId);
@@ -48,7 +57,9 @@ try {
   state.rows.set("other-admin",{userId:"admin-b",sessionId:"other-admin",isRevoked:false});
   assert.equal((await revoke("other-admin")).success,false);
   assert.equal((await revoke(oldToken.sessionId)).success,true);
+  state.rows.get(oldToken.sessionId).lastSeenAt=staleTime;
   assert.equal(await validateSessionJwt({token:{...oldToken}}),null);
+  assert.equal(state.rows.get(oldToken.sessionId).lastSeenAt,staleTime,"Revoked sessions cannot update last seen");
   assert.equal(await validateSessionJwt({token:{...oldToken},trigger:"update",session:{user:{role:"STUDENT"}}}),null);
   assert.equal((await validateSessionJwt({token:{...otherToken}})).sessionId,otherToken.sessionId);
   // An in-flight metadata touch must never revive the old login.
@@ -112,4 +123,5 @@ try {
   console.log("PASS the same device can sign in with a fresh session; old cookies stay invalid");
   console.log("PASS session updates and metadata sync cannot revive a signed-out session");
   console.log("PASS open admin pages detect remote sign-out, tolerate network failures, and clean up polling");
+  console.log("PASS last seen tracks active sessions, throttles writes, and preserves login time");
 } finally { delete globalThis.adminSessionCheck; }

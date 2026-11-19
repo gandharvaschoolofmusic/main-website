@@ -260,7 +260,7 @@ export function AdminDeviceSessionsPanel({
 
                       <span className="flex items-center gap-1">
                         <Clock className="w-3 h-3 text-body/50" />
-                        <span>Logged in: {formatDate(session.loginAt)}</span>
+                        <span>Last seen: <time dateTime={session.lastSeenAt}>{formatDate(session.lastSeenAt)}</time></span>
                       </span>
                     </div>
                   </div>

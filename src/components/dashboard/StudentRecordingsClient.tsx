@@ -336,19 +336,19 @@ export function StudentRecordingsClient({
                 {/* 16:9 Video Canvas Thumbnail */}
                 <div
                   onClick={() => handleOpenPlayer(lecture, 0)}
-                  className="relative aspect-video w-full bg-gradient-to-br from-[#1C0B36] via-[#120824] to-[#0A0514] flex items-center justify-center cursor-pointer overflow-hidden border-b border-neutral-100"
+                  className="relative aspect-video w-full bg-gradient-to-br from-[#1C0B36] via-[#120824] to-[#0A0514] flex items-center justify-center cursor-pointer overflow-hidden"
                 >
                   {/* Subtle waveform grid aesthetic */}
                   <div className="absolute inset-0 opacity-15 bg-[radial-gradient(#FF7803_1px,transparent_1px)] [background-size:16px_16px]" />
 
                   {/* Play Button Trigger */}
-                  <div className="relative z-10 w-12 h-12 rounded-full bg-white/10 group-hover:bg-[#FF7803] text-white flex items-center justify-center backdrop-blur-md transition-all group-hover:scale-110 shadow-lg border border-white/20">
+                  <div className="relative z-10 w-12 h-12 rounded-full bg-white/10 group-hover:bg-[#FF7803] text-white flex items-center justify-center backdrop-blur-md transition-all group-hover:scale-110 shadow-lg">
                     <Play className="w-5 h-5 ml-0.5 fill-current" />
                   </div>
 
                   {/* Top Badges */}
                   <div className="absolute top-3 left-3 flex items-center gap-1.5">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#3C096C]/90 text-white backdrop-blur-xs border border-white/10">
+                    <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-[#3C096C]/90 text-white backdrop-blur-xs">
                       {lecture.instrument || "1-on-1"}
                     </span>
                     {partCount > 1 && (
@@ -464,11 +464,11 @@ export function StudentRecordingsClient({
           onClick={() => setActiveLecture(null)}
         >
           <div
-            className="relative w-full max-w-4xl bg-[#0F0C18] border border-white/10 rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
+            className="relative w-full max-w-4xl bg-[#0F0C18] rounded-3xl shadow-2xl overflow-hidden flex flex-col animate-in zoom-in-95 duration-200"
             onClick={(e) => e.stopPropagation()}
           >
             {/* Modal Header */}
-            <div className="flex items-center justify-between px-5 py-4 border-b border-white/10 bg-[#140E24]">
+            <div className="flex items-center justify-between px-5 py-4 bg-[#140E24]">
               <div className="space-y-0.5 min-w-0 pr-4">
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded text-[10px] font-bold bg-[#3C096C] text-white">
@@ -505,7 +505,7 @@ export function StudentRecordingsClient({
 
             {/* Multi-part tabs if session was reconnected */}
             {activeLecture.recordings && activeLecture.recordings.length > 1 && (
-              <div className="px-5 py-2.5 bg-[#140E24] border-t border-white/10 flex items-center gap-2 overflow-x-auto">
+              <div className="px-5 py-2.5 bg-[#140E24] flex items-center gap-2 overflow-x-auto">
                 <span className="text-xs font-semibold text-white/60 shrink-0">
                   Lecture Parts:
                 </span>
@@ -527,7 +527,7 @@ export function StudentRecordingsClient({
             )}
 
             {/* Modal Footer */}
-            <div className="px-5 py-3.5 bg-[#120E20] border-t border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-400">
+            <div className="px-5 py-3.5 bg-[#120E20] flex flex-wrap items-center justify-between gap-3 text-xs text-neutral-400">
               <div className="flex items-center gap-3">
                 <span>Duration: {formatDuration(activeLecture.totalDurationSeconds, activeLecture.durationMinutes)}</span>
                 <span>•</span>
