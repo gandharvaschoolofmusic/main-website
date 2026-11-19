@@ -1005,12 +1005,12 @@ export default function LoginPage() {
 
         {/* Footer link */}
         <p className="entry-form-footer">
-          Don&apos;t have an account yet?{" "}
+          Want to teach with us?{" "}
           <Link
             href="/signup"
             className="font-bold text-cta hover:text-cta-hover transition-colors"
           >
-            Create an account
+            Create a teacher account
           </Link>
         </p>
     </FormShell>

@@ -40,7 +40,6 @@ import { INSTRUMENTS } from "@/types";
 export default function SignupPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [detectedTz, setDetectedTz] = useState("UTC");
-  const [selectedRole, setSelectedRole] = useState<"STUDENT" | "TEACHER">("STUDENT");
 
   // Country code state
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(SUPPORTED_COUNTRIES[0]); // India (+91)
@@ -100,16 +99,8 @@ export default function SignupPage() {
     try {
       const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
       // Detect the browser timezone after hydration so server markup stays stable.
-      // eslint-disable-next-line react-hooks/set-state-in-effect
       if (tz) setDetectedTz(tz);
 
-      if (typeof window !== "undefined") {
-        const params = new URLSearchParams(window.location.search);
-        const r = params.get("role")?.toUpperCase();
-        if (r === "TEACHER") {
-          setSelectedRole("TEACHER");
-        }
-      }
     } catch {
       // Fallback
     }
@@ -287,7 +278,7 @@ export default function SignupPage() {
   // SUCCESS SCREEN
   if (state?.success) {
     return (
-      <FormShell variant={selectedRole === "TEACHER" ? "teacher" : "student"}>
+      <FormShell variant="teacher">
         <div className="space-y-6">
             <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-2xl bg-emerald-50 text-emerald-600 shadow-sm border border-emerald-200">
               <CheckCircle2 className="h-8 w-8 text-emerald-600" />
@@ -295,31 +286,17 @@ export default function SignupPage() {
 
             <SplitHeading
               as="h2"
-              firstClause={selectedRole === "TEACHER" ? "Application" : "Check Your"}
-              accentClause={selectedRole === "TEACHER" ? "Submitted" : "Inbox"}
+              firstClause="Application"
+              accentClause="Submitted"
               align="center"
               size="md"
             />
 
             <p className="text-sm text-body leading-relaxed">
-              {selectedRole === "TEACHER" ? (
-                <>
-                  Your mobile phone has been verified! A verification link was also sent to{" "}
-                  <span className="font-bold text-heading">
-                    {state.data?.email}
-                  </span>
-                  . Your faculty application is now awaiting administrative review by the Academic Board.
-                  You can sign in now to set up your pedagogical bio, instrument disciplines, and weekly schedule while awaiting approval.
-                </>
-              ) : (
-                <>
-                  Your mobile number has been verified! We also sent an email verification link to{" "}
-                  <span className="font-bold text-heading">
-                    {state.data?.email}
-                  </span>
-                  . Please verify your email to activate full lesson booking and trial scheduling.
-                </>
-              )}
+              Your mobile phone has been verified! A verification link was also sent to{" "}
+              <span className="font-bold text-heading">{state.data?.email}</span>.
+              Your faculty application is awaiting review by the Academic Board.
+              You can sign in now to set up your bio, disciplines, and weekly schedule while awaiting approval.
             </p>
 
             <div className="pt-2">
@@ -338,10 +315,10 @@ export default function SignupPage() {
 
   // MAIN SIGNUP FORM
   return (
-    <FormShell variant={selectedRole === "TEACHER" ? "teacher" : "student"}>
+    <FormShell variant="teacher">
       <header className="entry-form-header">
-        <h1>{selectedRole === "TEACHER" ? "Become a teacher" : "Create your account"}</h1>
-        <p>{selectedRole === "TEACHER" ? "Tell us about your experience and apply to teach." : "Your first step towards a lifetime of music."}</p>
+        <h1>Become a teacher</h1>
+        <p>Tell us about your experience and apply to teach.</p>
       </header>
           {/* Global Error Alert */}
           {state?.error && (
@@ -355,54 +332,9 @@ export default function SignupPage() {
           )}
 
           <form action={formAction} className="space-y-5">
-            {/* Role selector */}
-            <div>
-              <label className="block text-xs font-bold uppercase tracking-wider text-heading mb-2">
-                I am joining as a
-              </label>
-              <div className="grid grid-cols-2 gap-3">
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole("STUDENT")}
-                  className="entry-role flex flex-col items-start text-left" aria-pressed={selectedRole === "STUDENT"}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        selectedRole === "STUDENT" ? "bg-cta" : "bg-surface-muted"
-                      }`}
-                    />
-                    <span className="text-xs sm:text-sm font-bold text-heading">Student</span>
-                  </div>
-                  <span className="mt-1 text-[11px] text-body leading-snug">
-                    Learn music from certified maestros
-                  </span>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => setSelectedRole("TEACHER")}
-                  className="entry-role flex flex-col items-start text-left" aria-pressed={selectedRole === "TEACHER"}
-                >
-                  <div className="flex items-center gap-2">
-                    <span
-                      className={`h-2.5 w-2.5 rounded-full ${
-                        selectedRole === "TEACHER" ? "bg-cta" : "bg-surface-muted"
-                      }`}
-                    />
-                    <span className="text-xs sm:text-sm font-bold text-heading">Teacher</span>
-                  </div>
-                  <span className="mt-1 text-[11px] text-body leading-snug">
-                    Teach, manage schedule & earn payouts
-                  </span>
-                </button>
-              </div>
-              <input type="hidden" name="role" value={selectedRole} />
-
-            </div>
+            <input type="hidden" name="role" value="TEACHER" />
 
             {/* TEACHER CREDENTIALS & TEACHING PROFILE */}
-            {selectedRole === "TEACHER" && (
               <div className="entry-teacher-profile space-y-4">
                 <div className="flex items-center justify-between border-b border-border-subtle/70 pb-3">
                   <div className="flex items-center gap-2">
@@ -617,7 +549,6 @@ export default function SignupPage() {
                   )}
                 </div>
               </div>
-            )}
 
             {/* MANDATORY PHONE OTP VERIFICATION CARD */}
             <div className="entry-verification space-y-3.5">
@@ -907,14 +838,12 @@ export default function SignupPage() {
                 ) : isPhoneVerified || otpCode.trim().length === 6 ? (
                   <>
                     <span>
-                      {selectedRole === "TEACHER"
-                        ? "Submit Faculty Application"
-                        : "Create Account"}
+                      Submit Faculty Application
                     </span>
                     <ArrowRight className="w-4 h-4" />
                   </>
                 ) : (
-                  <span>{selectedRole === "TEACHER" ? "Submit application" : "Create account"}</span>
+                  <span>Submit application</span>
                 )}
               </button>
             </div>

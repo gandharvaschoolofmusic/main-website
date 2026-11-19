@@ -49,7 +49,7 @@ import { isAppError } from "@/lib/errors";
 import { AuthError } from "next-auth";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
 import { NotificationType } from "@prisma/client";
-import { generateNextStudentId, generateNextTeacherId } from "@/lib/id-generator";
+import { generateNextTeacherId } from "@/lib/id-generator";
 
 export type ActionResponse<T = unknown> = {
   success: boolean;
@@ -61,13 +61,19 @@ export type ActionResponse<T = unknown> = {
 };
 
 /**
- * Handle user registration with Argon2id password hashing, mandatory phone OTP verification, and email verification.
+ * Handle teacher registration with mandatory phone OTP and email verification.
  */
 export async function signupAction(
   prevState: unknown,
   formData: FormData,
 ): Promise<ActionResponse<{ email: string; role: string; phone: string }>> {
   try {
+    if (formData.get("role") !== "TEACHER") {
+      return {
+        success: false,
+        error: "Direct registration is available only to teachers. Students can book a free trial.",
+      };
+    }
     const rawData = {
       name: formData.get("name"),
       email: formData.get("email"),
@@ -157,12 +163,7 @@ export async function signupAction(
 
     // 4. Create user with verified phone and role profile inside atomic transaction
     const newUser = await db.$transaction(async (tx) => {
-      let customId: string | null = null;
-      if (role === "STUDENT") {
-        customId = await generateNextStudentId(tx);
-      } else if (role === "TEACHER") {
-        customId = await generateNextTeacherId(tx);
-      }
+      const customId = await generateNextTeacherId(tx);
 
       const user = await tx.user.create({
         data: {

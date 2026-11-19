@@ -445,10 +445,10 @@ export function SlotPicker({
                         <p className="text-xs text-body-muted text-center">
                           Do not have an account?{" "}
                           <Link
-                            href="/signup"
+                            href="/book-trial"
                             className="text-cta font-bold hover:underline"
                           >
-                            Sign up here
+                            Book a free trial
                           </Link>
                         </p>
                       </>
