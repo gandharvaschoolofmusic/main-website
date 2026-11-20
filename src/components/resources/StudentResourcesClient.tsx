@@ -20,8 +20,8 @@ import {
   HardDrive,
   Video,
 } from "lucide-react";
-import { isResourceVideo } from "@/lib/resource-video";
-import { ResourceVideoPlayer } from "./ResourceVideoPlayer";
+import { isResourceVideo, isResourceAudio, isResourceMedia } from "@/lib/resource-video";
+import { ResourceMediaPlayer } from "./ResourceMediaPlayer";
 import { markResourceViewedAction } from "@/actions/resources";
 import { ResourceCategory } from "@prisma/client";
 
@@ -109,7 +109,7 @@ function getCategoryLabel(category: ResourceCategory) {
 function getFileIcon(fileName: string, mimeType?: string | null) {
   if (isResourceVideo(fileName, mimeType)) return <Video className="w-5 h-5 text-primary" />;
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (["mp3", "wav", "m4a", "ogg", "aac"].includes(ext) || mimeType?.startsWith("audio/")) {
+  if (isResourceAudio(fileName, mimeType)) {
     return <Music className="w-5 h-5 text-purple-600" />;
   }
   if (ext === "pdf") {
@@ -159,7 +159,7 @@ export function StudentResourcesClient({
 
       const matchesSearch = titleMatch || teacherMatch || notesMatch || courseMatch;
       const matchesCat =
-        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(item.resource.fileName, item.resource.mimeType) : item.resource.category === selectedCategory);
+        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(item.resource.fileName, item.resource.mimeType) : selectedCategory === "AUDIO_LESSON" ? isResourceAudio(item.resource.fileName, item.resource.mimeType) || item.resource.category === "AUDIO_LESSON" : item.resource.category === selectedCategory);
 
       return matchesSearch && matchesCat;
     });
@@ -390,7 +390,7 @@ export function StudentResourcesClient({
                     )}
                   </div>
 
-                  {isResourceVideo(res.fileName, res.mimeType) ? <ResourceVideoPlayer id={res.id} title={res.title} onPlay={() => { if (!item.isViewed) handleMarkViewed(item.id); }} /> : <button
+                  {isResourceMedia(res.fileName, res.mimeType) ? <ResourceMediaPlayer kind={isResourceAudio(res.fileName, res.mimeType) ? "audio" : "video"} id={res.id} title={res.title} onPlay={() => { if (!item.isViewed) handleMarkViewed(item.id); }} /> : <button
                     type="button"
                     onClick={() => handleMarkViewed(item.id, res.fileUrl)}
                     className="inline-flex items-center gap-1.5 rounded-xl bg-primary hover:bg-primary-hover active:scale-95 text-white px-3.5 py-1.5 text-xs font-bold shadow-sm transition-all btn-tactile cursor-pointer"

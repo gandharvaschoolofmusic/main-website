@@ -9,7 +9,7 @@ const state = globalThis.resourceVideoTest = {
 };
 const mocks = {
   "@/lib/auth": "export const auth=async()=>({user:globalThis.resourceVideoTest.user});",
-  "@prisma/client": 'export const Role={TEACHER:"TEACHER",STUDENT:"STUDENT",ADMIN:"ADMIN"};export const ResourceCategory={OTHER:"OTHER",SHEET_MUSIC:"SHEET_MUSIC",EXERCISE:"EXERCISE"};',
+  "@prisma/client": 'export const Role={TEACHER:"TEACHER",STUDENT:"STUDENT",ADMIN:"ADMIN"};export const ResourceCategory={OTHER:"OTHER",SHEET_MUSIC:"SHEET_MUSIC",AUDIO_LESSON:"AUDIO_LESSON",EXERCISE:"EXERCISE"};',
   "next/cache": "export const revalidatePath=()=>{};",
   "@/lib/db": `const s=globalThis.resourceVideoTest;export const db={resource:{
     upsert:async({where,create})=>{if(!s.rows.has(where.id))s.rows.set(where.id,create);return s.rows.get(where.id);},
@@ -43,33 +43,33 @@ try {
   assert(api.validateResourceVideo("empty.mp4", 0));
   assert(api.validateResourceVideo("large.mp4", 251 * 1024 * 1024));
   state.user = { id: "student-a", role: "STUDENT" };
-  assert.equal((await api.prepareResourceVideoAction(input)).success, false);
+  assert.equal((await api.prepareResourceMediaAction(input)).success, false);
   assert.equal(state.signedWrites, 0);
   state.user = { id: "teacher-a", role: "TEACHER" };
   state.bucketLimit = 50 * 1024 * 1024;
-  assert.match((await api.prepareResourceVideoAction(input)).error, /50 MB/);
+  assert.match((await api.prepareResourceMediaAction(input)).error, /50 MB/);
   state.bucketLimit = 250 * 1024 * 1024;
-  const prepared = await api.prepareResourceVideoAction(input);
+  const prepared = await api.prepareResourceMediaAction(input);
   assert.equal(prepared.success, true);
   const ticket = api.verifyResourceUpload(prepared.data.ticket, state.user.id);
   assert(ticket.path.startsWith("videos/teacher-a/"));
   assert.throws(() => api.verifyResourceUpload(prepared.data.ticket, "teacher-b"));
   assert.throws(() => api.verifyResourceUpload("a" + prepared.data.ticket, "teacher-a"));
   assert.throws(() => api.verifyResourceUpload(api.signResourceUpload({ ...ticket, expires: 1 }), "teacher-a"));
-  assert.equal((await api.completeResourceVideoAction(prepared.data.ticket)).success, false);
+  assert.equal((await api.completeResourceMediaAction(prepared.data.ticket)).success, false);
   assert.equal(state.rows.size, 0);
   state.files.set(ticket.path, { size: input.size - 1, contentType: "video/mp4" });
-  assert.equal((await api.completeResourceVideoAction(prepared.data.ticket)).success, false);
+  assert.equal((await api.completeResourceMediaAction(prepared.data.ticket)).success, false);
   state.files.set(ticket.path, { size: input.size, contentType: "text/html" });
-  assert.equal((await api.completeResourceVideoAction(prepared.data.ticket)).success, false);
+  assert.equal((await api.completeResourceMediaAction(prepared.data.ticket)).success, false);
   state.files.set(ticket.path, { size: input.size, contentType: "video/mp4" });
-  const saved = await api.completeResourceVideoAction(prepared.data.ticket);
+  const saved = await api.completeResourceMediaAction(prepared.data.ticket);
   assert.equal(saved.success, true);
-  assert.equal((await api.completeResourceVideoAction(prepared.data.ticket)).data.id, saved.data.id);
+  assert.equal((await api.completeResourceMediaAction(prepared.data.ticket)).data.id, saved.data.id);
   assert.equal(state.rows.size, 1);
   assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, true);
   state.user = { id: "teacher-b", role: "TEACHER" };
-  assert.equal((await api.completeResourceVideoAction(prepared.data.ticket)).success, false);
+  assert.equal((await api.completeResourceMediaAction(prepared.data.ticket)).success, false);
   assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, false);
   state.user = { id: "student-a", role: "STUDENT" };
   const reads = state.signedReads;
@@ -81,6 +81,36 @@ try {
   assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, false);
   state.user = null;
   assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, false);
+  for (const [extension, mime] of Object.entries({mp3:"audio/mpeg",wav:"audio/wav",m4a:"audio/mp4",ogg:"audio/ogg",aac:"audio/aac",flac:"audio/flac",opus:"audio/ogg"})) {
+    assert.equal(api.resourceAudioType(`Track.${extension.toUpperCase()}`), mime);
+    assert.equal(api.isResourceAudio(`track.${extension}`), true);
+    assert.equal(api.validateResourceMedia(`track.${extension}`, 30 * 1024 * 1024), null);
+  }
+  assert(api.validateResourceMedia("bad.html", 10));
+  assert(api.validateResourceMedia("empty.wav", 0));
+  assert(api.validateResourceMedia("large.wav", 251 * 1024 * 1024));
+  const audioInput={...input,fileName:"Practice.WAV",category:"AUDIO_LESSON"};
+  state.user={id:"student-a",role:"STUDENT"};
+  assert.equal((await api.prepareResourceMediaAction(audioInput)).success,false);
+  state.user={id:"teacher-a",role:"TEACHER"};
+  const audioPrepared=await api.prepareResourceMediaAction(audioInput);
+  assert.equal(audioPrepared.success,true);
+  const audioTicket=api.verifyResourceUpload(audioPrepared.data.ticket,state.user.id);
+  assert(audioTicket.path.startsWith("audio/teacher-a/"));
+  assert.equal(audioTicket.mimeType,"audio/wav");
+  assert.equal((await api.completeResourceMediaAction(audioPrepared.data.ticket)).success,false);
+  state.files.set(audioTicket.path,{size:audioInput.size,contentType:"audio/wav"});
+  const audioSaved=await api.completeResourceMediaAction(audioPrepared.data.ticket);
+  assert.equal(audioSaved.success,true);
+  assert.equal(state.rows.get(audioSaved.data.id).category,"AUDIO_LESSON");
+  assert.equal((await api.completeResourceMediaAction(audioPrepared.data.ticket)).data.id,audioSaved.data.id);
+  state.user={id:"student-a",role:"STUDENT"};
+  assert.equal((await api.resourcePlaybackAction(audioSaved.data.id)).success,false);
+  state.shared.add(audioSaved.data.id+":student-a");
+  assert.equal((await api.resourcePlaybackAction(audioSaved.data.id)).success,true);
+  state.shared.clear();
+  assert.equal((await api.resourcePlaybackAction(audioSaved.data.id)).success,false);
+  console.log("PASS audio formats, direct upload, storage confirmation, and shared-student-only playback");
   console.log("PASS video formats, size limits, and bucket limit preflight");
   console.log("PASS faculty-only uploads and owner-bound, tamper-proof, expiring tickets");
   console.log("PASS no database entry for missing, incomplete, or mismatched uploads");

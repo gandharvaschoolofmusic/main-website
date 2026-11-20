@@ -1,27 +1,27 @@
 "use client";
 
-import { prepareResourceVideoAction, completeResourceVideoAction } from "@/actions/resource-videos";
-import { validateResourceVideo } from "@/lib/resource-video";
+import { prepareResourceMediaAction, completeResourceMediaAction } from "@/actions/resource-videos";
+import { validateResourceMedia } from "@/lib/resource-video";
 
 // If storage succeeded but saving metadata failed, retry saving the same upload.
-// A lost application response must not create duplicate videos on the next click.
+// A lost application response must not create duplicate resources on the next click.
 const uploaded = new WeakMap<File, { ticket: string; details: string }>();
 
-export async function uploadResourceVideo(file: File, details: {
+export async function uploadResourceMedia(file: File, details: {
   title: string; description: string; category: string;
 }, onProgress: (percent: number) => void) {
   try {
-    const validation = validateResourceVideo(file.name, file.size);
+    const validation = validateResourceMedia(file.name, file.size);
     if (validation) throw new Error(validation);
     const previous = uploaded.get(file);
     if (previous?.details === JSON.stringify(details)) {
       onProgress(100);
-      const result = await completeResourceVideoAction(previous.ticket);
+      const result = await completeResourceMediaAction(previous.ticket);
       if (result.success) uploaded.delete(file);
       return result;
     }
     onProgress(0);
-    const prepared = await prepareResourceVideoAction({ ...details, fileName: file.name, size: file.size });
+    const prepared = await prepareResourceMediaAction({ ...details, fileName: file.name, size: file.size });
     if (!prepared.success || !prepared.data) throw new Error(prepared.error || "Could not prepare upload.");
     const { uploadUrl, ticket, mimeType } = prepared.data;
     await new Promise<void>((resolve, reject) => {
@@ -38,17 +38,17 @@ export async function uploadResourceVideo(file: File, details: {
       xhr.onload = () => {
         if (xhr.status >= 200 && xhr.status < 300) resolve();
         else reject(new Error(xhr.status === 413
-          ? "Storage rejected the video size. Ask administration to check the resources bucket and global upload limits."
-          : "Video storage rejected the upload. Please try again or contact administration."));
+          ? "Storage rejected the file size. Ask administration to check the resources bucket and global upload limits."
+          : "Media storage rejected the upload. Please try again or contact administration."));
       };
       xhr.send(file);
     });
     uploaded.set(file, { ticket, details: JSON.stringify(details) });
     onProgress(100);
-    const result = await completeResourceVideoAction(ticket);
+    const result = await completeResourceMediaAction(ticket);
     if (result.success) uploaded.delete(file);
     return result;
   } catch (error) {
-    return { success: false, error: error instanceof Error ? error.message : "Video upload failed." };
+    return { success: false, error: error instanceof Error ? error.message : "Media upload failed." };
   }
 }

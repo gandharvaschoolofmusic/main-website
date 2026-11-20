@@ -39,6 +39,9 @@ import {
   AllottedStudentOption,
 } from "@/actions/resources";
 import { ResourceCategory } from "@prisma/client";
+import { isResourceAudio, isResourceMedia, validateResourceMedia, RESOURCE_FILE_ACCEPT } from "@/lib/resource-video";
+import { uploadResourceMedia } from "@/lib/upload-resource-video";
+import { ResourceMediaPlayer } from "@/components/resources/ResourceMediaPlayer";
 
 export type AdminResourceItem = {
   id: string;
@@ -126,7 +129,7 @@ function getCategoryLabel(category: ResourceCategory) {
 
 function getFileIcon(fileName: string, mimeType?: string | null) {
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (["mp3", "wav", "m4a", "ogg", "aac"].includes(ext) || mimeType?.startsWith("audio/")) {
+  if (isResourceAudio(fileName, mimeType)) {
     return <Music className="w-5 h-5 text-purple-600" />;
   }
   if (ext === "pdf") {
@@ -169,6 +172,7 @@ export function AdminResourcesClient({
   const [uploadDescription, setUploadDescription] = useState("");
   const [uploadCategory, setUploadCategory] = useState<ResourceCategory>("SHEET_MUSIC");
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadError, setUploadError] = useState<string | null>(null);
 
   // Share modal state
@@ -217,7 +221,8 @@ export function AdminResourcesClient({
         (res.teacher.name && res.teacher.name.toLowerCase().includes(q));
 
       const matchesCat =
-        selectedCategory === "ALL" || res.category === selectedCategory;
+        selectedCategory === "ALL" || res.category === selectedCategory ||
+        (selectedCategory === "AUDIO_LESSON" && isResourceAudio(res.fileName, res.mimeType));
 
       const matchesTeacher =
         selectedTeacherId === "ALL" || res.teacher.id === selectedTeacherId;
@@ -230,6 +235,9 @@ export function AdminResourcesClient({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
+      setUploadError(isResourceMedia(file.name, file.type) ? validateResourceMedia(file.name, file.size) : null);
+      setUploadProgress(null);
+      if (isResourceAudio(file.name, file.type)) setUploadCategory("AUDIO_LESSON");
       setSelectedFile(file);
       if (!uploadTitle) {
         const cleanName = file.name
@@ -261,7 +269,9 @@ export function AdminResourcesClient({
     formData.append("file", selectedFile);
 
     startTransition(async () => {
-      const res = await uploadResourceAction(formData);
+      const res = isResourceMedia(selectedFile.name, selectedFile.type)
+        ? await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
+        : await uploadResourceAction(formData).catch(() => ({ success: false, error: "Upload interrupted. Please try again.", data: undefined }));
       if (res.success && res.data) {
         showToast(`"${uploadTitle}" uploaded to Supabase repository.`);
         setIsUploadOpen(false);
@@ -534,7 +544,7 @@ export function AdminResourcesClient({
             {isDriveReady ? "Active" : "Standby"}
           </div>
           <div className="text-[11px] text-body/60 font-medium mt-0.5">
-            25 MB limit · encrypted streaming
+            Audio/video: 250 MB · Other files: 25 MB
           </div>
         </div>
       </div>
@@ -726,7 +736,7 @@ export function AdminResourcesClient({
                     )}
 
                     {/* Direct View in Google Drive */}
-                    {res.fileUrl && (
+                    {isResourceMedia(res.fileName, res.mimeType) ? <ResourceMediaPlayer id={res.id} title={res.title} kind={isResourceAudio(res.fileName, res.mimeType) ? "audio" : "video"} /> : res.fileUrl && (
                       <a
                         href={res.fileUrl}
                         target="_blank"
@@ -781,7 +791,7 @@ export function AdminResourcesClient({
                   Upload Learning Resource
                 </h3>
                 <p className="text-xs text-body/70 mt-0.5">
-                  Direct upload to Gandharva Supabase cloud vault (up to 25 MB)
+                  Audio and video up to 250 MB. Other files up to 25 MB.
                 </p>
               </div>
               <button
@@ -811,7 +821,7 @@ export function AdminResourcesClient({
                     type="file"
                     onChange={handleFileChange}
                     className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
-                    accept=".pdf,.mp3,.wav,.m4a,.ogg,.doc,.docx,.txt,.png,.jpg,.jpeg,.webp,.zip,.mp4"
+                    accept={RESOURCE_FILE_ACCEPT}
                   />
                   <div className="flex flex-col items-center pointer-events-none">
                     <div className="w-10 h-10 rounded-full bg-purple-100 text-[#3C096C] flex items-center justify-center mb-2">
@@ -832,7 +842,7 @@ export function AdminResourcesClient({
                           Click or drag and drop file here
                         </p>
                         <p className="text-[11px] text-body/50">
-                          PDF, MP3, WAV, DOC, DOCX, ZIP, or video up to 25 MB
+                          Audio and video up to 250 MB. Documents and other files up to 25 MB.
                         </p>
                       </div>
                     )}
@@ -905,7 +915,7 @@ export function AdminResourcesClient({
                   {isPending ? (
                     <>
                       <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      <span>Syncing to Supabase...</span>
+                      <span>{uploadProgress === null ? "Uploading…" : uploadProgress === 100 ? "Saving…" : `Uploading ${uploadProgress}%`}</span>
                     </>
                   ) : (
                     <>

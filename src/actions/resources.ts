@@ -25,6 +25,9 @@ const ALLOWED_EXTENSIONS = [
   "wav",
   "m4a",
   "ogg",
+  "aac",
+  "flac",
+  "opus",
   "doc",
   "docx",
   "txt",
@@ -81,7 +84,7 @@ export async function uploadResourceAction(
     if (!ALLOWED_EXTENSIONS.includes(fileExt)) {
       return {
         success: false,
-        error: `File format .${fileExt} is not supported. Allowed formats: PDF, MP3, WAV, DOC, DOCX, Images, MP4, ZIP.`,
+        error: `File format .${fileExt} is not supported. Allowed formats: PDF, MP3, WAV, M4A, OGG, AAC, FLAC, OPUS, DOC, DOCX, Images, MP4, ZIP.`,
       };
     }
 

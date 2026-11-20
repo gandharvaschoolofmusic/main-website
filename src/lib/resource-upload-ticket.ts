@@ -18,15 +18,15 @@ export function signResourceUpload(ticket: ResourceUploadTicket) {
 
 export function verifyResourceUpload(token: string, userId: string): ResourceUploadTicket {
   const [payload, hash, extra] = token.split(".");
-  if (!payload || !hash || extra) throw new Error("Invalid upload. Please select the video again.");
+  if (!payload || !hash || extra) throw new Error("Invalid upload. Please select the file again.");
   const expected = signature(payload);
   const supplied = Buffer.from(hash, "base64url");
   if (supplied.length !== expected.length || !timingSafeEqual(supplied, expected)) {
-    throw new Error("Invalid upload. Please select the video again.");
+    throw new Error("Invalid upload. Please select the file again.");
   }
   const ticket = JSON.parse(Buffer.from(payload, "base64url").toString()) as ResourceUploadTicket;
   if (ticket.userId !== userId || ticket.expires <= Date.now()) {
-    throw new Error("Upload session expired. Please select the video again.");
+    throw new Error("Upload session expired. Please select the file again.");
   }
   return ticket;
 }

@@ -27,9 +27,9 @@ import {
   Layers,
   Video,
 } from "lucide-react";
-import { isResourceVideo, RESOURCE_FILE_ACCEPT, validateResourceVideo } from "@/lib/resource-video";
-import { uploadResourceVideo } from "@/lib/upload-resource-video";
-import { ResourceVideoPlayer } from "./ResourceVideoPlayer";
+import { isResourceVideo, isResourceAudio, isResourceMedia, RESOURCE_FILE_ACCEPT, validateResourceMedia } from "@/lib/resource-video";
+import { uploadResourceMedia } from "@/lib/upload-resource-video";
+import { ResourceMediaPlayer } from "./ResourceMediaPlayer";
 import {
   uploadResourceAction,
   deleteResourceAction,
@@ -120,7 +120,7 @@ function getCategoryLabel(category: ResourceCategory) {
 function getFileIcon(fileName: string, mimeType?: string | null) {
   if (isResourceVideo(fileName, mimeType)) return <Video className="w-5 h-5 text-primary" />;
   const ext = fileName.split(".").pop()?.toLowerCase() || "";
-  if (["mp3", "wav", "m4a", "ogg", "aac"].includes(ext) || mimeType?.startsWith("audio/")) {
+  if (isResourceAudio(fileName, mimeType)) {
     return <Music className="w-5 h-5 text-purple-600" />;
   }
   if (ext === "pdf") {
@@ -176,7 +176,7 @@ export function TeacherResourcesClient({
         (res.description && res.description.toLowerCase().includes(searchQuery.toLowerCase()));
 
       const matchesCat =
-        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(res.fileName, res.mimeType) : res.category === selectedCategory);
+        selectedCategory === "ALL" || (selectedCategory === "VIDEO" ? isResourceVideo(res.fileName, res.mimeType) : selectedCategory === "AUDIO_LESSON" ? isResourceAudio(res.fileName, res.mimeType) || res.category === "AUDIO_LESSON" : res.category === selectedCategory);
 
       return matchesSearch && matchesCat;
     });
@@ -186,9 +186,10 @@ export function TeacherResourcesClient({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setUploadError(isResourceVideo(file.name, file.type) ? validateResourceVideo(file.name, file.size) : null);
+      setUploadError(isResourceMedia(file.name, file.type) ? validateResourceMedia(file.name, file.size) : null);
       setUploadProgress(null);
-      if (isResourceVideo(file.name, file.type)) setUploadCategory("OTHER");
+      if (isResourceAudio(file.name, file.type)) setUploadCategory("AUDIO_LESSON");
+      else if (isResourceVideo(file.name, file.type)) setUploadCategory("OTHER");
       setSelectedFile(file);
       if (!uploadTitle) {
         // Auto-generate a readable title from file name
@@ -222,8 +223,8 @@ export function TeacherResourcesClient({
     formData.append("file", selectedFile);
 
     startTransition(async () => {
-      const res = isResourceVideo(selectedFile.name, selectedFile.type)
-        ? await uploadResourceVideo(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
+      const res = isResourceMedia(selectedFile.name, selectedFile.type)
+        ? await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
         : await uploadResourceAction(formData).catch(() => ({ success: false, error: "Upload interrupted. Please try again.", data: undefined }));
       if (!res.success) {
         setUploadError(res.error || "Upload failed. Please check file size and credentials.");
@@ -632,7 +633,7 @@ export function TeacherResourcesClient({
                 {/* Card Action Footer */}
                 <div className="mt-5 pt-3.5 border-t border-border-default/60 flex items-center justify-between gap-2">
                   {/* Google Drive Link */}
-                  {isResourceVideo(item.fileName, item.mimeType) ? <ResourceVideoPlayer id={item.id} title={item.title} /> : <a
+                  {isResourceMedia(item.fileName, item.mimeType) ? <ResourceMediaPlayer kind={isResourceAudio(item.fileName, item.mimeType) ? "audio" : "video"} id={item.id} title={item.title} /> : <a
                     href={item.fileUrl}
                     target="_blank"
                     rel="noopener noreferrer"
@@ -685,7 +686,7 @@ export function TeacherResourcesClient({
                     Upload Learning Resource
                   </h3>
                   <p className="text-[11px] text-body-muted">
-                    Videos up to 250 MB · Other files up to 25 MB
+                    Audio and video up to 250 MB · Other files up to 25 MB
                   </p>
                 </div>
               </div>
@@ -729,7 +730,7 @@ export function TeacherResourcesClient({
               {/* File Dropzone */}
               <div>
                 <label className="block text-xs font-semibold text-heading mb-1.5">
-                  Select file or video
+                  Select audio, video, or document
                 </label>
                 <div className="relative rounded-2xl border-2 border-dashed border-border-default hover:border-primary/50 bg-bg-alt/10 hover:bg-bg-alt/25 transition-colors p-5 text-center cursor-pointer">
                   <input
@@ -760,7 +761,7 @@ export function TeacherResourcesClient({
                           Drop file here or click to browse
                         </p>
                         <p className="text-[10px] text-body-muted mt-0.5">
-                          MP4, WebM, MOV, M4V, PDF, audio, and notes. MP4 is recommended for video.
+                          MP3, WAV, M4A, OGG, AAC, FLAC, OPUS, MP4, WebM, MOV, M4V, PDF, and notes.
                         </p>
                       </div>
                     )}
@@ -819,8 +820,8 @@ export function TeacherResourcesClient({
 
               {/* Submit Buttons */}
               {isPending && uploadProgress !== null && <div role="status" className="space-y-2 text-xs text-body">
-                <div className="flex justify-between"><span>{uploadProgress === 100 ? "Saving your video…" : "Uploading video…"}</span><span>{uploadProgress}%</span></div>
-                <progress max={100} value={uploadProgress} aria-label="Video upload progress" className="h-2 w-full accent-primary" />
+                <div className="flex justify-between"><span>{uploadProgress === 100 ? "Saving your file…" : "Uploading file…"}</span><span>{uploadProgress}%</span></div>
+                <progress max={100} value={uploadProgress} aria-label="File upload progress" className="h-2 w-full accent-primary" />
                 <p className="text-body-muted">Keep this page open until the upload finishes.</p>
               </div>}
               <div className="pt-2 flex items-center justify-end gap-2.5">
