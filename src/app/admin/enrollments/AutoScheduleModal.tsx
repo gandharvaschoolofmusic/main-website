@@ -443,10 +443,11 @@ export function WeeklySchedulePicker({
                     <input
                       type="number"
                       min="50"
-                      step="50"
+                      step="1"
                       value={rateText}
                       onChange={(e) => {
-                        const str = e.target.value;
+                        const str = e.target.value.replace(/^0+(?=\d)/, "");
+                        e.currentTarget.value = str;
                         setRateText(str);
                         const val = Number(str);
                         if (val > 0) {

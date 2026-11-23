@@ -21,7 +21,7 @@ export const metadata = {
 
 const getCachedAdminEnrollmentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-enrollments-v4", async () => {
+    return getResilientData("admin-enrollments-v5", async () => {
       // Run ALL queries in parallel — cuts total time from sum(all) to max(slowest)
       const [dbCourses, dbTeachers, dbStudents, dbTrialLeads, dbEnrollments, dbCourseRequests] =
         await Promise.all([
@@ -95,7 +95,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
             take: 50,
           }),
 
-          // 5. Fetch enrollments with lessons limited to recent 20 per enrollment
+          // 5. Fetch every lesson so the enrollment schedule includes the full course.
           db.enrollment.findMany({
             include: {
               student: {
@@ -133,7 +133,6 @@ const getCachedAdminEnrollmentsData = unstable_cache(
                   teacherId: true,
                 },
                 orderBy: { startsAt: "asc" },
-                take: 30, // Cap lessons per enrollment to reduce payload
               },
               payment: {
                 select: {
@@ -353,7 +352,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       };
     });
   },
-  ["admin-enrollments-data-v4"],
+  ["admin-enrollments-data-v5"],
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 
@@ -381,13 +380,13 @@ export default async function AdminEnrollmentsPage(props: {
     data = await getCachedAdminEnrollmentsData();
   } catch (err) {
     console.error("[AdminEnrollmentsPage] Failed to load cached enrollments data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v5");
     if (fallback) data = fallback;
   }
 
   // Safety net: if students array is empty, check resilient cache for last known good data
   if (!data.formattedStudents || data.formattedStudents.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v5");
     if (fallback && fallback.formattedStudents.length > 0) {
       data = fallback;
     }

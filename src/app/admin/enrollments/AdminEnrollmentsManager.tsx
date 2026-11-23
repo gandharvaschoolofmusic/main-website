@@ -798,7 +798,7 @@ export function AdminEnrollmentsManager({
       cur.setDate(cur.getDate() + 1);
     }
     return list;
-  }, [activeEnrollment?.lessons, startDate, recurringCadence, totalSessions]);
+  }, [activeEnrollment, startDate, recurringCadence, totalSessions]);
 
   // Dynamic schedule, dates, and session metrics derived from actual lessons and configuration
   const enrollmentSummaryMetrics = useMemo(() => {
@@ -2117,8 +2117,14 @@ export function AdminEnrollmentsManager({
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-body">₹</span>
                               <input
                                 type="number"
-                                value={allotFeeRupees}
-                                onChange={(e) => setAllotFeeRupees(Number(e.target.value))}
+                                min={0}
+                                step={1}
+                                placeholder="0"
+                                value={allotFeeRupees || ""}
+                                onChange={(e) => {
+                                  e.currentTarget.value = e.currentTarget.value.replace(/^0+(?=\d)/, "");
+                                  setAllotFeeRupees(Number(e.currentTarget.value));
+                                }}
                                 className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-heading focus:outline-none focus:border-[#3C096C]"
                               />
                             </div>
@@ -2133,8 +2139,14 @@ export function AdminEnrollmentsManager({
                               <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700">₹</span>
                               <input
                                 type="number"
-                                value={allotPaidRupees}
-                                onChange={(e) => setAllotPaidRupees(Number(e.target.value))}
+                                min={0}
+                                step={1}
+                                placeholder="0"
+                                value={allotPaidRupees || ""}
+                                onChange={(e) => {
+                                  e.currentTarget.value = e.currentTarget.value.replace(/^0+(?=\d)/, "");
+                                  setAllotPaidRupees(Number(e.currentTarget.value));
+                                }}
                                 className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-emerald-700 focus:outline-none focus:border-[#3C096C]"
                               />
                             </div>
@@ -2266,8 +2278,14 @@ export function AdminEnrollmentsManager({
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-body">₹</span>
                         <input
                           type="number"
-                          value={allotFeeRupees}
-                          onChange={(e) => setAllotFeeRupees(Number(e.target.value))}
+                          min={0}
+                          step={1}
+                          placeholder="0"
+                          value={allotFeeRupees || ""}
+                          onChange={(e) => {
+                            e.currentTarget.value = e.currentTarget.value.replace(/^0+(?=\d)/, "");
+                            setAllotFeeRupees(Number(e.currentTarget.value));
+                          }}
                           className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-heading focus:outline-none focus:border-[#3C096C]"
                         />
                       </div>
@@ -2281,8 +2299,14 @@ export function AdminEnrollmentsManager({
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-xs font-bold text-emerald-700">₹</span>
                         <input
                           type="number"
-                          value={allotPaidRupees}
-                          onChange={(e) => setAllotPaidRupees(Number(e.target.value))}
+                          min={0}
+                          step={1}
+                          placeholder="0"
+                          value={allotPaidRupees || ""}
+                          onChange={(e) => {
+                            e.currentTarget.value = e.currentTarget.value.replace(/^0+(?=\d)/, "");
+                            setAllotPaidRupees(Number(e.currentTarget.value));
+                          }}
                           className="w-full pl-7 pr-3 py-2 rounded-xl border border-neutral-300 bg-white text-xs font-bold text-emerald-700 focus:outline-none focus:border-[#3C096C]"
                         />
                       </div>
@@ -2760,9 +2784,9 @@ export function AdminEnrollmentsManager({
                 </div>
 
                 <div className="rounded-xl border border-neutral-200 overflow-hidden bg-white shadow-2xs">
-                  <div className="overflow-x-auto">
+                  <div className="max-h-[min(65vh,640px)] overflow-auto overscroll-contain" tabIndex={0} role="region" aria-label="All enrollment sessions">
                     <table className="w-full text-left text-xs">
-                      <thead className="bg-neutral-50 border-b border-neutral-200 text-[11px] font-semibold text-body uppercase tracking-wider">
+                      <thead className="sticky top-0 z-10 bg-neutral-50 border-b border-neutral-200 text-[11px] font-semibold text-body uppercase tracking-wider">
                         <tr>
                           <th className="py-2.5 px-3.5">#</th>
                           <th className="py-2.5 px-3.5">Session ID (Tracking)</th>
