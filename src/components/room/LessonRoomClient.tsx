@@ -69,6 +69,7 @@ const lessonRoomOptions: RoomOptions = {
 
 export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
   const router = useRouter();
+  const [companion, setCompanion] = useState(false);
   const room = useRef<Room | null>(null);
   const previewMicrophone = useRef<MediaStreamTrack | null>(null);
   useEffect(() => {
@@ -107,17 +108,18 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     isAudioMuted: boolean;
     isVideoMuted: boolean;
   }, microphone?: MediaStreamTrack) => {
-    previewMicrophone.current = microphone ?? null;
+    if (companion) microphone?.stop();
+    previewMicrophone.current = companion ? null : microphone ?? null;
     room.current ??= new Room(lessonRoomOptions);
     // Use the Join gesture while the browser still permits starting playback.
     void room.current.startAudio().catch(() => {});
-    setJoinedConfig(config);
+    setJoinedConfig({ ...config, isAudioMuted: companion || config.isAudioMuted });
     setStep("CONNECTING");
     setErrorMessage(null);
 
     try {
       const [res] = await Promise.all([
-        fetch(`/api/lessons/${lesson.id}/room-token?early=true`),
+        fetch(`/api/lessons/${lesson.id}/room-token?early=true&companion=${companion}`),
         preferPhoneSpeaker(room.current),
       ]);
       const data = await res.json();
@@ -153,11 +155,14 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
 
   if (step === "PRE_JOIN") {
     return (
+      <>
+      <label className="meet-companion-choice"><input type="checkbox" checked={companion} onChange={event => setCompanion(event.target.checked)} /> Join as second device — camera / screen sharing only, microphone and speakers off. Keep your main device connected.</label>
       <PreJoinScreen
         lesson={lesson}
         onJoin={handlePreJoinComplete}
         onCancel={handleLeave}
       />
+      </>
     );
   }
 
@@ -175,7 +180,7 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
       room={tokenData.room}
       token={tokenData.token}
       serverUrl={tokenData.serverUrl}
-      lesson={lesson}
+      lesson={{ ...lesson, companion, isTeacher: lesson.isTeacher && !companion }}
       initialConfig={{ ...joinedConfig, previewMicrophone }}
       onLeave={handleLeave}
     />

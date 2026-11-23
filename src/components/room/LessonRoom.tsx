@@ -42,6 +42,7 @@ interface LessonRoomProps {
     durationMinutes: number;
     partnerName: string;
     isTeacher: boolean;
+    companion?: boolean;
     callerRole?: "TEACHER" | "STUDENT";
     lessonSource?: string | null;
   };
@@ -101,7 +102,7 @@ export function LessonRoom(props: LessonRoomProps) {
         audio={false} // The microphone controller applies the pre-join choice after connection.
         video={false} // Managed explicitly after engine is connected
         className="w-full h-full flex flex-col"
-        onConnected={() => { void fetch(`/api/lessons/${lesson.id}/join`, { method: "POST" }).catch(() => {}); }}
+        onConnected={() => { if (lesson.companion) return; void fetch(`/api/lessons/${lesson.id}/join`, { method: "POST" }).catch(() => {}); }}
         onDisconnected={handleDisconnected}
         onError={(err) => {
           // Ignore expected client-initiated disconnect cancellations when user exits
@@ -473,7 +474,7 @@ function LessonRoomContent({
   useEffect(() => {
     const handleWindowUnload = () => {
       try {
-        if (navigator.sendBeacon) {
+        if (lesson.companion) { /* Auxiliary devices do not close main-device attendance. */ } else if (navigator.sendBeacon) {
           navigator.sendBeacon(`/api/lessons/${lesson.id}/leave`);
         } else {
           fetch(`/api/lessons/${lesson.id}/leave`, { method: "POST", keepalive: true }).catch(() => {});
@@ -553,7 +554,7 @@ function LessonRoomContent({
     try {
       // 1. Record exit timestamp immediately
       try {
-        if (typeof navigator !== "undefined" && navigator.sendBeacon) {
+        if (lesson.companion) { /* Main-device attendance remains active. */ } else if (typeof navigator !== "undefined" && navigator.sendBeacon) {
           navigator.sendBeacon(`/api/lessons/${lesson.id}/leave`);
         } else {
           fetch(`/api/lessons/${lesson.id}/leave`, {
@@ -602,7 +603,8 @@ function LessonRoomContent({
 
   return (
     <>
-      <RoomAudioRenderer />
+      {!lesson.companion && <RoomAudioRenderer />}
+      {lesson.companion && <div className="meet-companion-choice" role="status">Second device: camera and screen sharing only. Audio stays on your main device.</div>}
       <MeetRoomUI
         lesson={lesson}
         audioMode={mic.settings.mode}
@@ -619,12 +621,12 @@ function LessonRoomContent({
         selectedCameraId={selectedCameraId}
         audioDeviceId={mic.settings.deviceId}
         microphoneError={mic.error}
-        onAudioDeviceSwitch={mic.selectDevice}
+        onAudioDeviceSwitch={lesson.companion ? async () => {} : mic.selectDevice}
         multiCam={multiCam}
-        onToggleMic={mic.toggle}
+        onToggleMic={lesson.companion ? async () => {} : mic.toggle}
         onToggleVideo={handleToggleVideo}
         onToggleScreenShare={handleToggleScreenShare}
-        onSwitchAudioMode={mic.selectMode}
+        onSwitchAudioMode={lesson.companion ? async () => {} : mic.selectMode}
         onCameraDeviceSwitch={handleCameraDeviceSwitch}
         onOpenMultiCam={() => setIsMultiCamModalOpen(true)}
         onLeave={handleLeaveRoom}

@@ -194,7 +194,10 @@ export async function sendFirebaseOtp(
       clearRecaptchaVerifier();
     }
 
-    let msg = error?.message || "Failed to dispatch verification SMS via Firebase.";
+    let msg = "We could not send your verification code. Please try again later or contact the school.";
+    if (/error-code[:-]-?39/.test(`${error?.code} ${error?.message}`)) {
+      return { success: false, error: "The SMS provider could not send a code to this number or mobile network. Please wait before trying again, or contact the school with your country and mobile network. Your details have been kept." };
+    }
     if (error?.code === "auth/invalid-phone-number") {
       msg = "Invalid mobile number format. Please ensure the country code is selected and digits are correct.";
     } else if (error?.code === "auth/quota-exceeded") {

@@ -1,5 +1,6 @@
 import {
   AccessToken,
+  TrackSource,
   EgressClient,
   EncodedFileOutput,
   EncodedFileType,
@@ -19,6 +20,7 @@ export interface GenerateLessonTokenParams {
   instrument: string;
   durationMinutes: number;
   requestHost?: string;
+  companion?: boolean;
   groupRoomId?: string | null; // shared room ID for group course lessons
 }
 
@@ -35,7 +37,7 @@ export interface LessonTokenResult {
  *
  * Security guarantees:
  * 1. Room name is strictly derived server-side: `lesson-${lessonId}` (never client-supplied).
- * 2. Identity is pinned to the user's validated ID.
+ * 2. Identity is pinned to the validated user; auxiliary devices get a server-generated suffix.
  * 3. `roomAdmin` grant is given only to the TEACHER role.
  * 4. Token TTL is bounded to the lesson duration plus a safe grace buffer.
  */
@@ -100,17 +102,21 @@ export async function generateLessonRoomToken(
   // so all enrolled students join the same LiveKit room
   const roomName = params.groupRoomId || `lesson-${lessonId}`;
   const isTeacher = role === "TEACHER";
+  const companion = params.companion === true;
+  const identity = companion ? `${userId}:companion:${crypto.randomUUID()}` : userId;
 
   // TTL: lesson duration + 30 minutes grace in seconds
   const ttlSeconds = (durationMinutes + 30) * 60;
 
   const at = new AccessToken(apiKey, apiSecret, {
-    identity: userId,
-    name: userName,
+    identity,
+    name: companion ? `${userName} · Second device` : userName,
     metadata: JSON.stringify({
       role,
+      userId,
+      companion,
       instrument,
-      isTeacher,
+      isTeacher: isTeacher && !companion,
     }),
     ttl: `${ttlSeconds}s`,
   });
@@ -119,9 +125,10 @@ export async function generateLessonRoomToken(
     room: roomName,
     roomJoin: true,
     canPublish: true,
-    canSubscribe: true,
+    canSubscribe: !companion,
+    ...(companion ? { canPublishSources: [TrackSource.CAMERA, TrackSource.SCREEN_SHARE] } : {}),
     canPublishData: true,
-    roomAdmin: isTeacher,
+    roomAdmin: isTeacher && !companion,
   });
 
   const token = await at.toJwt();
@@ -135,7 +142,7 @@ export async function generateLessonRoomToken(
     token,
     roomName,
     serverUrl,
-    identity: userId,
+    identity,
     role,
   };
 }

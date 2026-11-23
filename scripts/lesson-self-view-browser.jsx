@@ -1,0 +1,6 @@
+import React from 'react';
+import {createRoot} from 'react-dom/client';
+import {MovableSelfView} from '../src/components/room/MovableSelfView';
+createRoot(document.querySelector('main')).render(<div className="meet-stage is-focused has-floating-self" style={{width:'100%',height:500,position:'relative'}}><div className="meet-main-tile" style={{background:'#202a40',color:'#fff'}}>Partner video — instrument view</div><MovableSelfView><article className="meet-tile"><div className="meet-camera-off"><div className="meet-avatar">You</div></div></article></MovableSelfView></div>);
+const delay=ms=>new Promise(r=>setTimeout(r,ms));
+(async()=>{await delay(500);const button=document.querySelector('.meet-self-drag');button.focus();button.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowLeft',bubbles:true}));await delay(50);if(document.querySelector('.meet-movable-self').style.left!=='90%')throw Error('Keyboard movement failed');for(let i=0;i<20;i++)button.dispatchEvent(new KeyboardEvent('keydown',{key:'ArrowUp',bubbles:true}));await delay(50);if(document.querySelector('.meet-movable-self').style.top!=='0%')throw Error('Boundary failed');button.dispatchEvent(new KeyboardEvent('keydown',{key:'Home',bubbles:true}));await delay(50);window.videoTestResult={checks:['keyboard repositioning, bounds, and reset']};})().catch(e=>window.videoTestResult={error:e.message});

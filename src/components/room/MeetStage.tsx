@@ -5,6 +5,7 @@ import { useTracks, useIsSpeaking, VideoTrack, type TrackReferenceOrPlaceholder 
 import { Track } from "livekit-client";
 import { MicOff, Hand, Pin, PinOff, Maximize, Minimize, FlipHorizontal } from "lucide-react";
 import { RoomIconButton } from "./MeetPrimitives";
+import { MovableSelfView } from "./MovableSelfView";
 
 export type MeetLayout = "auto" | "tiled" | "spotlight" | "sidebar" | "studio";
 export function trackKey(track: TrackReferenceOrPlaceholder) { return `${track.participant.identity}:${track.source}:${track.publication?.trackName || "camera"}`; }
@@ -21,7 +22,7 @@ export function MeetStage({ layout, hands, pinned, onPin, mirror, showSelf, part
   return <div className={`meet-stage ${grid ? "is-tiled" : "is-focused"} ${floating ? "has-floating-self" : ""} ${layout === "spotlight" ? "is-spotlight" : ""}`} data-count={Math.min(visible.length, 9)}>
     {visible.length === 0 ? <div className="meet-stage-empty"><div className="meet-avatar">{partnerName[0]}</div><h2>Waiting for {partnerName}</h2><p>{showSelf ? "Your lesson video will appear here." : "Your self-view is hidden. You can show it in Settings."}</p></div> : grid ? visible.map(renderTile) : <>
       <div className="meet-main-tile">{main && renderTile(main)}</div>
-      {rest.length > 0 && layout !== "spotlight" && <div className="meet-filmstrip">{rest.map(renderTile)}</div>}
+      {rest.length > 0 && layout !== "spotlight" && (floating ? <MovableSelfView>{rest.map(renderTile)}</MovableSelfView> : <div className="meet-filmstrip">{rest.map(renderTile)}</div>)}
     </>}
   </div>;
 }

@@ -94,6 +94,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       undefined;
 
     const tokenResult = await generateLessonRoomToken({
+      companion: new URL(request.url).searchParams.get("companion") === "true",
       lessonId: lesson.id,
       userId,
       userName:
