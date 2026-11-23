@@ -20,7 +20,7 @@ import {
   Mic,
   X,
   Sparkles,
-  Piano, Guitar, Drum, ArrowLeft, ChevronDown,
+  Piano, Guitar, Drum, Footprints, ArrowLeft, ChevronDown,
 } from "lucide-react";
 import { formatInternationalE164 } from "@/lib/phone-utils";
 import { createTrialRequestAction } from "@/actions/trial";
@@ -57,7 +57,7 @@ export interface BookTrialClientProps {
 export interface CatalogItem {
   id: string;
   name: string;
-  category: "Instruments" | "Singing";
+  category: "Instruments" | "Singing" | "Dancing";
   subtitle: string;
   tags?: string[];
   iconType:
@@ -73,7 +73,8 @@ export interface CatalogItem {
     | "hindustani"
     | "carnatic"
     | "bollywood"
-    | "regionalFilm";
+    | "regionalFilm"
+    | "dance";
   iconBoxBg?: string;
   defaultIconBg?: string;
   iconColor?: string;
@@ -209,12 +210,33 @@ export const CATALOG_ITEMS: CatalogItem[] = [
     iconType: "regionalFilm",
     iconBoxBg: "bg-orange-50 text-[#FF7803]",
   },
+  {
+    id: "Bharatanatyam",
+    name: "Bharatanatyam",
+    category: "Dancing",
+    subtitle: "Classical dance",
+    iconType: "dance",
+  },
+  {
+    id: "Kathak",
+    name: "Kathak",
+    category: "Dancing",
+    subtitle: "Classical dance",
+    iconType: "dance",
+  },
+  {
+    id: "Bollywood Dance",
+    name: "Bollywood Dance",
+    category: "Dancing",
+    subtitle: "Beginner friendly",
+    iconType: "dance",
+  },
 ];
 
 function CategoryIcon({ type }: { type: CatalogItem["iconType"] }) {
   const Icon = type === "piano" || type === "electronicKeyboard" ? Piano
     : ["acousticGuitar", "electricGuitar", "ukulele"].includes(type) ? Guitar
-    : type === "tabla" ? Drum : ["westernVocals", "hindustani", "carnatic", "bollywood", "regionalFilm"].includes(type) ? Mic : Music;
+    : type === "dance" ? Footprints : type === "tabla" ? Drum : ["westernVocals", "hindustani", "carnatic", "bollywood", "regionalFilm"].includes(type) ? Mic : Music;
   return <Icon size={22} strokeWidth={1.7} aria-hidden="true"/>;
 }
 
@@ -315,10 +337,10 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
 
 
   // Step 1: Category & Instrument selection
-  const [selectedCategory, setSelectedCategory] = useState<"Instruments" | "Singing">("Singing");
+  const [selectedCategory, setSelectedCategory] = useState<CatalogItem["category"]>("Singing");
   const [selectedInstrument, setSelectedInstrument] = useState<string>("Bollywood & Light Vocals (North India)");
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterTab, setFilterTab] = useState<"All" | "Instruments" | "Singing">("All");
+  const [filterTab, setFilterTab] = useState<"All" | CatalogItem["category"]>("All");
 
   // Filtered catalog items based on tab and live search
   const filteredItems = CATALOG_ITEMS.filter((item) => {
@@ -336,6 +358,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
 
   const instrumentsList = filteredItems.filter((i) => i.category === "Instruments");
   const singingList = filteredItems.filter((i) => i.category === "Singing");
+  const dancingList = filteredItems.filter((i) => i.category === "Dancing");
 
   const selectedItemObj = CATALOG_ITEMS.find((item) => item.id === selectedInstrument);
   const selectedDisplayName = selectedItemObj?.name || selectedInstrument || "Select an instrument or style";
@@ -681,12 +704,12 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       {step < 4 && <nav className="trial-progress" aria-label="Booking progress">{steps.map(({num,label}) => <button key={num} type="button" aria-current={step === num ? "step" : undefined} disabled={num === 2 ? !selectedInstrument : num === 3 ? !selectedInstrument || !selectedSlot : false} onClick={() => setStep(num as 1 | 2 | 3)}><span>{step > num ? <Check size={16}/> : num}</span><strong>{label}</strong></button>)}</nav>}
       {errorMessage && step !== 3 && <div role="alert" className="trial-error"><AlertCircle size={18}/>{errorMessage}</div>}
       {step === 1 && <section className="trial-surface">
-        <header className="trial-section-heading"><span>Step 1 of 3</span><h2>What would you like to learn?</h2><p>Choose an instrument or singing style to get started.</p></header>
+        <header className="trial-section-heading"><span>Step 1 of 3</span><h2>What would you like to learn?</h2><p>Choose an instrument, singing style, or dance form to get started.</p></header>
         <div className="trial-catalog-toolbar">
-          <div className="trial-filters" role="group" aria-label="Course categories">{(["All","Instruments","Singing"] as const).map(tab => <button key={tab} type="button" aria-pressed={filterTab === tab} onClick={() => setFilterTab(tab)}>{tab}</button>)}</div>
+          <div className="trial-filters" role="group" aria-label="Course categories">{(["All","Instruments","Singing","Dancing"] as const).map(tab => <button key={tab} type="button" aria-pressed={filterTab === tab} onClick={() => setFilterTab(tab)}>{tab}</button>)}</div>
           <div className="trial-search"><Search size={18}/><input aria-label="Search instruments or styles" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} placeholder="Search courses"/>{searchQuery && <button type="button" aria-label="Clear course search" onClick={() => setSearchQuery("")}><X size={17}/></button>}</div>
         </div>
-        {filteredItems.length === 0 ? <div className="trial-empty"><Search size={28}/><h3>No matching courses</h3><p>Try another instrument or singing style.</p><button type="button" onClick={() => {setSearchQuery("");setFilterTab("All");}}>Clear filters</button></div> : <div className="trial-catalog">{[{name:"Instruments",items:instrumentsList},{name:"Singing",items:singingList}].filter(group => group.items.length).map(group => <section key={group.name} className="trial-category"><h3>{group.name}<span>{group.items.length}</span></h3><div className="trial-course-grid">{group.items.map(item => <button key={item.id} type="button" className="trial-course" aria-pressed={selectedInstrument === item.id} onClick={() => {setSelectedInstrument(item.id);setSelectedCategory(item.category);}}><span className="trial-course-icon"><CategoryIcon type={item.iconType}/></span><span className="trial-course-copy"><strong>{item.name}</strong><small>{item.subtitle}{item.tags?.length ? ` · ${item.tags.join(" · ")}` : ""}</small></span><span className="trial-course-check">{selectedInstrument === item.id && <Check size={14}/>}</span></button>)}</div></section>)}</div>}
+        {filteredItems.length === 0 ? <div className="trial-empty"><Search size={28}/><h3>No matching courses</h3><p>Try another instrument, singing style, or dance form.</p><button type="button" onClick={() => {setSearchQuery("");setFilterTab("All");}}>Clear filters</button></div> : <div className="trial-catalog">{[{name:"Instruments",items:instrumentsList},{name:"Singing",items:singingList},{name:"Dancing",items:dancingList}].filter(group => group.items.length).map(group => <section key={group.name} className="trial-category"><h3>{group.name}<span>{group.items.length}</span></h3><div className="trial-course-grid">{group.items.map(item => <button key={item.id} type="button" className="trial-course" aria-pressed={selectedInstrument === item.id} onClick={() => {setSelectedInstrument(item.id);setSelectedCategory(item.category);}}><span className="trial-course-icon"><CategoryIcon type={item.iconType}/></span><span className="trial-course-copy"><strong>{item.name}</strong><small>{item.subtitle}{item.tags?.length ? ` · ${item.tags.join(" · ")}` : ""}</small></span><span className="trial-course-check">{selectedInstrument === item.id && <Check size={14}/>}</span></button>)}</div></section>)}</div>}
         <footer className="trial-actions"><p><span>Selected</span><strong>{selectedDisplayName}</strong></p><button type="button" className="entry-primary" disabled={!selectedInstrument} onClick={() => setStep(2)}>Choose a time <ArrowRight size={18}/></button></footer>
       </section>}
       {step === 2 && <section className="trial-surface">
