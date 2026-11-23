@@ -49,6 +49,7 @@ async function run(kind) {
   const pdf = { id: "pdf", title: "Practice notes", fileName: "notes.pdf", fileUrl: "/notes.pdf", fileId: null,
     category: "LESSON_NOTES", description: "", fileSizeBytes: 100, mimeType: "application/pdf", shares: [], createdAt: new Date().toISOString() };
   root.render(<TeacherResourcesClient key={kind} initialResources={[pdf]} allottedStudents={[student]} />);
+  await delay(150);
   await until(() => [...document.querySelectorAll("button")].some(el => el.textContent.includes("Upload")), "Teacher page missing");
   [...document.querySelectorAll("button")].find(el => el.textContent.includes("Upload")).click();
   await until(() => document.querySelector('input[type="file"]'), "Upload form missing");
@@ -93,6 +94,24 @@ async function run(kind) {
   await document.querySelector(`dialog ${kind}`).play();
   return ["teacher uploads a real video directly with progress; save retry avoids duplicate uploads", "video filtering and sharing to selected students", "student video decodes with controls; viewed state changes on playback", "player cleanup, error feedback, and retry"].map(check => `${kind}: ${check.replaceAll("video", kind)}`);
 }
-run("video").then(videoChecks => run("audio").then(audioChecks => [...videoChecks,...audioChecks])).then(checks => ({ checks }), error => ({ error: error.message })).then(result => {
+async function runPdf() {
+  const baseline = await (await fetch("/stats")).json();
+  const file = new File(["%PDF-1.7\n", new Uint8Array(Math.round(5.7 * 1024 * 1024))], "music-handbook.pdf", {type:"application/pdf"});
+  window.videoTest={saves:0,shared:null};
+  root.render(<TeacherResourcesClient key="pdf-upload" initialResources={[]} allottedStudents={[]} />);
+  await until(()=>[...document.querySelectorAll("button")].some(el=>el.textContent.includes("Upload")),"Teacher upload missing");
+  [...document.querySelectorAll("button")].find(el=>el.textContent.includes("Upload")).click();
+  await until(()=>document.querySelector('input[type="file"]'),"File picker missing");
+  const input=document.querySelector('input[type="file"]'), transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;input.dispatchEvent(new Event("change",{bubbles:true}));
+  await delay(100);button("Upload & Save").click();
+  await until(()=>document.querySelector('[role="alert"]')?.textContent.includes("Save interrupted"),"PDF save error missing");
+  button("Upload & Save").click();
+  await until(()=>!document.querySelector('input[type="file"]'),"PDF did not finish saving");
+  const stats=await(await fetch("/stats")).json();
+  insist(stats.uploads===baseline.uploads+1 && stats.bytes===baseline.bytes+file.size,"PDF bytes did not go directly to storage or retry duplicated upload");
+  insist(document.body.textContent.includes("music handbook"),"Saved PDF not displayed");
+  return ["5.7 MB PDF uses direct upload; progress, save-error recovery and no duplicate upload"];
+}
+runPdf().then(pdfChecks=>run("video").then(videoChecks => run("audio").then(audioChecks => [...pdfChecks,...videoChecks,...audioChecks]))).then(checks => ({ checks }), error => ({ error: error.message })).then(result => {
   window.videoTestResult = result;
 });

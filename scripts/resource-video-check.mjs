@@ -107,6 +107,26 @@ try {
     assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, true);
   }
   console.log("PASS MPEG/MPG video and MPEG/MPGA audio upload, save, and sharing");
+  const pdfInput = {...input, fileName:"Music Handbook.PDF", size: Math.round(5.7 * 1024 * 1024), category:"SHEET_MUSIC"};
+  state.user={id:"teacher-a",role:"TEACHER"};
+  assert.equal(api.validateResourceFile(pdfInput.fileName, pdfInput.size), null);
+  assert(api.validateResourceFile("large.pdf", 26 * 1024 * 1024));
+  assert(api.validateResourceFile("bad.html", 100));
+  const pdfPrepared=await api.prepareResourceMediaAction(pdfInput);
+  assert.equal(pdfPrepared.success,true,pdfPrepared.error);
+  const pdfTicket=api.verifyResourceUpload(pdfPrepared.data.ticket,state.user.id);
+  assert.equal(pdfTicket.mimeType,"application/pdf");
+  assert(pdfTicket.path.startsWith("files/teacher-a/"));
+  assert.equal((await api.completeResourceMediaAction(pdfPrepared.data.ticket)).success,false);
+  state.files.set(pdfTicket.path,{size:pdfInput.size,contentType:"application/pdf"});
+  const pdfSaved=await api.completeResourceMediaAction(pdfPrepared.data.ticket);
+  assert.equal(pdfSaved.success,true);
+  assert.equal((await api.completeResourceMediaAction(pdfPrepared.data.ticket)).data.id,pdfSaved.data.id);
+  state.user={id:"student-a",role:"STUDENT"};
+  assert.equal((await api.resourcePlaybackAction(pdfSaved.data.id)).success,false);
+  state.shared.add(pdfSaved.data.id+":student-a");
+  assert.equal((await api.resourcePlaybackAction(pdfSaved.data.id)).success,true);
+  console.log("PASS 5.7 MB PDF direct upload, storage confirmation, retry, sharing and 25 MB limit");
   const audioInput={...input,fileName:"Practice.WAV",category:"AUDIO_LESSON"};
   state.user={id:"student-a",role:"STUDENT"};
   assert.equal((await api.prepareResourceMediaAction(audioInput)).success,false);

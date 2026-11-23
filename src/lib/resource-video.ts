@@ -49,3 +49,21 @@ export function validateResourceVideo(name: string, size: number) {
   if (size > MAX_RESOURCE_VIDEO_SIZE) return "Videos can be up to 250 MB. Choose a smaller video.";
   return null;
 }
+
+const documentTypes: Record<string, string> = {
+  pdf: "application/pdf", doc: "application/msword",
+  docx: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  txt: "text/plain", png: "image/png", jpg: "image/jpeg", jpeg: "image/jpeg",
+  webp: "image/webp", zip: "application/zip",
+};
+export function resourceFileType(name: string, mimeType?: string) {
+  const extension = name.split(".").pop()?.toLowerCase() || "";
+  return resourceMediaType(name, mimeType) || (Object.hasOwn(documentTypes, extension) ? documentTypes[extension] : undefined);
+}
+export function validateResourceFile(name: string, size: number) {
+  if (!resourceFileType(name)) return "This file format is not supported. Choose a document, image, audio, video, or ZIP file.";
+  if (!Number.isSafeInteger(size) || size <= 0) return "Choose a file that is not empty.";
+  const media = !!resourceMediaType(name);
+  if (size > (media ? MAX_RESOURCE_VIDEO_SIZE : 25 * 1024 * 1024)) return media ? "Audio and video files can be up to 250 MB." : "Documents and other files can be up to 25 MB.";
+  return null;
+}

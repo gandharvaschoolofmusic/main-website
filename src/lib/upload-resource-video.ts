@@ -1,7 +1,7 @@
 "use client";
 
 import { prepareResourceMediaAction, completeResourceMediaAction } from "@/actions/resource-videos";
-import { validateResourceMedia } from "@/lib/resource-video";
+import { validateResourceFile } from "@/lib/resource-video";
 
 // If storage succeeded but saving metadata failed, retry saving the same upload.
 // A lost application response must not create duplicate resources on the next click.
@@ -11,7 +11,7 @@ export async function uploadResourceMedia(file: File, details: {
   title: string; description: string; category: string;
 }, onProgress: (percent: number) => void) {
   try {
-    const validation = validateResourceMedia(file.name, file.size);
+    const validation = validateResourceFile(file.name, file.size);
     if (validation) throw new Error(validation);
     const previous = uploaded.get(file);
     if (previous?.details === JSON.stringify(details)) {

@@ -6,7 +6,7 @@ import { revalidatePath } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { getSupabaseClient, recordingPlaybackUrl } from "@/lib/supabase-storage";
-import { resourceMediaType, validateResourceMedia, isResourceAudio } from "@/lib/resource-video";
+import { resourceFileType, validateResourceFile, isResourceAudio, isResourceVideo } from "@/lib/resource-video";
 import { signResourceUpload, verifyResourceUpload } from "@/lib/resource-upload-ticket";
 import type { ResourceActionResponse } from "./resources";
 
@@ -29,7 +29,7 @@ export async function prepareResourceMediaAction(input: {
 }): Promise<ResourceActionResponse<{ uploadUrl: string; ticket: string; mimeType: string }>> {
   try {
     const userId = await faculty();
-    const validation = validateResourceMedia(input.fileName, input.size);
+    const validation = validateResourceFile(input.fileName, input.size);
     if (validation) throw new Error(validation);
     const title = input.title.trim();
     if (title.length < 2 || title.length > 200) throw new Error("Use a title between 2 and 200 characters.");
@@ -42,8 +42,8 @@ export async function prepareResourceMediaAction(input: {
       throw new Error(`This storage bucket currently allows ${Math.floor(bucket.file_size_limit / 1024 / 1024)} MB. Ask administration to increase its limit for larger audio or video files.`);
     }
     const id = randomUUID();
-    const path = `${isResourceAudio(input.fileName, resourceMediaType(input.fileName, input.mimeType)) ? "audio" : "videos"}/${userId}/${id}.${input.fileName.split(".").pop()!.toLowerCase()}`;
-    const mimeType = resourceMediaType(input.fileName, input.mimeType)!;
+    const path = `${isResourceAudio(input.fileName, resourceFileType(input.fileName, input.mimeType)) ? "audio" : isResourceVideo(input.fileName) ? "videos" : "files"}/${userId}/${id}.${input.fileName.split(".").pop()!.toLowerCase()}`;
+    const mimeType = resourceFileType(input.fileName, input.mimeType)!;
     const ticket = signResourceUpload({ ...input, title, id, path, mimeType, userId, expires: Date.now() + 2 * 60 * 60 * 1000 });
     const { data, error } = await client.storage.from("resources").createSignedUploadUrl(path, { upsert: false });
     if (error || !data) throw new Error("Could not prepare media storage. Please try again or contact administration.");

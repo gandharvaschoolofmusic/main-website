@@ -32,14 +32,13 @@ import {
   ShieldAlert,
 } from "lucide-react";
 import {
-  uploadResourceAction,
   deleteResourceAction,
   shareResourceAction,
   unshareResourceAction,
   AllottedStudentOption,
 } from "@/actions/resources";
 import { ResourceCategory } from "@prisma/client";
-import { isResourceAudio, isResourceMedia, validateResourceMedia, RESOURCE_FILE_ACCEPT } from "@/lib/resource-video";
+import { isResourceAudio, isResourceMedia, validateResourceFile, RESOURCE_FILE_ACCEPT } from "@/lib/resource-video";
 import { uploadResourceMedia } from "@/lib/upload-resource-video";
 import { ResourceMediaPlayer } from "@/components/resources/ResourceMediaPlayer";
 
@@ -235,7 +234,7 @@ export function AdminResourcesClient({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setUploadError(isResourceMedia(file.name, file.type) ? validateResourceMedia(file.name, file.size) : null);
+      setUploadError(validateResourceFile(file.name, file.size));
       setUploadProgress(null);
       if (isResourceAudio(file.name, file.type)) setUploadCategory("AUDIO_LESSON");
       setSelectedFile(file);
@@ -262,16 +261,8 @@ export function AdminResourcesClient({
     }
 
     setUploadError(null);
-    const formData = new FormData();
-    formData.append("title", uploadTitle.trim());
-    formData.append("description", uploadDescription.trim());
-    formData.append("category", uploadCategory);
-    formData.append("file", selectedFile);
-
     startTransition(async () => {
-      const res = isResourceMedia(selectedFile.name, selectedFile.type)
-        ? await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
-        : await uploadResourceAction(formData).catch(() => ({ success: false, error: "Upload interrupted. Please try again.", data: undefined }));
+      const res = await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress);
       if (res.success && res.data) {
         showToast(`"${uploadTitle}" uploaded to Supabase repository.`);
         setIsUploadOpen(false);

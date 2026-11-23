@@ -34,6 +34,10 @@ export async function createTicketAction(input: CreateTicketInput) {
       };
     }
 
+    if (input.subject.trim().startsWith("Reschedule [")) {
+      return { success: false, error: "Use Request Reschedule on your lesson card to submit a reschedule request." };
+    }
+
     const ticket = await db.supportTicket.create({
       data: {
         userId: user.id,

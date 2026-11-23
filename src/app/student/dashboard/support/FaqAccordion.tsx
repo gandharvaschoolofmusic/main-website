@@ -10,7 +10,7 @@ const FAQ_ITEMS = [
   },
   {
     q: "What is your lesson cancellation & rescheduling policy?",
-    a: "You can cancel or reschedule any scheduled lesson up to 24 hours prior to the session start time without losing the lesson credit. Cancellations within 24 hours are non-refundable to respect the faculty member's reserved studio time.",
+    a: "Students cannot cancel classes directly. Use Request Reschedule to contact administration at least 6 hours before your class starts. Each 24-class enrollment allows up to 6 requests. Your original class remains scheduled until admin confirms a new time, and each request includes a notification with your remaining allowance.",
   },
   {
     q: "How are teachers assigned when I buy a course?",

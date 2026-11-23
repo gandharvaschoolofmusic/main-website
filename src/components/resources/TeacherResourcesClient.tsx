@@ -27,11 +27,10 @@ import {
   Layers,
   Video,
 } from "lucide-react";
-import { isResourceVideo, isResourceAudio, isResourceMedia, RESOURCE_FILE_ACCEPT, validateResourceMedia } from "@/lib/resource-video";
+import { isResourceVideo, isResourceAudio, isResourceMedia, RESOURCE_FILE_ACCEPT, validateResourceFile } from "@/lib/resource-video";
 import { uploadResourceMedia } from "@/lib/upload-resource-video";
 import { ResourceMediaPlayer } from "./ResourceMediaPlayer";
 import {
-  uploadResourceAction,
   deleteResourceAction,
   shareResourceAction,
   unshareResourceAction,
@@ -186,7 +185,7 @@ export function TeacherResourcesClient({
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setUploadError(isResourceMedia(file.name, file.type) ? validateResourceMedia(file.name, file.size) : null);
+      setUploadError(validateResourceFile(file.name, file.size));
       setUploadProgress(null);
       if (isResourceAudio(file.name, file.type)) setUploadCategory("AUDIO_LESSON");
       else if (isResourceVideo(file.name, file.type)) setUploadCategory("OTHER");
@@ -216,16 +215,8 @@ export function TeacherResourcesClient({
 
     setUploadError(null);
 
-    const formData = new FormData();
-    formData.append("title", uploadTitle.trim());
-    formData.append("description", uploadDescription.trim());
-    formData.append("category", uploadCategory);
-    formData.append("file", selectedFile);
-
     startTransition(async () => {
-      const res = isResourceMedia(selectedFile.name, selectedFile.type)
-        ? await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress)
-        : await uploadResourceAction(formData).catch(() => ({ success: false, error: "Upload interrupted. Please try again.", data: undefined }));
+      const res = await uploadResourceMedia(selectedFile, { title: uploadTitle.trim(), description: uploadDescription.trim(), category: uploadCategory }, setUploadProgress);
       if (!res.success) {
         setUploadError(res.error || "Upload failed. Please check file size and credentials.");
       } else {

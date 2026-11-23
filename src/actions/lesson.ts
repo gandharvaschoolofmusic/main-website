@@ -37,6 +37,9 @@ export async function cancelLessonAction(
 ): Promise<CancelLessonResponse> {
   try {
     const user = await requireUser();
+    if (user.role === "STUDENT") {
+      return { success: false, error: "Students cannot cancel classes. Please use Request Reschedule for admin approval.", code: "FORBIDDEN" };
+    }
 
     const parsed = CancelLessonSchema.safeParse(input);
     if (!parsed.success) {

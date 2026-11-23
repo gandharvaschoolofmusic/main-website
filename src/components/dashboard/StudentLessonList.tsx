@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { LessonCountdown } from "./LessonCountdown";
-import { CancelLessonModal } from "./CancelLessonModal";
+import { RequestRescheduleModal } from "./RequestRescheduleModal";
 import { JOIN_WINDOW_MINUTES_BEFORE } from "@/types";
 import { useSyncedTime } from "@/lib/synced-time";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
@@ -208,7 +208,7 @@ export function StudentLessonList({
                         onClick={() => setCancellingLesson(lesson)}
                         className="text-xs text-body hover:text-error transition-colors py-1.5 font-medium"
                       >
-                        Cancel
+                        Request Reschedule
                       </button>
 
                       <div className="flex items-center gap-2">
@@ -332,17 +332,14 @@ export function StudentLessonList({
         </>
       )}
 
-      {/* Cancel Lesson Modal */}
+      {/* Admin-approved reschedule request */}
       {cancellingLesson && (
-        <CancelLessonModal
-          isOpen={!!cancellingLesson}
+        <RequestRescheduleModal
           onClose={() => setCancellingLesson(null)}
           lesson={{
             id: cancellingLesson.id,
             instrument: cancellingLesson.instrument,
             startsAt: cancellingLesson.startsAt,
-            partnerName: cancellingLesson.teacherName,
-            isTeacher: false,
           }}
           onSuccess={() => {
             setCancellingLesson(null);
