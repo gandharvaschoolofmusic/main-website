@@ -37,6 +37,7 @@ import {
   Music,
   CreditCard,
   Mic,
+  Footprints,
   Globe,
   Eye,
   EyeOff,
@@ -199,8 +200,8 @@ export function AdminCoursesManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [modalMode, setModalMode] = useState<"CREATE" | "EDIT" | null>(null);
 
-  // Filter tab: ALL, INSTRUMENTS, or SINGING
-  const [disciplineTab, setDisciplineTab] = useState<"ALL" | "INSTRUMENTS" | "SINGING">("ALL");
+  // Filter tab: all courses or a specific discipline.
+  const [disciplineTab, setDisciplineTab] = useState<"ALL" | "INSTRUMENTS" | "SINGING" | "DANCING">("ALL");
   const [levelFilter, setLevelFilter] = useState<"ALL" | CourseLevel>("ALL");
   const [publicationFilter, setPublicationFilter] = useState<"ALL" | "PUBLISHED" | "DRAFT">("ALL");
   const [togglingCourseId, setTogglingCourseId] = useState<string | null>(null);
@@ -902,6 +903,9 @@ export function AdminCoursesManager({
       if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) {
         return false;
       }
+      if (disciplineTab === "DANCING" && c.discipline !== Discipline.DANCE) {
+        return false;
+      }
 
       if (levelFilter !== "ALL" && String(c.level).toUpperCase() !== levelFilter) {
         return false;
@@ -934,11 +938,12 @@ export function AdminCoursesManager({
       <div className="flex flex-col gap-3 p-3 rounded-2xl bg-white border border-slate-200/90 shadow-2xs">
         {/* Top Controls Row: Discipline Filters, Search, Create Button */}
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Filter Pills: All, Instruments, Singing */}
+          {/* Discipline filters */}
           <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5 shrink-0">
             <button
               type="button"
               onClick={() => setDisciplineTab("ALL")}
+              aria-pressed={disciplineTab === "ALL"}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "ALL"
                   ? "bg-[#3C096C] text-white shadow-xs"
@@ -958,6 +963,7 @@ export function AdminCoursesManager({
             <button
               type="button"
               onClick={() => setDisciplineTab("INSTRUMENTS")}
+              aria-pressed={disciplineTab === "INSTRUMENTS"}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "INSTRUMENTS"
                   ? "bg-[#3C096C] text-white shadow-xs"
@@ -980,6 +986,7 @@ export function AdminCoursesManager({
             <button
               type="button"
               onClick={() => setDisciplineTab("SINGING")}
+              aria-pressed={disciplineTab === "SINGING"}
               className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
                 disciplineTab === "SINGING"
                   ? "bg-[#3C096C] text-white shadow-xs"
@@ -996,6 +1003,29 @@ export function AdminCoursesManager({
                 }`}
               >
                 {courses.filter((c) => c.discipline === Discipline.VOCALS).length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setDisciplineTab("DANCING")}
+              aria-pressed={disciplineTab === "DANCING"}
+              className={`px-3.5 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shrink-0 active:scale-[0.98] ${
+                disciplineTab === "DANCING"
+                  ? "bg-[#3C096C] text-white shadow-xs"
+                  : "text-gray-600 hover:text-black hover:bg-slate-100"
+              }`}
+            >
+              <Footprints className="w-3.5 h-3.5" />
+              <span>Dancing</span>
+              <span
+                className={`px-1.5 py-0.2 rounded-full text-[10px] font-semibold ${
+                  disciplineTab === "DANCING"
+                    ? "bg-white/20 text-white"
+                    : "bg-slate-200 text-slate-700"
+                }`}
+              >
+                {courses.filter((c) => c.discipline === Discipline.DANCE).length}
               </span>
             </button>
           </div>
@@ -1046,11 +1076,13 @@ export function AdminCoursesManager({
                   ? courses.filter((c) => {
                       if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
                       if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                      if (disciplineTab === "DANCING" && c.discipline !== Discipline.DANCE) return false;
                       return true;
                     }).length
                   : courses.filter((c) => {
                       if (disciplineTab === "INSTRUMENTS" && c.discipline !== Discipline.INSTRUMENT) return false;
                       if (disciplineTab === "SINGING" && c.discipline !== Discipline.VOCALS) return false;
+                      if (disciplineTab === "DANCING" && c.discipline !== Discipline.DANCE) return false;
                       return String(c.level).toUpperCase() === lvl;
                     }).length;
                 const label = lvl === "ALL" ? "All Levels" : lvl.charAt(0) + lvl.slice(1).toLowerCase();
@@ -1142,7 +1174,7 @@ export function AdminCoursesManager({
           </h4>
           <p className="text-xs text-body-muted max-w-md mx-auto">
             {disciplineTab !== "ALL"
-              ? `No ${disciplineTab === "INSTRUMENTS" ? "instrument" : "singing"} courses match "${searchQuery || 'current filters'}".`
+              ? `No ${disciplineTab === "INSTRUMENTS" ? "instrument" : disciplineTab === "DANCING" ? "dance" : "singing"} courses match "${searchQuery || 'current filters'}".`
               : "Try clearing your search query or reset filters."}
           </p>
           <div className="pt-2 flex items-center justify-center gap-3">
