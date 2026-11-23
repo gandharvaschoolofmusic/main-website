@@ -461,6 +461,16 @@ const getCachedAdminOverviewData = unstable_cache(
 
     const attentionItems: NeedsAttentionItem[] = [];
 
+    if (dbPendingCourseRequests > 0) {
+      attentionItems.push({
+        id: "att-course-requests",
+        title: "Course admission requests",
+        description: `${dbPendingCourseRequests} pending course ${dbPendingCourseRequests === 1 ? "request" : "requests"} to review and allot`,
+        color: "amber",
+        href: "/admin/enrollments",
+      });
+    }
+
     if (conflictCount > 0) {
       attentionItems.push({
         id: "att-conflict",

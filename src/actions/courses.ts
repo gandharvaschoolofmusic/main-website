@@ -11,9 +11,15 @@ import {
   NotificationType,
   TrialStatus,
 } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { notifyAdmins, createNotification } from "@/actions/notifications";
 import { logger } from "@/lib/logger";
+
+function refreshAdmissionQueues() {
+  updateTag("admin-overview");
+  updateTag("admin-enrollments");
+  revalidatePath("/admin");
+}
 
 // ─── Student: Submit Course Admission Request ────────────────────────────────
 
@@ -34,15 +40,13 @@ export async function submitCourseEnrollmentRequestAction(input: {
       return { success: false, error: "Course not found or is no longer published." };
     }
 
-    // Strict requirement: Only converted trial students can request course admission
-    const convertedTrial = await db.trialRequest.findFirst({
-      where: {
-        studentId: user.id,
-        isConverted: true,
-      },
-    });
+    // Existing students can request another course even when admitted directly.
+    const [convertedTrial, priorEnrollment] = await Promise.all([
+      db.trialRequest.findFirst({ where: { studentId: user.id, isConverted: true } }),
+      db.enrollment.findFirst({ where: { studentId: user.id, status: { in: [EnrollmentStatus.ACTIVE, EnrollmentStatus.COMPLETED] } } }),
+    ]);
 
-    if (!convertedTrial) {
+    if (!convertedTrial && !priorEnrollment) {
       return {
         success: false,
         error:
@@ -94,24 +98,29 @@ export async function submitCourseEnrollmentRequestAction(input: {
       },
     });
 
-    const planLabel = "Full Course Tuition";
+    // Notification delivery must not turn a saved request into a failed submission.
+    const notifications = await Promise.allSettled([
+      // Notify Academy Administrators
+      notifyAdmins({
+        type: NotificationType.NEW_COURSE_REQUEST,
+        title: "New Course Admission Request",
+        body: `${user.name || user.email} requested admission for "${course.title}".`,
+        link: `/admin/enrollments?studentId=${user.id}`,
+      }),
 
-    // Notify Academy Administrators
-    await notifyAdmins({
-      type: NotificationType.NEW_COURSE_REQUEST,
-      title: "New Course Admission Request",
-      body: `${user.name || user.email} requested admission for "${course.title}".`,
-      link: `/admin/enrollments?studentId=${user.id}`,
-    });
+      // Notify the Student
+      createNotification({
+        userId: user.id,
+        type: NotificationType.SYSTEM,
+        title: "Admission Request Submitted",
+        body: `Your request for "${course.title}" has been sent to academy administration. Our director will review and allot your course to your dashboard.`,
+        link: "/student/dashboard/courses",
+      }),
 
-    // Notify the Student
-    await createNotification({
-      userId: user.id,
-      type: NotificationType.SYSTEM,
-      title: "Admission Request Submitted",
-      body: `Your request for "${course.title}" has been sent to academy administration. Our director will review and allot your course to your dashboard.`,
-      link: "/student/dashboard/courses",
-    });
+    ]);
+    for (const result of notifications) {
+      if (result.status === "rejected") logger.error({ error: result.reason, requestId: request.id }, "Course request notification failed");
+    }
 
     logger.info(
       { requestId: request.id, studentId: user.id, courseId: course.id, plan: input.paymentPlan },
@@ -123,6 +132,7 @@ export async function submitCourseEnrollmentRequestAction(input: {
     revalidatePath(`/courses/${course.slug}`);
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
 
     return { success: true, requestId: request.id };
   } catch (error: any) {
@@ -162,6 +172,7 @@ export async function cancelCourseEnrollmentRequestAction(requestId: string) {
     revalidatePath(`/student/dashboard/courses/${request.course.slug}`);
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
 
     return { success: true };
   } catch (error: any) {
@@ -281,6 +292,7 @@ export async function adminApproveCourseRequestAction(input: {
 
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
     revalidatePath("/admin");
     revalidatePath("/student/dashboard/courses");
     revalidatePath(`/student/dashboard/courses/${request.course.slug}`);
@@ -342,6 +354,7 @@ export async function adminRejectCourseRequestAction(input: {
 
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
     revalidatePath("/admin");
     revalidatePath("/student/dashboard/courses");
 
@@ -430,6 +443,7 @@ export async function adminDirectAllotCourseAction(input: {
 
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
     revalidatePath("/admin");
     revalidatePath("/student/dashboard/courses");
     revalidatePath(`/student/dashboard/courses/${course.slug}`);
@@ -486,6 +500,7 @@ export async function adminUpdateStudentCourseAction(input: {
 
     revalidatePath("/admin/student-courses");
     revalidatePath("/admin/enrollments");
+    refreshAdmissionQueues();
     revalidatePath("/admin");
     revalidatePath("/student/dashboard/courses");
     revalidatePath(`/student/dashboard/courses/${enrollment.course.slug}`);

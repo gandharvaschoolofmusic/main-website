@@ -89,6 +89,24 @@ try {
   assert(api.validateResourceMedia("bad.html", 10));
   assert(api.validateResourceMedia("empty.wav", 0));
   assert(api.validateResourceMedia("large.wav", 251 * 1024 * 1024));
+  for (const [fileName, mimeType, expected] of [["lesson.MPEG", "video/mpeg", "video/mpeg"], ["lesson.mpg", "", "video/mpeg"], ["practice.mpeg", "audio/mpeg", "audio/mpeg"], ["practice.mpga", "audio/mpeg", "audio/mpeg"]]) {
+    state.user = { id: "teacher-a", role: "TEACHER" };
+    const prepared = await api.prepareResourceMediaAction({ ...input, fileName, mimeType });
+    assert.equal(prepared.success, true, prepared.error);
+    assert.equal(prepared.data.mimeType, expected);
+    const ticket = api.verifyResourceUpload(prepared.data.ticket, state.user.id);
+    state.files.set(ticket.path, { size: input.size, contentType: expected });
+    const saved = await api.completeResourceMediaAction(prepared.data.ticket);
+    assert.equal(saved.success, true);
+    assert.equal(state.rows.get(saved.data.id).mimeType, expected);
+    assert.equal(api.isResourceAudio(fileName, expected), expected.startsWith("audio/"));
+    assert.equal(api.isResourceVideo(fileName, expected), expected.startsWith("video/"));
+    state.user = { id: "student-a", role: "STUDENT" };
+    assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, false);
+    state.shared.add(saved.data.id + ":student-a");
+    assert.equal((await api.resourcePlaybackAction(saved.data.id)).success, true);
+  }
+  console.log("PASS MPEG/MPG video and MPEG/MPGA audio upload, save, and sharing");
   const audioInput={...input,fileName:"Practice.WAV",category:"AUDIO_LESSON"};
   state.user={id:"student-a",role:"STUDENT"};
   assert.equal((await api.prepareResourceMediaAction(audioInput)).success,false);

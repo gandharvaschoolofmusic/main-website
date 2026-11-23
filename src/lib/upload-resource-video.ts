@@ -21,7 +21,7 @@ export async function uploadResourceMedia(file: File, details: {
       return result;
     }
     onProgress(0);
-    const prepared = await prepareResourceMediaAction({ ...details, fileName: file.name, size: file.size });
+    const prepared = await prepareResourceMediaAction({ ...details, fileName: file.name, mimeType: file.type, size: file.size });
     if (!prepared.success || !prepared.data) throw new Error(prepared.error || "Could not prepare upload.");
     const { uploadUrl, ticket, mimeType } = prepared.data;
     await new Promise<void>((resolve, reject) => {

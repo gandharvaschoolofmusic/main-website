@@ -51,18 +51,19 @@ export function CourseEnrollmentRequestModal({
   description,
   level,
   isAlreadyEnrolled = false,
-  pendingRequest = null,
+  pendingRequest: initialPendingRequest = null,
   isAuthenticated = true,
   isConvertedStudent = true,
 }: CourseEnrollmentRequestModalProps) {
   const router = useRouter();
+  const [submittedRequest, setSubmittedRequest] = useState<CourseEnrollmentRequestModalProps["pendingRequest"]>(null);
+  const pendingRequest = submittedRequest || initialPendingRequest;
   const [isOpen, setIsOpen] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<CoursePaymentPlan>(CoursePaymentPlan.FULL_PAYMENT);
   const [preferredSchedule, setPreferredSchedule] = useState("");
   const [studentNotes, setStudentNotes] = useState("");
   const [isPending, startTransition] = useTransition();
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const [successMsg, setSuccessMsg] = useState<string | null>(null);
 
   // If already enrolled
   if (isAlreadyEnrolled) {
@@ -132,6 +133,7 @@ export function CourseEnrollmentRequestModal({
                 startTransition(async () => {
                   const res = await cancelCourseEnrollmentRequestAction(pendingRequest.id);
                   if (res.success) {
+                    setSubmittedRequest(null);
                     router.refresh();
                   } else {
                     alert(res.error || "Failed to cancel request.");
@@ -215,27 +217,25 @@ export function CourseEnrollmentRequestModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (isPending) return;
     setErrorMsg(null);
-    setSuccessMsg(null);
 
     startTransition(async () => {
-      const res = await submitCourseEnrollmentRequestAction({
-        courseId,
-        paymentPlan: selectedPlan,
-        preferredSchedule,
-        studentNotes,
-      });
-
-      if (!res.success) {
-        setErrorMsg(res.error || "Failed to submit request.");
-      } else {
-        setSuccessMsg(
-          "Your admission request has been sent to academy administration! Our team will review your allotment and add the course directly to your dashboard.",
-        );
-        setTimeout(() => {
-          setIsOpen(false);
-          router.refresh();
-        }, 2200);
+      try {
+        const res = await submitCourseEnrollmentRequestAction({
+          courseId,
+          paymentPlan: selectedPlan,
+          preferredSchedule,
+          studentNotes,
+        });
+        if (!res.success || !res.requestId) {
+          setErrorMsg(res.error || "Your request could not be confirmed. Please try again.");
+          return;
+        }
+        setSubmittedRequest({ id: res.requestId, status: "PENDING", paymentPlan: selectedPlan, createdAt: new Date().toISOString() });
+        setIsOpen(false);
+      } catch {
+        setErrorMsg("Could not confirm your request. Check your connection and try again. Your details have been kept.");
       }
     });
   };
@@ -303,114 +303,97 @@ export function CourseEnrollmentRequestModal({
               </div>
             )}
 
-            {successMsg ? (
-              <div className="p-6 rounded-2xl bg-emerald-50 border border-emerald-200 text-emerald-900 text-center space-y-3">
-                <div className="w-12 h-12 rounded-full bg-emerald-100 flex items-center justify-center mx-auto text-emerald-600">
-                  <CheckCircle2 className="w-6 h-6" />
-                </div>
-                <h4 className="font-serif font-bold text-lg text-heading">
-                  Request Successfully Sent!
-                </h4>
-                <p className="text-xs text-emerald-800 leading-relaxed max-w-md mx-auto">
-                  {successMsg}
-                </p>
-                <p className="text-[11px] text-body-muted pt-2">
-                  Redirecting to course dashboard...
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* 1. Tuition Structure & Per-Session Breakdown */}
+              <div className="space-y-2">
+                <label className="block text-xs font-bold text-heading uppercase tracking-wider">
+                  Step 1: Academy Tuition & Fee Structure
+                </label>
+                <CourseEmiBreakdown
+                  priceMinorUnits={priceMinorUnits}
+                  level={level ?? undefined}
+                  sessionCount={sessionCount}
+                  description={description ?? undefined}
+                />
+              </div>
+
+              {/* 2. Schedule Preference */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="preferredSchedule"
+                  className="block text-xs font-bold text-heading"
+                >
+                  Step 2: Preferred Days & Time Window (Optional)
+                </label>
+                <input
+                  id="preferredSchedule"
+                  type="text"
+                  value={preferredSchedule}
+                  onChange={(e) => setPreferredSchedule(e.target.value)}
+                  placeholder="e.g. Weekends afternoon, or Tue & Thu 6-8 PM IST"
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border-default focus:border-cta focus:ring-2 focus:ring-cta/20 text-xs text-heading placeholder:text-body-muted/60 transition-all"
+                />
+                <p className="text-[11px] text-body-muted">
+                  Our academy administration will match you with a certified faculty teacher fitting this window.
                 </p>
               </div>
-            ) : (
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* 1. Tuition Structure & Per-Session Breakdown */}
-                <div className="space-y-2">
-                  <label className="block text-xs font-bold text-heading uppercase tracking-wider">
-                    Step 1: Academy Tuition & Fee Structure
-                  </label>
-                  <CourseEmiBreakdown
-                    priceMinorUnits={priceMinorUnits}
-                    level={level ?? undefined}
-                    sessionCount={sessionCount}
-                    description={description ?? undefined}
-                  />
-                </div>
 
-                {/* 2. Schedule Preference */}
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="preferredSchedule"
-                    className="block text-xs font-bold text-heading"
-                  >
-                    Step 2: Preferred Days & Time Window (Optional)
-                  </label>
-                  <input
-                    id="preferredSchedule"
-                    type="text"
-                    value={preferredSchedule}
-                    onChange={(e) => setPreferredSchedule(e.target.value)}
-                    placeholder="e.g. Weekends afternoon, or Tue & Thu 6-8 PM IST"
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border-default focus:border-cta focus:ring-2 focus:ring-cta/20 text-xs text-heading placeholder:text-body-muted/60 transition-all"
-                  />
-                  <p className="text-[11px] text-body-muted">
-                    Our academy administration will match you with a certified faculty teacher fitting this window.
-                  </p>
-                </div>
+              {/* 3. Notes / Musical Background */}
+              <div className="space-y-1.5">
+                <label
+                  htmlFor="studentNotes"
+                  className="block text-xs font-bold text-heading"
+                >
+                  Step 3: Goals or Musical Background (Optional)
+                </label>
+                <textarea
+                  id="studentNotes"
+                  rows={3}
+                  value={studentNotes}
+                  onChange={(e) => setStudentNotes(e.target.value)}
+                  placeholder="Tell us about your musical experience, favorite genres, or exam objectives (Trinity, Gandharva Mahavidyalaya, hobby)..."
+                  className="w-full px-3.5 py-2.5 rounded-xl border border-border-default focus:border-cta focus:ring-2 focus:ring-cta/20 text-xs text-heading placeholder:text-body-muted/60 transition-all resize-none"
+                />
+              </div>
 
-                {/* 3. Notes / Musical Background */}
-                <div className="space-y-1.5">
-                  <label
-                    htmlFor="studentNotes"
-                    className="block text-xs font-bold text-heading"
-                  >
-                    Step 3: Goals or Musical Background (Optional)
-                  </label>
-                  <textarea
-                    id="studentNotes"
-                    rows={3}
-                    value={studentNotes}
-                    onChange={(e) => setStudentNotes(e.target.value)}
-                    placeholder="Tell us about your musical experience, favorite genres, or exam objectives (Trinity, Gandharva Mahavidyalaya, hobby)..."
-                    className="w-full px-3.5 py-2.5 rounded-xl border border-border-default focus:border-cta focus:ring-2 focus:ring-cta/20 text-xs text-heading placeholder:text-body-muted/60 transition-all resize-none"
-                  />
-                </div>
+              {/* Terms Assurance */}
+              <div className="p-3.5 rounded-xl bg-bg-alt/40 border border-border-subtle flex items-start gap-2.5 text-[11px] text-body">
+                <ShieldCheck className="w-4 h-4 text-accent-dark shrink-0 mt-0.5" />
+                <span>
+                  When you click "Submit Admission Request", your request goes directly to the Academy Director. Once approved, the course will be added directly to your dashboard with your assigned mentor.
+                </span>
+              </div>
 
-                {/* Terms Assurance */}
-                <div className="p-3.5 rounded-xl bg-bg-alt/40 border border-border-subtle flex items-start gap-2.5 text-[11px] text-body">
-                  <ShieldCheck className="w-4 h-4 text-accent-dark shrink-0 mt-0.5" />
-                  <span>
-                    When you click "Submit Admission Request", your request goes directly to the Academy Director. Once approved, the course will be added directly to your dashboard with your assigned mentor.
-                  </span>
-                </div>
+              {/* Modal Footer Actions */}
+              <div className="flex items-center justify-end gap-3 pt-3 border-t border-border-subtle">
+                <button
+                  type="button"
+                  disabled={isPending}
+                  onClick={() => setIsOpen(false)}
+                  className="px-5 py-2.5 rounded-xl border border-border-default text-xs font-semibold text-body hover:bg-bg-alt/50 transition-colors"
+                >
+                  Cancel
+                </button>
 
-                {/* Modal Footer Actions */}
-                <div className="flex items-center justify-end gap-3 pt-3 border-t border-border-subtle">
-                  <button
-                    type="button"
-                    disabled={isPending}
-                    onClick={() => setIsOpen(false)}
-                    className="px-5 py-2.5 rounded-xl border border-border-default text-xs font-semibold text-body hover:bg-bg-alt/50 transition-colors"
-                  >
-                    Cancel
-                  </button>
-
-                  <button
-                    type="submit"
-                    disabled={isPending}
-                    className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cta hover:bg-cta-hover active:bg-cta-active text-white text-xs font-bold transition-all shadow-sm shadow-cta/25 btn-tactile disabled:opacity-60"
-                  >
-                    {isPending ? (
-                      <>
-                        <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                        <span>Submitting Request...</span>
-                      </>
-                    ) : (
-                      <>
-                        <Send className="w-3.5 h-3.5" />
-                        <span>Submit Admission Request</span>
-                      </>
-                    )}
-                  </button>
-                </div>
-              </form>
-            )}
+                <button
+                  type="submit"
+                  disabled={isPending}
+                  className="inline-flex items-center gap-2 px-6 py-2.5 rounded-xl bg-cta hover:bg-cta-hover active:bg-cta-active text-white text-xs font-bold transition-all shadow-sm shadow-cta/25 btn-tactile disabled:opacity-60"
+                >
+                  {isPending ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Submitting Request...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-3.5 h-3.5" />
+                      <span>Submit Admission Request</span>
+                    </>
+                  )}
+                </button>
+              </div>
+            </form>
           </div>
         </div>
       )}

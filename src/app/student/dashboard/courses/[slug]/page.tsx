@@ -60,7 +60,7 @@ export default async function StudentCourseDetailPage({
   }
 
   // Check if student already enrolled, has pending request, and whether trial was converted
-  const [existingEnrollment, pendingRequestRecord, convertedTrial] = await Promise.all([
+  const [existingEnrollment, pendingRequestRecord, convertedTrial, priorEnrollment] = await Promise.all([
     db.enrollment.findFirst({
       where: {
         studentId: user.id,
@@ -81,9 +81,12 @@ export default async function StudentCourseDetailPage({
         isConverted: true,
       },
     }),
+    db.enrollment.findFirst({
+      where: { studentId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
+    }),
   ]);
 
-  const isConvertedStudent = Boolean(convertedTrial);
+  const isConvertedStudent = Boolean(convertedTrial || priorEnrollment);
 
   const pendingRequest = pendingRequestRecord
     ? {

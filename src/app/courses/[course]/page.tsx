@@ -102,7 +102,7 @@ export default async function Page({
   let isConvertedStudent = false;
 
   if (user) {
-    const [enrollment, req, convertedTrial] = await Promise.all([
+    const [enrollment, req, convertedTrial, priorEnrollment] = await Promise.all([
       db.enrollment.findFirst({
         where: { studentId: user.id, courseId: course.id, status: "ACTIVE" },
       }),
@@ -112,9 +112,12 @@ export default async function Page({
       db.trialRequest.findFirst({
         where: { studentId: user.id, isConverted: true },
       }),
+      db.enrollment.findFirst({
+        where: { studentId: user.id, status: { in: ["ACTIVE", "COMPLETED"] } },
+      }),
     ]);
     isAlreadyEnrolled = !!enrollment;
-    isConvertedStudent = Boolean(convertedTrial);
+    isConvertedStudent = Boolean(convertedTrial || priorEnrollment);
     if (req) {
       pendingRequest = {
         id: req.id,

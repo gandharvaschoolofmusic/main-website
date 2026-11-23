@@ -5,6 +5,7 @@ import { headers } from "next/headers";
 import { AdminSidebar } from "@/components/dashboard/AdminSidebar";
 import { syncAdminDeviceSession } from "@/lib/admin-device-session";
 import { AdminSessionMonitor } from "@/components/auth/AdminSessionMonitor";
+import { AdminQueueRefresh } from "@/components/dashboard/AdminQueueRefresh";
 
 export const metadata = {
   title: "Admin Portal | Gandharva School of Music",
@@ -50,6 +51,7 @@ export default async function AdminPortalLayout({
   return (
     <div className="flex flex-col sm:flex-row h-[calc(100dvh-4rem)] max-h-[calc(100dvh-4rem)] overflow-hidden bg-[#F8F7FC] text-heading font-sans antialiased">
       <AdminSessionMonitor />
+      <AdminQueueRefresh />
       <AdminSidebar
         currentUser={{
           name: user.name || "Administrator",

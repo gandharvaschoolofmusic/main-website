@@ -25,7 +25,7 @@ function storage() {
 }
 
 export async function prepareResourceMediaAction(input: {
-  fileName: string; size: number; title: string; description: string; category: string;
+  fileName: string; mimeType?: string; size: number; title: string; description: string; category: string;
 }): Promise<ResourceActionResponse<{ uploadUrl: string; ticket: string; mimeType: string }>> {
   try {
     const userId = await faculty();
@@ -42,8 +42,8 @@ export async function prepareResourceMediaAction(input: {
       throw new Error(`This storage bucket currently allows ${Math.floor(bucket.file_size_limit / 1024 / 1024)} MB. Ask administration to increase its limit for larger audio or video files.`);
     }
     const id = randomUUID();
-    const path = `${isResourceAudio(input.fileName) ? "audio" : "videos"}/${userId}/${id}.${input.fileName.split(".").pop()!.toLowerCase()}`;
-    const mimeType = resourceMediaType(input.fileName)!;
+    const path = `${isResourceAudio(input.fileName, resourceMediaType(input.fileName, input.mimeType)) ? "audio" : "videos"}/${userId}/${id}.${input.fileName.split(".").pop()!.toLowerCase()}`;
+    const mimeType = resourceMediaType(input.fileName, input.mimeType)!;
     const ticket = signResourceUpload({ ...input, title, id, path, mimeType, userId, expires: Date.now() + 2 * 60 * 60 * 1000 });
     const { data, error } = await client.storage.from("resources").createSignedUploadUrl(path, { upsert: false });
     if (error || !data) throw new Error("Could not prepare media storage. Please try again or contact administration.");
