@@ -108,6 +108,14 @@ export function AdminTeacherPaymentsManager({
   // Clean UPI ID string
   const cleanModalUpi = modalUpiId.replace(/[\u200B-\u200D\uFEFF]/g, "").trim();
 
+  // Keep the amount near the front so it remains in the UPI note even when
+  // the session reference is long and the note is trimmed for app compatibility.
+  const qrTransactionNote = useMemo(() => {
+    if (!selectedSession) return "";
+    const sessionRef = selectedSession.trackingCode.replace(/[^a-zA-Z0-9]/g, "").slice(0, 16);
+    return `Payout ${sessionRef} Rs ${Math.max(0, customAmountRupees)}`;
+  }, [selectedSession, customAmountRupees]);
+
   // Auto-generate standard UPI payment URI dynamically based on current modal UPI ID
   const upiUri = useMemo(() => {
     if (!cleanModalUpi || !cleanModalUpi.includes("@")) return "";
@@ -116,6 +124,7 @@ export function AdminTeacherPaymentsManager({
       payeeName: selectedSession?.teacherName,
       amount: customAmountRupees,
       trackingCode: selectedSession?.trackingCode,
+      customNote: qrTransactionNote,
       includeAmount: includeAmountInQr,
       includeNote: includeNoteInQr,
       includePayeeName: includeNameInQr,
@@ -124,6 +133,7 @@ export function AdminTeacherPaymentsManager({
     cleanModalUpi,
     selectedSession,
     customAmountRupees,
+    qrTransactionNote,
     includeAmountInQr,
     includeNoteInQr,
     includeNameInQr,
@@ -1394,10 +1404,10 @@ export function AdminTeacherPaymentsManager({
                         Embedded QR Transaction Note
                       </span>
                       <p className="font-mono text-[10.5px] text-heading bg-white px-2 py-1 rounded border border-neutral-200 truncate">
-                        Session {selectedSession.trackingCode} - {selectedSession.teacherName} - Rs {customAmountRupees}
+                        {qrTransactionNote}
                       </p>
                       <p className="text-[10px] text-body-muted leading-relaxed">
-                        Scanning the QR code on Google Pay, PhonePe, Paytm, or BHIM automatically fills the recipient name, session reference, and amount.
+                        The QR embeds this description, session reference, and amount in the UPI payment request.
                       </p>
                     </div>
                   </div>
