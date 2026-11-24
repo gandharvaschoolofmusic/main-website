@@ -606,6 +606,7 @@ function LessonRoomContent({
   return (
     <>
       {!lesson.companion && <RoomAudioRenderer />}
+      {autoRecorder.recordingWarning && <div className="meet-call-banner" role="status">{autoRecorder.recordingWarning}</div>}
       {lesson.companion && <div className="meet-companion-choice" role="status">Second device: camera and screen sharing only. Audio stays on your main device.</div>}
       <MeetRoomUI
         lesson={lesson}

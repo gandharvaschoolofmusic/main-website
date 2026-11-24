@@ -55,7 +55,7 @@ export async function recordParticipantJoin(params: {
   const nowIso = now.toISOString();
 
   try {
-    await db.$transaction(async tx => {
+    const changed = await db.$transaction(async tx => {
       // Serialize changes to the shared attendance array across both participants.
       await tx.$queryRaw`SELECT id FROM "Lesson" WHERE id = ${lessonId} FOR UPDATE`;
       const lesson = await tx.lesson.findUnique({
@@ -83,19 +83,9 @@ export async function recordParticipantJoin(params: {
       );
 
       if (existingOpenIdx !== -1) {
-        // User is already marked active in an open session.
-        // If joined very recently (< 45s), ignore redundant ping from concurrent token & webhook.
-        const openSession = sessions[existingOpenIdx];
-        const timeSinceOpen = now.getTime() - new Date(openSession.joinedAt).getTime();
-        if (timeSinceOpen < 45_000) {
-          return;
-        }
-        // If previous session was left open for hours, close it and open fresh
-        openSession.leftAt = nowIso;
-        openSession.durationSeconds = Math.max(
-          0,
-          Math.round((now.getTime() - new Date(openSession.joinedAt).getTime()) / 1000),
-        );
+        // Client joins, delayed webhooks and reconnect notifications can describe
+        // the same visit. Only a recorded leave closes it; its age is not an exit.
+        return false;
       }
 
       // Append new active session
@@ -130,8 +120,10 @@ export async function recordParticipantJoin(params: {
         where: { id: lessonId },
         data: updateData,
       });
+      return true;
     });
 
+    if (!changed) return;
     try {
       revalidateTag("admin-recordings", "max");
       revalidateTag("admin-lessons", "max");
