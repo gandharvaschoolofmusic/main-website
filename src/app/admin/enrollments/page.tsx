@@ -21,7 +21,7 @@ export const metadata = {
 
 const getCachedAdminEnrollmentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-enrollments-v5", async () => {
+    return getResilientData("admin-enrollments-v6", async () => {
       // Run ALL queries in parallel — cuts total time from sum(all) to max(slowest)
       const [dbCourses, dbTeachers, dbStudents, dbTrialLeads, dbEnrollments, dbCourseRequests] =
         await Promise.all([
@@ -157,7 +157,6 @@ const getCachedAdminEnrollmentsData = unstable_cache(
                   notes: true,
                   createdAt: true,
                 },
-                take: 20, // Cap payment records per enrollment
               },
             },
             orderBy: { startedAt: "desc" },
@@ -352,7 +351,7 @@ const getCachedAdminEnrollmentsData = unstable_cache(
       };
     });
   },
-  ["admin-enrollments-data-v5"],
+  ["admin-enrollments-data-v6"],
   { revalidate: 30, tags: ["admin-enrollments", "enrollments"] }
 );
 
@@ -380,13 +379,13 @@ export default async function AdminEnrollmentsPage(props: {
     data = await getCachedAdminEnrollmentsData();
   } catch (err) {
     console.error("[AdminEnrollmentsPage] Failed to load cached enrollments data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v5");
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v6");
     if (fallback) data = fallback;
   }
 
   // Safety net: if students array is empty, check resilient cache for last known good data
   if (!data.formattedStudents || data.formattedStudents.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v5");
+    const fallback = getLastKnownGood<typeof data>("admin-enrollments-v6");
     if (fallback && fallback.formattedStudents.length > 0) {
       data = fallback;
     }

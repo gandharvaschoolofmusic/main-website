@@ -424,19 +424,17 @@ export function OverallPaymentsManager({
       return days;
     }
 
-    // Month view: 5 intervals (e.g. Days 1-7, 8-14, 15-21, 22-28, 29-31)
+    // Four monthly periods; the final period includes every remaining day.
     if (timeFilter === "THIS_MONTH" || timeFilter === "LAST_MONTH") {
       const baseMonth = timeFilter === "THIS_MONTH" ? now : subMonths(now, 1);
-      const mStart = startOfMonth(baseMonth);
       const mEnd = endOfMonth(baseMonth);
       const totalDays = mEnd.getDate();
 
       const intervals = [
         { label: "Days 1-7", startDay: 1, endDay: 7 },
-        { label: "Days 8-14", startDay: 8, endDay: 14 },
-        { label: "Days 15-21", startDay: 15, endDay: 21 },
-        { label: "Days 22-28", startDay: 22, endDay: 28 },
-        { label: `Days 29-${totalDays}`, startDay: 29, endDay: totalDays },
+        { label: "Days 8-15", startDay: 8, endDay: 15 },
+        { label: "Days 16-23", startDay: 16, endDay: 23 },
+        { label: `Days 24-${totalDays}`, startDay: 24, endDay: totalDays },
       ];
 
       return intervals.map((inv) => {
@@ -454,7 +452,7 @@ export function OverallPaymentsManager({
         return {
           key: inv.label,
           label: inv.label,
-          sublabel: `${format(baseMonth, "MMMM yyyy")}`,
+          sublabel: `${inv.label} · ${format(baseMonth, "MMMM yyyy")}`,
           revenue: rev,
           count: matching.length,
         };

@@ -3,6 +3,7 @@
 import { useState, useTransition, useEffect, useMemo } from "react";
 import { EnrollmentStatus, PaymentStatus, LessonStatus } from "@prisma/client";
 import { formatToIST, toISTInputString, fromISTInputToUtc } from "@/lib/timezone";
+import { enrollmentPaidMinor, enrollmentPayments } from "@/lib/enrollment-payments";
 import {
   saveFullEnrollmentPlanAction,
   scheduleEnrollmentLessonAction,
@@ -126,6 +127,18 @@ export interface EnrollmentRecord {
     gatewayPaymentId: string | null;
   } | null;
   payments?: EnrollmentPaymentItem[];
+}
+
+function recordedPayments(enrollment: EnrollmentRecord): EnrollmentPaymentItem[] {
+  const primary = enrollment.payment ? {
+    ...enrollment.payment,
+    currency: "INR",
+    gateway: "manual",
+    gatewayOrderId: null,
+    notes: "Initial admission payment tranche",
+    createdAt: enrollment.startedAt,
+  } : null;
+  return enrollmentPayments<EnrollmentPaymentItem>({ payment: primary, payments: enrollment.payments });
 }
 
 export interface CourseCatalogOption {
@@ -365,9 +378,7 @@ export function AdminEnrollmentsManager({
       : 24000
   );
   const [paidRupees, setPaidRupees] = useState<number>(
-    activeEnrollment?.payment
-      ? Math.round(activeEnrollment.payment.amountMinorUnits / 100)
-      : 0
+    activeEnrollment ? Math.round(enrollmentPaidMinor(activeEnrollment) / 100) : 0
   );
   const [paymentStatus, setPaymentStatus] = useState<string>("Partially paid");
   const [enrollmentStatus, setEnrollmentStatus] = useState<EnrollmentStatus>(
@@ -553,17 +564,7 @@ export function AdminEnrollmentsManager({
         Math.max(0, activeEnrollment.sessionsTotal - activeEnrollment.sessionsRemaining)
       );
       setFeeRupees(Math.round(activeEnrollment.coursePriceMinorUnits / 100));
-      const totalPaidMinor = (activeEnrollment.payments || []).reduce(
-        (sum, p) => sum + p.amountMinorUnits,
-        0
-      );
-      if (totalPaidMinor > 0) {
-        setPaidRupees(Math.round(totalPaidMinor / 100));
-      } else if (activeEnrollment.payment) {
-        setPaidRupees(Math.round(activeEnrollment.payment.amountMinorUnits / 100));
-      } else {
-        setPaidRupees(0);
-      }
+      setPaidRupees(Math.round(enrollmentPaidMinor(activeEnrollment) / 100));
       setEnrollmentStatus(activeEnrollment.status);
       if (activeEnrollment.adminNotes) {
         setAdminNotes(activeEnrollment.adminNotes);
@@ -573,27 +574,7 @@ export function AdminEnrollmentsManager({
 
   // Derived list of all recorded payment tranches
   const allRecordedPayments = useMemo(() => {
-    if (!activeEnrollment) return [];
-    if (activeEnrollment.payments && activeEnrollment.payments.length > 0) {
-      return activeEnrollment.payments;
-    }
-    if (activeEnrollment.payment) {
-      return [
-        {
-          id: activeEnrollment.payment.id,
-          customId: activeEnrollment.payment.customId || null,
-          amountMinorUnits: activeEnrollment.payment.amountMinorUnits,
-          currency: "INR",
-          gateway: "manual",
-          gatewayPaymentId: activeEnrollment.payment.gatewayPaymentId || activeEnrollment.payment.customId || "PAYID000001",
-          gatewayOrderId: null,
-          status: activeEnrollment.payment.status,
-          notes: "Initial admission payment tranche",
-          createdAt: activeEnrollment.startedAt,
-        },
-      ];
-    }
-    return [];
+    return activeEnrollment ? recordedPayments(activeEnrollment) : [];
   }, [activeEnrollment]);
 
   // Record 2nd, 3rd, or subsequent payment installment
@@ -662,8 +643,8 @@ export function AdminEnrollmentsManager({
             item.id === activeEnrollment.id
               ? {
                   ...item,
-                  payments: [...(item.payments || []), newPaymentItem],
-                  payment: newPaymentItem,
+                  payments: [...recordedPayments(item), newPaymentItem],
+                  payment: item.payment || newPaymentItem,
                   lessons: [...(item.lessons || []), ...scheduledLessons],
                 }
               : item
@@ -1971,7 +1952,7 @@ export function AdminEnrollmentsManager({
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
                     {studentEnrollments.map((enr) => {
                       const isThisActive = enr.id === activeEnrollment?.id;
-                      const paidAmount = enr.payment ? Math.round(enr.payment.amountMinorUnits / 100) : 0;
+                      const paidAmount = Math.round(enrollmentPaidMinor(enr) / 100);
                       const totalFee = Math.round(enr.coursePriceMinorUnits / 100);
                       const dueAmount = Math.max(0, totalFee - paidAmount);
 

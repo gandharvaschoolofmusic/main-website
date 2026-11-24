@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { enrollmentPaidMinor } from "@/lib/enrollment-payments";
 import { requireRole } from "@/lib/auth-helpers";
 import {
   Role,
@@ -3129,7 +3130,8 @@ export async function adminRecordEnrollmentPaymentAction(input: {
       include: {
         student: { select: { id: true, name: true, email: true } },
         course: { select: { id: true, title: true, priceMinorUnits: true, instrument: true } },
-        payments: { select: { id: true, amountMinorUnits: true } },
+        payment: { select: { id: true, amountMinorUnits: true, status: true } },
+        payments: { select: { id: true, amountMinorUnits: true, status: true } },
       },
     });
 
@@ -3159,9 +3161,9 @@ export async function adminRecordEnrollmentPaymentAction(input: {
     });
 
     // Compute updated total paid across all payments
-    const existingPaidMinor = enrollment.payments.reduce((sum, p) => sum + p.amountMinorUnits, 0);
+    const existingPaidMinor = enrollmentPaidMinor(enrollment);
     const newTotalPaidMinor = existingPaidMinor + amountMinorUnits;
-    const courseFeeMinor = enrollment.course.priceMinorUnits || 0;
+    const courseFeeMinor = enrollment.customFeeMinorUnits ?? enrollment.course.priceMinorUnits ?? 0;
     const isFullyPaid = newTotalPaidMinor >= courseFeeMinor;
     const newEmiStatus = isFullyPaid ? CourseEmiStatus.FULLY_PAID : CourseEmiStatus.PARTIALLY_PAID;
 
