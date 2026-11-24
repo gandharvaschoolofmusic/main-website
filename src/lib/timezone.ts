@@ -139,10 +139,82 @@ export function getTimezoneAbbr(
   if (isNaN(d.getTime())) return "UTC";
 
   try {
-    return formatInTimeZone(d, timezone, "zzz");
+    if (timezone === "Asia/Kolkata" || timezone === "Asia/Calcutta") return "IST";
+    return new Intl.DateTimeFormat("en-US", {
+      timeZone: timezone,
+      timeZoneName: "short",
+    }).formatToParts(d).find(part => part.type === "timeZoneName")?.value || "UTC";
   } catch {
     return "UTC";
   }
+}
+
+// IANA location names identify the timezone's representative city, not a
+// student's precise physical location. Keep the saved profile country separate.
+const TIMEZONE_LOCATIONS: Record<string, { country: string; code?: string; city?: string }> = {
+  "Asia/Kolkata": { country: "India", city: "Kolkata" },
+  "Asia/Calcutta": { country: "India", city: "Kolkata" },
+  "America/New_York": { country: "United States", code: "ET" },
+  "America/Detroit": { country: "United States", code: "ET" },
+  "America/Chicago": { country: "United States", code: "CT" },
+  "America/Denver": { country: "United States", code: "MT" },
+  "America/Phoenix": { country: "United States", code: "MST" },
+  "America/Los_Angeles": { country: "United States", code: "PT" },
+  "America/Anchorage": { country: "United States", code: "AKT" },
+  "Pacific/Honolulu": { country: "United States", code: "HST" },
+  "America/Toronto": { country: "Canada", code: "ET" },
+  "America/Vancouver": { country: "Canada", code: "PT" },
+  "America/Edmonton": { country: "Canada", code: "MT" },
+  "America/Winnipeg": { country: "Canada", code: "CT" },
+  "America/Halifax": { country: "Canada", code: "AT" },
+  "America/St_Johns": { country: "Canada", code: "NT" },
+  "America/Mexico_City": { country: "Mexico" },
+  "America/Sao_Paulo": { country: "Brazil" },
+  "Europe/London": { country: "United Kingdom" },
+  "Europe/Dublin": { country: "Ireland" },
+  "Europe/Paris": { country: "France" },
+  "Europe/Berlin": { country: "Germany" },
+  "Europe/Rome": { country: "Italy" },
+  "Europe/Madrid": { country: "Spain" },
+  "Europe/Amsterdam": { country: "Netherlands" },
+  "Europe/Zurich": { country: "Switzerland" },
+  "Asia/Dubai": { country: "United Arab Emirates" },
+  "Asia/Riyadh": { country: "Saudi Arabia" },
+  "Asia/Qatar": { country: "Qatar" },
+  "Asia/Muscat": { country: "Oman" },
+  "Asia/Kuwait": { country: "Kuwait" },
+  "Asia/Singapore": { country: "Singapore" },
+  "Asia/Kuala_Lumpur": { country: "Malaysia" },
+  "Asia/Tokyo": { country: "Japan" },
+  "Asia/Shanghai": { country: "China" },
+  "Asia/Hong_Kong": { country: "Hong Kong" },
+  "Asia/Seoul": { country: "South Korea" },
+  "Asia/Bangkok": { country: "Thailand" },
+  "Asia/Manila": { country: "Philippines" },
+  "Asia/Kathmandu": { country: "Nepal" },
+  "Asia/Katmandu": { country: "Nepal", city: "Kathmandu" },
+  "Asia/Colombo": { country: "Sri Lanka" },
+  "Asia/Dhaka": { country: "Bangladesh" },
+  "Asia/Karachi": { country: "Pakistan" },
+  "Australia/Sydney": { country: "Australia" },
+  "Australia/Melbourne": { country: "Australia" },
+  "Australia/Brisbane": { country: "Australia" },
+  "Australia/Adelaide": { country: "Australia" },
+  "Australia/Perth": { country: "Australia" },
+  "Pacific/Auckland": { country: "New Zealand" },
+  "Africa/Johannesburg": { country: "South Africa" },
+};
+
+/** Human-readable booking timezone; seasonal codes use the lesson date. */
+export function formatTimezoneLabel(timezone: string, date: Date | string | number, country?: string | null): string {
+  if (!isValidTimezone(timezone)) return "Timezone unavailable";
+  if (timezone === "UTC" || timezone === "Etc/UTC") return "Coordinated Universal Time · UTC";
+  const canonical = Intl.DateTimeFormat("en-US", { timeZone: timezone }).resolvedOptions().timeZone;
+  const location = TIMEZONE_LOCATIONS[timezone] || TIMEZONE_LOCATIONS[canonical];
+  const city = location?.city || timezone.split("/").at(-1)!.replaceAll("_", " ");
+  const abbr = getTimezoneAbbr(date, timezone);
+  const code = location?.code && location.code !== abbr ? `${location.code} (${abbr})` : abbr;
+  return [location?.country || country, city, code].filter(Boolean).join(" · ");
 }
 
 /**

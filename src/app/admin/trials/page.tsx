@@ -10,7 +10,7 @@ import {
   CourseOption,
   TrialCrmKpiStats,
 } from "./AdminTrialsManager";
-import { formatInViewerTimezone } from "@/lib/timezone";
+import { formatToIST, getLocalDateString, IST_TIMEZONE } from "@/lib/timezone";
 
 export const metadata = {
   title: "Trial Bookings CRM | Admin Portal | Gandharva School of Music",
@@ -19,7 +19,7 @@ export const metadata = {
 
 const getCachedAdminTrialsData = unstable_cache(
   async () => {
-    return getResilientData("admin-trials-v3", async () => {
+    return getResilientData("admin-trials-v4", async () => {
       const [dbRequests, dbTeachers, dbCourses] = await Promise.all([
       db.trialRequest.findMany({
         include: {
@@ -86,7 +86,7 @@ const getCachedAdminTrialsData = unstable_cache(
     ]);
 
     const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayInIST = getLocalDateString(now, IST_TIMEZONE);
 
     const formattedRequests: AdminTrialRequestItem[] = dbRequests.map((r) => {
       const activeStartsAt = r.allottedLesson?.startsAt || r.requestedStartsAt;
@@ -110,11 +110,7 @@ const getCachedAdminTrialsData = unstable_cache(
         requestedStartsAt: activeStartsAt.toISOString(),
         originalRequestedStartsAt: r.requestedStartsAt.toISOString(),
         timezone: studentTz,
-        formattedTime: formatInViewerTimezone(
-          activeStartsAt,
-          studentTz,
-          "EEE, MMM d, yyyy 'at' h:mm a (zzz)"
-        ),
+        formattedTime: formatToIST(activeStartsAt),
         preferredTimeSlot: r.preferredTimeSlot,
         ageGroup: r.ageGroup,
         studentNotes: r.studentNotes,
@@ -144,7 +140,7 @@ const getCachedAdminTrialsData = unstable_cache(
       (r) => r.status === TrialRequestStatus.PENDING && !r.isContacted
     );
     const newToday = formattedRequests.filter(
-      (r) => new Date(r.createdAt) >= startOfToday
+      (r) => getLocalDateString(r.createdAt, IST_TIMEZONE) === todayInIST
     ).length;
 
     const contacted = formattedRequests.filter((r) => r.isContacted);
@@ -192,7 +188,7 @@ const getCachedAdminTrialsData = unstable_cache(
     };
     });
   },
-  ["admin-trials-data-v3"],
+  ["admin-trials-data-v4"],
   { revalidate: 30, tags: ["admin-trials", "trials"] }
 );
 
@@ -219,13 +215,13 @@ export default async function AdminTrialsPage() {
     data = await getCachedAdminTrialsData();
   } catch (err) {
     console.error("[AdminTrialsPage] Failed to load cached trials data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v3");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v4");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedRequests is empty, check resilient cache for last known good data
   if (!data.formattedRequests || data.formattedRequests.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v3");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v4");
     if (fallback && fallback.formattedRequests.length > 0) {
       data = fallback;
     }

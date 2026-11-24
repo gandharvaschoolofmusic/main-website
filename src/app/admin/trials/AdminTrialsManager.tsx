@@ -3,6 +3,7 @@
 import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TrialRequestStatus } from "@prisma/client";
+import { IST_TIMEZONE, formatToIST, formatISTDateOnly, formatISTTimeOnly, fromISTInputToUtc, toISTInputString, getLocalDateString, formatTimezoneLabel, formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
 import {
   allotTrialTeacherAction,
   updateTrialLeadStatusAction,
@@ -233,26 +234,11 @@ function getAvatarColor(name: string): string {
 }
 
 function formatReadableDateTime(isoString: string | null | undefined): string {
-  if (!isoString) return "—";
-  const date = new Date(isoString);
-  if (isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-  }).format(date);
+  return formatToIST(isoString, "MMM d, h:mm a 'IST'") || "—";
 }
 
 function formatReadableDateOnly(isoString: string | null | undefined): string {
-  if (!isoString) return "—";
-  const date = new Date(isoString);
-  if (isNaN(date.getTime())) return "—";
-  return new Intl.DateTimeFormat("en-US", {
-    day: "2-digit",
-    month: "short",
-    year: "numeric",
-  }).format(date);
+  return formatISTDateOnly(isoString) || "—";
 }
 
 function getCountdownPill(targetIso: string, isMounted = true): { label: string; isLive: boolean } {
@@ -351,7 +337,7 @@ export function AdminTrialsManager({
   const [contactMethod, setContactMethod] = useState<"WhatsApp" | "Phone" | "Email">("WhatsApp");
   const [contactedNotes, setContactedNotes] = useState("Student responded. Interested in trial.");
   const [contactedFollowUpDate, setContactedFollowUpDate] = useState(
-    new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+    getLocalDateString(Date.now() + 86400000, IST_TIMEZONE)
   );
   const [contactedFollowUpTime, setContactedFollowUpTime] = useState("18:00");
 
@@ -370,7 +356,7 @@ export function AdminTrialsManager({
     "Parent will confirm package tomorrow."
   );
   const [completionFollowUpDate, setCompletionFollowUpDate] = useState(
-    new Date(Date.now() + 86400000).toISOString().slice(0, 10)
+    getLocalDateString(Date.now() + 86400000, IST_TIMEZONE)
   );
   const [completionFollowUpTime, setCompletionFollowUpTime] = useState("18:00");
 
@@ -383,7 +369,7 @@ export function AdminTrialsManager({
   >("Interested");
   const [followUpNotes, setFollowUpNotes] = useState("");
   const [followUpNextDate, setFollowUpNextDate] = useState(
-    new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10)
+    getLocalDateString(Date.now() + 86400000 * 2, IST_TIMEZONE)
   );
   const [followUpNextTime, setFollowUpNextTime] = useState("18:00");
 
@@ -405,7 +391,7 @@ export function AdminTrialsManager({
   const [newLeadGuardianName, setNewLeadGuardianName] = useState("");
   const [newLeadInstrument, setNewLeadInstrument] = useState("Guitar");
   const [newLeadSlotDate, setNewLeadSlotDate] = useState(
-    new Date(Date.now() + 86400000 * 2).toISOString().slice(0, 10)
+    getLocalDateString(Date.now() + 86400000 * 2, IST_TIMEZONE)
   );
   const [newLeadSlotTime, setNewLeadSlotTime] = useState("19:00");
   const [newLeadSource, setNewLeadSource] = useState("Direct Web");
@@ -624,8 +610,7 @@ export function AdminTrialsManager({
           if (reqDate < thirtyDaysAgo || reqDate > thirtyDaysLater) return false;
         } else if (trialDateFilter === "THIS_MONTH") {
           if (
-            reqDate.getMonth() !== now.getMonth() ||
-            reqDate.getFullYear() !== now.getFullYear()
+            getLocalDateString(reqDate, IST_TIMEZONE).slice(0, 7) !== getLocalDateString(now, IST_TIMEZONE).slice(0, 7)
           ) {
             return false;
           }
@@ -646,9 +631,9 @@ export function AdminTrialsManager({
   // ─── Step 6: Upcoming Confirmed Trials Grouping ────────────────────
   const upcomingConfirmedTrials = useMemo(() => {
     const now = new Date();
-    const todayDateStr = now.toISOString().slice(0, 10);
+    const todayDateStr = getLocalDateString(now, IST_TIMEZONE);
     const tomorrow = new Date(now.getTime() + 86400000);
-    const tomorrowDateStr = tomorrow.toISOString().slice(0, 10);
+    const tomorrowDateStr = getLocalDateString(tomorrow, IST_TIMEZONE);
 
     // Filter confirmed/allotted requests that are not completed or cancelled
     const confirmed = requests.filter(
@@ -660,20 +645,20 @@ export function AdminTrialsManager({
 
     const todayList = confirmed.filter((r) => {
       const d = new Date(r.requestedStartsAt);
-      return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === todayDateStr;
+      return !isNaN(d.getTime()) && getLocalDateString(d, IST_TIMEZONE) === todayDateStr;
     });
 
     const tomorrowList = confirmed.filter((r) => {
       const d = new Date(r.requestedStartsAt);
-      return !isNaN(d.getTime()) && d.toISOString().slice(0, 10) === tomorrowDateStr;
+      return !isNaN(d.getTime()) && getLocalDateString(d, IST_TIMEZONE) === tomorrowDateStr;
     });
 
     const laterList = confirmed.filter((r) => {
       const d = new Date(r.requestedStartsAt);
       return (
         !isNaN(d.getTime()) &&
-        d.toISOString().slice(0, 10) !== todayDateStr &&
-        d.toISOString().slice(0, 10) !== tomorrowDateStr
+        getLocalDateString(d, IST_TIMEZONE) !== todayDateStr &&
+        getLocalDateString(d, IST_TIMEZONE) !== tomorrowDateStr
       );
     });
 
@@ -690,7 +675,7 @@ export function AdminTrialsManager({
       id: "act-create",
       date: lead.createdAt,
       title: "Trial booking created",
-      description: `${lead.instrument} · Preferred ${lead.preferredTimeSlot || "Evening"}`,
+      description: `${lead.instrument} · Requested ${formatToIST(lead.originalRequestedStartsAt || lead.requestedStartsAt)}`,
       status: "NEW",
     });
 
@@ -724,7 +709,7 @@ export function AdminTrialsManager({
         id: "act-confirm",
         date: lead.requestedStartsAt,
         title: "Trial confirmed",
-        description: `${lead.formattedTime}`,
+        description: formatToIST(lead.requestedStartsAt),
         status: "CONFIRMED",
       });
     }
@@ -879,7 +864,7 @@ export function AdminTrialsManager({
     const targetLead = requests.find((r) => r.id === contactedLeadId) || drawerLead;
     if (!targetLead) return;
 
-    const followUpIso = `${contactedFollowUpDate}T${contactedFollowUpTime}:00`;
+    const followUpIso = fromISTInputToUtc(`${contactedFollowUpDate}T${contactedFollowUpTime}:00`).toISOString();
     const nowIso = new Date().toISOString();
 
     const parsed = parseStudentNotes(targetLead.studentNotes);
@@ -948,7 +933,7 @@ export function AdminTrialsManager({
     const targetLead = requests.find((r) => r.id === completionLeadId) || drawerLead;
     if (!targetLead) return;
 
-    const followUpIso = `${completionFollowUpDate}T${completionFollowUpTime}:00`;
+    const followUpIso = fromISTInputToUtc(`${completionFollowUpDate}T${completionFollowUpTime}:00`).toISOString();
     const nowIso = new Date().toISOString();
 
     const parsed = parseStudentNotes(targetLead.studentNotes);
@@ -1025,7 +1010,7 @@ export function AdminTrialsManager({
     const targetLead = requests.find((r) => r.id === followUpTargetLeadId) || drawerLead;
     if (!targetLead) return;
 
-    const followUpIso = `${followUpNextDate}T${followUpNextTime}:00`;
+    const followUpIso = fromISTInputToUtc(`${followUpNextDate}T${followUpNextTime}:00`).toISOString();
     const nowIso = new Date().toISOString();
 
     const parsed = parseStudentNotes(targetLead.studentNotes);
@@ -1185,8 +1170,9 @@ export function AdminTrialsManager({
     );
     const d = new Date(lead.requestedStartsAt);
     const valid = !isNaN(d.getTime()) ? d : new Date();
-    setScheduledDate(valid.toISOString().slice(0, 10));
-    setScheduledTime(valid.toTimeString().slice(0, 5));
+    const [date, time] = toISTInputString(valid).split("T");
+    setScheduledDate(date);
+    setScheduledTime(time);
     setDurationMinutes(lead.durationMinutes || 60);
     setAllotAdminNotes("");
     setIsAllotModalOpen(true);
@@ -1198,7 +1184,7 @@ export function AdminTrialsManager({
     const targetLead = requests.find((r) => r.id === allotTargetLeadId) || selectedLead;
     if (!targetLead || !allotTeacherId || !scheduledDate || !scheduledTime) return;
 
-    const startsAt = new Date(`${scheduledDate}T${scheduledTime}:00`);
+    const startsAt = fromISTInputToUtc(`${scheduledDate}T${scheduledTime}:00`);
     if (isNaN(startsAt.getTime())) {
       alert("Invalid date/time.");
       return;
@@ -1216,6 +1202,7 @@ export function AdminTrialsManager({
               allottedTeacherId: allotTeacherId,
               allottedTeacherName: assigned?.name || "Assigned Faculty",
               requestedStartsAt: startsAt.toISOString(),
+              formattedTime: formatToIST(startsAt),
               durationMinutes,
             }
           : r
@@ -1291,7 +1278,7 @@ export function AdminTrialsManager({
     e.preventDefault();
     if (!newLeadName || !newLeadEmail || !newLeadInstrument) return;
 
-    const startsAt = new Date(`${newLeadSlotDate}T${newLeadSlotTime}:00`);
+    const startsAt = fromISTInputToUtc(`${newLeadSlotDate}T${newLeadSlotTime}:00`);
 
     startTransition(async () => {
       const res = await createAdminTrialLeadAction({
@@ -1319,7 +1306,7 @@ export function AdminTrialsManager({
           category: "General",
           instrument: newLeadInstrument,
           requestedStartsAt: startsAt.toISOString(),
-          formattedTime: `${formatReadableDateOnly(startsAt.toISOString())} at ${newLeadSlotTime}`,
+          formattedTime: formatToIST(startsAt),
           preferredTimeSlot: "Custom Slot",
           timezone: "Asia/Kolkata",
           ageGroup: "Adult (18+)",
@@ -1371,7 +1358,7 @@ export function AdminTrialsManager({
       `"${r.instrument}"`,
       `"${r.status}"`,
       `"${r.allottedTeacherName || "Unassigned"}"`,
-      `"${r.formattedTime}"`,
+      `"${formatToIST(r.requestedStartsAt)}"`,
       `"${r.isContacted ? "Yes" : "No"}"`,
       `"${r.isConverted ? "Yes" : "No"}"`,
     ]);
@@ -1460,7 +1447,7 @@ export function AdminTrialsManager({
         <div className="flex items-center gap-2.5 text-body/80 self-end sm:self-auto">
           <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white border border-neutral-200/90 text-[11px] font-medium shadow-2xs">
             <Globe className="w-3.5 h-3.5 text-primary/70" />
-            <span suppressHydrationWarning>IST · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</span>
+            <span suppressHydrationWarning>IST · {formatISTDateOnly(new Date(), "dd MMM yyyy")}</span>
           </div>
         </div>
       </div>
@@ -1585,7 +1572,7 @@ export function AdminTrialsManager({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {upcomingConfirmedTrials.todayList.map((item) => {
                     const pill = getCountdownPill(item.requestedStartsAt, isMounted);
-                    const parsedTime = formatReadableDateTime(item.requestedStartsAt).split(",")[1] || item.preferredTimeSlot;
+                    const parsedTime = formatISTTimeOnly(item.requestedStartsAt);
 
                     return (
                       <div
@@ -1661,7 +1648,7 @@ export function AdminTrialsManager({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                   {upcomingConfirmedTrials.tomorrowList.map((item) => {
                     const pill = getCountdownPill(item.requestedStartsAt, isMounted);
-                    const parsedTime = formatReadableDateTime(item.requestedStartsAt).split(",")[1] || item.preferredTimeSlot;
+                    const parsedTime = formatISTTimeOnly(item.requestedStartsAt);
 
                     return (
                       <div
@@ -1954,7 +1941,7 @@ export function AdminTrialsManager({
                             {req.instrument}
                           </div>
                           <div className="text-[11px] text-body/80 mt-0.5">
-                            {req.formattedTime.split("at")[0]}
+                            {formatToIST(req.requestedStartsAt)}
                           </div>
                         </td>
 
@@ -2139,7 +2126,7 @@ export function AdminTrialsManager({
                 <div className="flex items-center justify-between py-1.5">
                   <span className="text-body/70">Preferred Schedule</span>
                   <span className="font-semibold text-heading font-numeric">
-                    {selectedLead.formattedTime.split("at")[0]}
+                    {formatToIST(selectedLead.requestedStartsAt)}
                   </span>
                 </div>
                 <div className="flex items-center justify-between py-1.5">
@@ -2428,9 +2415,9 @@ export function AdminTrialsManager({
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">
-                          <span className="text-body/60">Timezone</span>
-                          <span className="font-medium text-heading">
-                            {drawerLead.timezone || "Asia/Kolkata"}
+                          <span className="text-body/60">Student timezone</span>
+                          <span className="font-medium text-heading text-right max-w-[70%]" title={drawerLead.timezone || IST_TIMEZONE}>
+                            {formatTimezoneLabel(drawerLead.timezone || IST_TIMEZONE, drawerLead.requestedStartsAt, drawerLead.country)}
                           </span>
                         </div>
                       </div>
@@ -2449,15 +2436,21 @@ export function AdminTrialsManager({
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">
-                          <span className="text-body/60">Preferred Date</span>
+                          <span className="text-body/60">Date (IST)</span>
                           <span className="font-medium text-heading font-numeric">
                             {formatReadableDateOnly(drawerLead.requestedStartsAt)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">
-                          <span className="text-body/60">Preferred Time</span>
+                          <span className="text-body/60">Time (IST)</span>
                           <span className="font-medium text-heading font-numeric">
-                            {drawerLead.preferredTimeSlot || "7:00 PM"}
+                            {formatISTTimeOnly(drawerLead.requestedStartsAt)}
+                          </span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 py-0.5">
+                          <span className="text-body/60">Student local time</span>
+                          <span className="font-medium text-heading font-numeric text-right">
+                            {formatInViewerTimezone(drawerLead.requestedStartsAt, drawerLead.timezone || IST_TIMEZONE, "MMM d, yyyy 'at' h:mm a")} {getTimezoneAbbr(drawerLead.requestedStartsAt, drawerLead.timezone || IST_TIMEZONE)}
                           </span>
                         </div>
                       </div>
@@ -3071,7 +3064,7 @@ export function AdminTrialsManager({
 
               <div className="space-y-1.5">
                 <label className="font-semibold text-heading block">
-                  Next Follow-up Due
+                  Next Follow-up (IST) Due
                 </label>
                 <div className="grid grid-cols-2 gap-2">
                   <input
@@ -3161,7 +3154,7 @@ export function AdminTrialsManager({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-semibold text-heading block">
-                    Lesson Date *
+                    Lesson Date (IST) *
                   </label>
                   <input
                     type="date"
@@ -3174,7 +3167,7 @@ export function AdminTrialsManager({
 
                 <div className="space-y-1">
                   <label className="font-semibold text-heading block">
-                    Start Time *
+                    Start Time (IST) *
                   </label>
                   <input
                     type="time"
@@ -3376,7 +3369,7 @@ export function AdminTrialsManager({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div className="space-y-1">
                   <label className="font-semibold text-heading block">
-                    Trial Date *
+                    Trial Date (IST) *
                   </label>
                   <input
                     type="date"
@@ -3389,7 +3382,7 @@ export function AdminTrialsManager({
 
                 <div className="space-y-1">
                   <label className="font-semibold text-heading block">
-                    Trial Time *
+                    Trial Time (IST) *
                   </label>
                   <input
                     type="time"

@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useTransition, useEffect, useRef } from "react";
+import { useState, useTransition, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
+import { formatTimezoneLabel, getTimezoneAbbr, getLocalDateString, isValidTimezone, projectTeacherSlotToUtc } from "@/lib/timezone";
 import { BookingSummary } from "@/components/auth/BookingSummary";
 import {
   CheckCircle2,
@@ -364,16 +365,21 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
   const selectedDisplayName = selectedItemObj?.name || selectedInstrument || "Select an instrument or style";
 
   // Step 2: Date & Time slot
-  const [dates] = useState(() => {
-    const list = [];
-    const today = new Date();
-    for (let i = 0; i < 10; i++) {
-      const d = new Date(today);
-      d.setDate(today.getDate() + i);
-      list.push(d);
-    }
-    return list;
-  });
+  const [studentTimezone, setStudentTimezone] = useState(() =>
+    currentUser?.timezone && isValidTimezone(currentUser.timezone) ? currentUser.timezone : "UTC",
+  );
+  useEffect(() => {
+    const saved = currentUser?.timezone;
+    const detected = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    setStudentTimezone(saved && saved !== "UTC" && isValidTimezone(saved) ? saved : detected || "UTC");
+  }, [currentUser?.timezone]);
+  // These Dates represent calendar days, not instants. Render them in UTC so
+  // a student's saved timezone and the browser's timezone cannot shift a day.
+  const dates = useMemo(() => {
+    const today = getLocalDateString(new Date(), studentTimezone);
+    const midnight = new Date(`${today}T00:00:00Z`).getTime();
+    return Array.from({ length: 10 }, (_, day) => new Date(midnight + day * 86400000));
+  }, [studentTimezone]);
 
   const [selectedDateIndex, setSelectedDateIndex] = useState(0);
   const [selectedHour, setSelectedHour] = useState("10");
@@ -585,16 +591,19 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
   };
 
   // Selected date formatting
-  const activeDate = dates[selectedDateIndex] || new Date();
+  const activeDate = dates[selectedDateIndex] || dates[0];
   const activeDateFormatted = activeDate.toLocaleDateString("en-US", {
+    timeZone: "UTC",
     weekday: "long",
     month: "short",
     day: "numeric",
   });
-  const year = activeDate.getFullYear();
-  const month = String(activeDate.getMonth() + 1).padStart(2, "0");
-  const day = String(activeDate.getDate()).padStart(2, "0");
+  const year = activeDate.getUTCFullYear();
+  const month = String(activeDate.getUTCMonth() + 1).padStart(2, "0");
+  const day = String(activeDate.getUTCDate()).padStart(2, "0");
   const dateIsoString = `${year}-${month}-${day}`;
+  const slotHour = Number(selectedHour) % 12 + (selectedPeriod === "PM" ? 12 : 0);
+  const selectedStartsAt = projectTeacherSlotToUtc(dateIsoString, slotHour * 60 + Number(selectedMinute), studentTimezone);
 
   const handleSubmitBooking = (e: React.FormEvent) => {
     e.preventDefault();
@@ -643,20 +652,13 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       }
     }
 
-    const detectedTz =
-      typeof Intl !== "undefined" ? Intl.DateTimeFormat().resolvedOptions().timeZone : "UTC";
-    const studentTz =
-      currentUser?.timezone && currentUser.timezone !== "UTC"
-        ? currentUser.timezone
-        : detectedTz || "UTC";
-
     startTransition(async () => {
       const res = await createTrialRequestAction({
         category: selectedCategory,
         instrument: selectedInstrument,
         requestedDate: dateIsoString,
         timeSlot: selectedSlot,
-        timezone: studentTz,
+        timezone: studentTimezone,
         ageGroup: selectedAgeGroup,
         studentName,
         studentEmail,
@@ -693,7 +695,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
         <BookingSummary
           discipline={selectedDisplayName}
           date={step >= 2 ? activeDateFormatted : undefined}
-          time={selectedSlot}
+          time={`${selectedSlot} ${getTimezoneAbbr(selectedStartsAt, studentTimezone)}`}
           onEditDiscipline={step > 1 && step < 4 ? () => setStep(1) : undefined}
           onEditSchedule={step === 3 ? () => setStep(2) : undefined}
         />
@@ -715,7 +717,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
       {step === 2 && <section className="trial-surface">
         <header className="trial-section-heading"><span>Step 2 of 3</span><h2>When is a good time?</h2><p>Choose your preferred date and time for the lesson.</p></header>
         <h3 className="trial-field-title">Choose a date</h3>
-        <div className="trial-dates" role="group" aria-label="Preferred lesson date">{dates.map((date,index) => <button key={index} type="button" aria-pressed={selectedDateIndex === index} aria-label={date.toLocaleDateString("en-US",{weekday:"long",month:"long",day:"numeric"})} onClick={() => setSelectedDateIndex(index)}><small>{index === 0 ? "Today" : date.toLocaleDateString("en-US",{weekday:"short"})}</small><strong>{date.getDate()}</strong><small>{date.toLocaleDateString("en-US",{month:"short"})}</small></button>)}</div>
+        <div className="trial-dates" role="group" aria-label="Preferred lesson date">{dates.map((date,index) => <button key={index} type="button" aria-pressed={selectedDateIndex === index} aria-label={date.toLocaleDateString("en-US",{timeZone:"UTC",weekday:"long",month:"long",day:"numeric"})} onClick={() => setSelectedDateIndex(index)}><small>{index === 0 ? "Today" : date.toLocaleDateString("en-US",{timeZone:"UTC",weekday:"short"})}</small><strong>{date.getUTCDate()}</strong><small>{date.toLocaleDateString("en-US",{timeZone:"UTC",month:"short"})}</small></button>)}</div>
         <h3 className="trial-field-title">Choose your preferred time</h3>
         <div className="trial-custom-time-card">
           <div className="trial-time-controls-row">
@@ -812,7 +814,7 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
           </div>
         </div>
 
-        <p className="trial-time-note"><Clock size={16}/>Times are shown in your local time.</p>
+        <p className="trial-time-note"><Clock size={16}/>Times are shown in {formatTimezoneLabel(studentTimezone, selectedStartsAt)}.</p>
         <footer className="trial-actions"><button type="button" className="trial-back" onClick={() => setStep(1)}><ArrowLeft size={16}/>Back</button><button type="button" className="entry-primary" disabled={!selectedSlot} onClick={() => setStep(3)}>Your details <ArrowRight size={18}/></button></footer>
       </section>}
       {/* ============ STEP 3: ACCOUNT DETAILS & AGE GROUP ============ */}
