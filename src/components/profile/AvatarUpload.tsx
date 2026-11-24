@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useRef, useTransition } from "react";
+import { useState, useRef, useTransition, useEffect } from "react";
 import Image from "next/image";
+import { prepareAvatar } from "@/lib/prepare-avatar";
 import { uploadAvatarAction, removeAvatarAction } from "@/actions/profile";
 import { Camera, Trash2, Upload, Loader2, Check, AlertCircle } from "lucide-react";
 
@@ -23,6 +24,14 @@ export function AvatarUpload({
     type: "success" | "error";
     text: string;
   } | null>(null);
+
+  useEffect(() => () => { if (previewUrl) URL.revokeObjectURL(previewUrl); }, [previewUrl]);
+
+  useEffect(() => {
+    if (statusMessage?.type !== "success") return;
+    const timer = setTimeout(() => setStatusMessage(null), 3500);
+    return () => clearTimeout(timer);
+  }, [statusMessage]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
 
@@ -67,25 +76,29 @@ export function AvatarUpload({
 
     // Upload
     startTransition(async () => {
-      const formData = new FormData();
-      formData.append("file", file);
+      try {
+        const formData = new FormData();
+        formData.append("file", await prepareAvatar(file), "avatar.webp");
 
-      const res = await uploadAvatarAction(formData);
-      if (res.success && res.image) {
-        setCurrentImage(res.image);
+        const res = await uploadAvatarAction(formData);
+        if (res.success && res.image) {
+          setCurrentImage(res.image);
+          setPreviewUrl(null);
+          setStatusMessage({
+            type: "success",
+            text: "Profile picture updated successfully!",
+          });
+          onImageUpdated?.(res.image);
+        } else {
+          setPreviewUrl(null);
+          setStatusMessage({
+            type: "error",
+            text: res.error || "Failed to upload image. Please try again.",
+          });
+        }
+      } catch {
         setPreviewUrl(null);
-        setStatusMessage({
-          type: "success",
-          text: "Profile picture updated successfully!",
-        });
-        onImageUpdated?.(res.image);
-        setTimeout(() => setStatusMessage(null), 3500);
-      } else {
-        setPreviewUrl(null);
-        setStatusMessage({
-          type: "error",
-          text: res.error || "Failed to upload image. Please try again.",
-        });
+        setStatusMessage({ type: "error", text: "Could not upload the photo. Check your connection and try again." });
       }
     });
   };
@@ -95,21 +108,24 @@ export function AvatarUpload({
     setStatusMessage(null);
 
     startTransition(async () => {
-      const res = await removeAvatarAction();
-      if (res.success) {
-        setCurrentImage(null);
-        setPreviewUrl(null);
-        setStatusMessage({
-          type: "success",
-          text: "Profile picture removed.",
-        });
-        onImageUpdated?.(null);
-        setTimeout(() => setStatusMessage(null), 3500);
-      } else {
-        setStatusMessage({
-          type: "error",
-          text: res.error || "Failed to remove image.",
-        });
+      try {
+        const res = await removeAvatarAction();
+        if (res.success) {
+          setCurrentImage(null);
+          setPreviewUrl(null);
+          setStatusMessage({
+            type: "success",
+            text: "Profile picture removed.",
+          });
+          onImageUpdated?.(null);
+        } else {
+          setStatusMessage({
+            type: "error",
+            text: res.error || "Failed to remove image.",
+          });
+        }
+      } catch {
+        setStatusMessage({ type: "error", text: "Could not remove the photo. Please try again." });
       }
     });
   };

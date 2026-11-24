@@ -35,7 +35,6 @@ import {
   MessageSquare,
 } from "lucide-react";
 import {
-  generateChatlogText,
   triggerDownload,
   type LessonChatMessageItem,
 } from "@/lib/chatlog";
@@ -426,33 +425,23 @@ export function AdminRecordingsManager({
     });
   };
 
-  const handleDownloadChatlog = useCallback(
-    (session: SessionLessonItem) => {
-      const content = generateChatlogText({
-        sessionCode: session.trackingCode || session.id,
-        sessionNumber: session.sessionNumber,
-        courseTitle: selectedCourse?.title,
-        instrument: session.instrument || selectedCourse?.instrument,
-        startsAt: session.startsAt,
-        status: session.status,
-        teacherName: session.teacherName,
-        teacherEmail: session.teacherEmail,
-        studentName: selectedStudent?.name || "Student",
-        studentEmail: selectedStudent?.email,
-        teacherDurationSeconds: session.teacherDurationSeconds,
-        studentDurationSeconds: session.studentDurationSeconds,
-        overlapDurationSeconds: session.overlapDurationSeconds,
-        teacherSessions: session.teacherSessions,
-        studentSessions: session.studentSessions,
-        chatLogs: session.chatLogs,
+  const [downloadingChatlog, setDownloadingChatlog] = useState(false);
+  const handleDownloadChatlog = useCallback(async (session: SessionLessonItem) => {
+    setDownloadingChatlog(true);
+    try {
+      // Fetch the current archive, not the snapshot loaded when this page opened.
+      const response = await fetch(`/api/lessons/${encodeURIComponent(session.id)}/chat?download=1`, {
+        cache: "no-store", signal: AbortSignal.timeout(15_000),
       });
-
+      if (!response.ok) throw new Error("Could not retrieve the chat log. Please try again.");
       const dateSlug = session.startsAt ? session.startsAt.slice(0, 10) : "session";
-      const filename = `Chatlog_${session.trackingCode || session.id}_${dateSlug}.txt`;
-      triggerDownload(filename, content);
-    },
-    [selectedCourse, selectedStudent],
-  );
+      triggerDownload(`Chatlog_${session.trackingCode || session.id}_${dateSlug}.txt`, await response.text());
+    } catch (error) {
+      alert(error instanceof Error ? error.message : "Could not download the chat log.");
+    } finally {
+      setDownloadingChatlog(false);
+    }
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -1098,7 +1087,8 @@ export function AdminRecordingsManager({
             <div className="flex items-center gap-3 shrink-0 flex-wrap sm:flex-nowrap justify-between sm:justify-end">
               <button
                 type="button"
-                onClick={() => handleDownloadChatlog(selectedSession)}
+                disabled={downloadingChatlog}
+                onClick={() => void handleDownloadChatlog(selectedSession)}
                 className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-xl text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all cursor-pointer shadow-2xs active:scale-95"
                 title="Download classroom chatlog transcript with timestamps"
               >
@@ -1144,7 +1134,8 @@ export function AdminRecordingsManager({
               <div className="flex items-center gap-2.5 flex-wrap">
                 <button
                   type="button"
-                  onClick={() => handleDownloadChatlog(selectedSession)}
+                  disabled={downloadingChatlog}
+                onClick={() => void handleDownloadChatlog(selectedSession)}
                   className="inline-flex items-center gap-1.5 px-3.5 py-1.5 rounded-full text-xs font-semibold bg-primary/10 hover:bg-primary/20 text-primary transition-all cursor-pointer shadow-2xs active:scale-95"
                   title="Download complete session chatlog and attendance transcript with timestamps"
                 >

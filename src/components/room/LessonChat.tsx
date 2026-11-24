@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useRef, useEffect } from "react";
+import { archiveLessonChat } from "@/lib/archive-lesson-chat";
 import { useChat } from "@livekit/components-react";
 import { X, Send } from "lucide-react";
 import { RoomIconButton } from "./MeetPrimitives";
@@ -80,12 +81,14 @@ function checkPIIViolation(text: string): string | null {
 export function LessonChat({
   isOpen,
   onClose,
-  isTeacher,
   participantName,
   onNewMessage,
   lessonId,
 }: LessonChatProps) {
   const { chatMessages, send, isSending } = useChat();
+  const [saving, setSaving] = useState(false);
+  const sending = useRef(false);
+  const draftId = useRef<{ text: string; id: string } | null>(null);
   const [inputText, setInputText] = useState("");
   const [safetyWarning, setSafetyWarning] = useState<string | null>(null);
 
@@ -148,7 +151,7 @@ export function LessonChat({
   const handleSendMessage = async (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = inputText.trim();
-    if (!trimmed || isSending) return;
+    if (!trimmed || isSending || sending.current) return;
 
     // Strict PII filter before dispatch
     const violation = checkPIIViolation(trimmed);
@@ -162,28 +165,23 @@ export function LessonChat({
       return;
     }
 
+    sending.current = true;
+    setSaving(true);
     try {
+      if (!draftId.current || draftId.current.text !== trimmed) {
+        draftId.current = { text: trimmed, id: crypto.randomUUID() };
+      }
+      if (lessonId) await archiveLessonChat(lessonId, trimmed, draftId.current.id);
       await send(trimmed);
+      draftId.current = null;
       setInputText("");
       setSafetyWarning(null);
-
-      if (lessonId) {
-        fetch(`/api/lessons/${lessonId}/chat`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            message: trimmed,
-            senderName: isTeacher ? "Instructor" : (participantName || "Student"),
-            senderRole: isTeacher ? "TEACHER" : "STUDENT",
-            timestamp: new Date().toISOString(),
-          }),
-        }).catch((err) => {
-          console.error("Non-blocking: Failed to archive chat message:", err);
-        });
-      }
     } catch (err) {
       console.error("Failed to send chat message:", err);
-      setSafetyWarning("Failed to send message. Please try again.");
+      setSafetyWarning(err instanceof Error ? err.message : "Failed to send message. Please try again.");
+    } finally {
+      sending.current = false;
+      setSaving(false);
     }
   };
 
@@ -199,7 +197,7 @@ export function LessonChat({
   return (
     <aside className="meet-panel meet-chat" aria-label="In-call messages">
       <header className="meet-panel-header"><h2>In-call messages</h2><RoomIconButton label="Close messages" onClick={onClose}><X/></RoomIconButton></header>
-      <div className="meet-chat-notice"><strong>Messages are visible to everyone in this call</strong>Messages are only available during the call. Personal contact details and external links remain restricted.</div>
+      <div className="meet-chat-notice"><strong>Messages are visible to everyone in this call</strong>Messages are saved with the lesson for administration. Personal contact details and external links remain restricted.</div>
       <div className="meet-chat-messages" role="log" aria-live="polite" aria-label="Messages">
         {chatMessages.length === 0 ? <p className="meet-chat-empty">Send a message to start the conversation.</p> : chatMessages.map((message, index) => (
           <article key={`${message.timestamp}-${index}`} className="meet-chat-message">
@@ -211,8 +209,8 @@ export function LessonChat({
       </div>
       {safetyWarning && <div className="meet-chat-warning" role="alert"><span>{safetyWarning}</span><RoomIconButton label="Dismiss message warning" onClick={() => setSafetyWarning(null)}><X size={16}/></RoomIconButton></div>}
       <form className="meet-chat-compose" onSubmit={handleSendMessage}>
-        <input ref={inputRef} aria-label="Send a message" value={inputText} onChange={handleInputChange} placeholder="Send a message" maxLength={500}/>
-        <button type="submit" className="meet-icon-button" aria-label="Send message" disabled={!inputText.trim() || isSending || !!safetyWarning}><Send size={21}/></button>
+        <input ref={inputRef} disabled={saving} aria-label="Send a message" value={inputText} onChange={handleInputChange} placeholder="Send a message" maxLength={500}/>
+        <button type="submit" className="meet-icon-button" aria-label="Send message" disabled={!inputText.trim() || isSending || saving || !!safetyWarning}><Send size={21}/></button>
       </form>
     </aside>
   );

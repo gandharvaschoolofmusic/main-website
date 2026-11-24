@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useCallback } from "react";
 import Image from "next/image";
 
 import {
@@ -21,6 +21,7 @@ import type { AudioMode } from "@/lib/audio-engine";
 import { useLessonMicrophone } from "@/hooks/useLessonMicrophone";
 import { useLessonAudioPlayback } from "@/hooks/useLessonAudioPlayback";
 import { releaseAllMediaDevices } from "@/lib/media-devices";
+import { watchLessonVideo } from "@/lib/lesson-video-recovery";
 import { MeetRoomUI } from "./MeetRoomUI";
 
 import { TurnTakingState } from "./TurnTakingControls";
@@ -60,7 +61,6 @@ interface LessonRoomProps {
 export function LessonRoom(props: LessonRoomProps) {
   const { token, serverUrl, lesson, initialConfig, onLeave } = props;
   const isIntentionalLeaveRef = useRef(false);
-  const [isIntentionalLeave, setIsIntentionalLeave] = useState(false);
   const [disconnectedError, setDisconnectedError] = useState<string | null>(null);
   const hasLeftRef = useRef(false);
 
@@ -68,24 +68,34 @@ export function LessonRoom(props: LessonRoomProps) {
     if (hasLeftRef.current) return;
     hasLeftRef.current = true;
     isIntentionalLeaveRef.current = true;
-    setIsIntentionalLeave(true);
     releaseAllMediaDevices();
     onLeave();
   };
 
-  const handleDisconnected = (reason?: DisconnectReason) => {
-    if (isIntentionalLeaveRef.current) {
-      if (hasLeftRef.current) return;
-      hasLeftRef.current = true;
-      releaseAllMediaDevices();
-      onLeave();
-    } else {
-      console.warn("LiveKit room disconnected unexpectedly:", reason);
-      setDisconnectedError(
-        "The live video room was disconnected. Check your connection or LiveKit server status.",
-      );
-    }
-  };
+  // Keep callbacks stable: useLiveKitRoom reconnects whenever onError changes.
+  const handleConnected = useCallback(() => {
+    setDisconnectedError(null);
+    if (!lesson.companion) void fetch(`/api/lessons/${lesson.id}/join`, { method: "POST" }).catch(() => {});
+  }, [lesson.companion, lesson.id]);
+  const handleDisconnected = useCallback((reason?: DisconnectReason) => {
+    if (isIntentionalLeaveRef.current) return;
+    console.warn("[LessonRoom] Disconnected", { reason, lessonId: lesson.id });
+    setDisconnectedError("The lesson connection was lost. Check your connection and retry joining.");
+  }, [lesson.id]);
+  const handleError = useCallback((err: Error) => {
+    if (isIntentionalLeaveRef.current || /Client initiated disconnect|cancelled|aborted/i.test(err.message)) return;
+    console.error("[LessonRoom] Connection error", { lessonId: lesson.id, message: err.message, state: props.room.state });
+    // A media error must not cover a connected/recovering room with a permanent modal.
+    if (props.room.state !== "disconnected") return;
+    initialConfig.previewMicrophone?.current?.stop();
+    if (initialConfig.previewMicrophone) initialConfig.previewMicrophone.current = null;
+    setDisconnectedError(err.message || "Could not connect to the lesson.");
+  }, [props.room, lesson.id, initialConfig.previewMicrophone]);
+  useEffect(() => {
+    const recovered = () => setDisconnectedError(null);
+    props.room.on(RoomEvent.Reconnected, recovered);
+    return () => { props.room.off(RoomEvent.Reconnected, recovered); };
+  }, [props.room]);
 
   return (
     <div className="fixed inset-0 bg-[#111111] text-stone-100 flex flex-col z-50 overflow-hidden">
@@ -102,28 +112,9 @@ export function LessonRoom(props: LessonRoomProps) {
         audio={false} // The microphone controller applies the pre-join choice after connection.
         video={false} // Managed explicitly after engine is connected
         className="w-full h-full flex flex-col"
-        onConnected={() => { if (lesson.companion) return; void fetch(`/api/lessons/${lesson.id}/join`, { method: "POST" }).catch(() => {}); }}
+        onConnected={handleConnected}
         onDisconnected={handleDisconnected}
-        onError={(err) => {
-          // Ignore expected client-initiated disconnect cancellations when user exits
-          const isExpectedExit =
-            isIntentionalLeaveRef.current ||
-            isIntentionalLeave ||
-            err?.message?.includes("Client initiated disconnect") ||
-            err?.message?.includes("cancelled") ||
-            err?.message?.includes("aborted");
-
-          if (isExpectedExit) {
-            return;
-          }
-
-          console.error("LiveKit connection error:", err);
-          initialConfig.previewMicrophone?.current?.stop();
-          if (initialConfig.previewMicrophone) initialConfig.previewMicrophone.current = null;
-          setDisconnectedError(
-            err.message || "Failed to establish WebRTC video room connection.",
-          );
-        }}
+        onError={handleError}
       >
         <LessonRoomContent
           lesson={lesson}
@@ -245,6 +236,10 @@ function LessonRoomContent({
     initialConfig.videoDeviceId || "",
   );
 
+  const cameraState = useRef({ off: isVideoOff, deviceId: selectedCameraId });
+  useEffect(() => { cameraState.current = { off: isVideoOff, deviceId: selectedCameraId }; }, [isVideoOff, selectedCameraId]);
+  useEffect(() => watchLessonVideo(room, () => !cameraState.current.off, () => cameraState.current.deviceId), [room]);
+
   // Multi-Camera Director Engine
   const multiCam = useMultiCamera(room, isVideoOff);
   const [isMultiCamModalOpen, setIsMultiCamModalOpen] = useState(false);
@@ -297,18 +292,18 @@ function LessonRoomContent({
   }, [lesson.endsAt]);
 
   // 3b. Initialize Video Track safely after engine connects with transition backoff
-  const initializedVideoRef = useRef(false);
   useEffect(() => {
-    if (!room || initializedVideoRef.current) return;
-    initializedVideoRef.current = true;
+    if (!room) return;
+    let cancelled = false;
 
     async function initVideo() {
-      if (isVideoOff || initialConfig.isVideoMuted) {
+      if (cancelled || cameraState.current.off || initialConfig.isVideoMuted) {
         console.log("[Video] Camera kept OFF per user Pre-Join selection");
         return;
       }
 
       const tryEnableCamera = async (attempt = 0): Promise<void> => {
+        if (cancelled || cameraState.current.off) return;
         try {
           await room.localParticipant.setCameraEnabled(true, {
             deviceId: initialConfig.videoDeviceId
@@ -332,6 +327,7 @@ function LessonRoomContent({
             return tryEnableCamera(attempt + 1);
           }
 
+          if (cancelled || cameraState.current.off) return;
           console.warn("Could not enable camera with preferred deviceId, trying default camera:", deviceErr);
           try {
             await room.localParticipant.setCameraEnabled(true, {
@@ -339,7 +335,7 @@ function LessonRoomContent({
             });
           } catch (fallbackErr) {
             console.warn("Could not auto-enable camera on room connect:", fallbackErr);
-            setIsVideoOff(true);
+            if (!cancelled) setIsVideoOff(true);
           }
         }
       };
@@ -352,7 +348,8 @@ function LessonRoomContent({
     } else {
       room.once(RoomEvent.Connected, initVideo);
     }
-  }, [room, isVideoOff, initialConfig.videoDeviceId]);
+    return () => { cancelled = true; room.off(RoomEvent.Connected, initVideo); };
+  }, [room, initialConfig.videoDeviceId, initialConfig.isVideoMuted]);
 
   // 4. Listen to LiveKit Room Events
 
@@ -418,6 +415,7 @@ function LessonRoomContent({
   // Toggle Video
   const handleToggleVideo = async () => {
     const nextOff = !isVideoOff;
+    cameraState.current.off = nextOff;
     setIsVideoOff(nextOff);
     try {
       await room.localParticipant.setCameraEnabled(!nextOff, {
@@ -435,6 +433,7 @@ function LessonRoomContent({
           resolution: VideoPresets.h720.resolution,
         });
       } catch (err2) {
+        setIsVideoOff(!room.localParticipant.isCameraEnabled);
         console.error("Camera toggle failed completely:", err2);
       }
     }
@@ -502,7 +501,7 @@ function LessonRoomContent({
     const triggerRecording = async (retryCount = 0) => {
       if (cancelled) return;
       try {
-        const res = await fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST" });
+        const res = await fetch(`/api/lessons/${lesson.id}/recording/start`, { method: "POST", signal: AbortSignal.timeout(15_000) });
         if (cancelled) return;
         if (res.ok) {
           const data = await res.json();
@@ -530,17 +529,20 @@ function LessonRoomContent({
       }
     };
 
+    const startRecording = () => { void triggerRecording(); };
+
     // Stagger initial check by 2.5s so participants are connected and room is established
     const initTimer = setTimeout(() => {
       if (room.state === "connected") {
         void triggerRecording();
       } else {
-        room.once(RoomEvent.Connected, () => void triggerRecording());
+        room.once(RoomEvent.Connected, startRecording);
       }
     }, 2500);
 
     return () => {
       cancelled = true;
+      room.off(RoomEvent.Connected, startRecording);
       clearTimeout(initTimer);
       if (retryTimer) clearTimeout(retryTimer);
     };

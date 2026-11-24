@@ -37,7 +37,7 @@ function startSegment(stream: MediaStream, mimeType: string, chunks: Blob[], rot
  * and mixed audio (microphone feeds from both sides) in the background.
  *
  * Highlights:
- * - Silent & discreet background operation with zero frame drops.
+ * - Bounded canvas rendering while server recording is unavailable.
  * - Dynamic composite layout: auto-adapts to screen share or side-by-side video feeds.
  * - Mixed AudioContext engine combining local and remote audio.
  * - Safely stops and uploads recording to Supabase when lesson ends.
@@ -67,7 +67,7 @@ export function useLessonAutoRecorder({
   const pendingParts = useRef(new Set<Promise<unknown>>());
   const isRecordingRef = useRef(false);
   const recordingStartTimeRef = useRef<number>(0);
-  const animationFrameIdRef = useRef<number | null>(null);
+  const renderTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const combinedStreamRef = useRef<MediaStream | null>(null);
   const selectedMimeRef = useRef<string>("");
   const segmentIntervalRef = useRef<NodeJS.Timeout | null>(null);
@@ -191,9 +191,9 @@ export function useLessonAutoRecorder({
       segmentIntervalRef.current = null;
     }
 
-    if (animationFrameIdRef.current) {
-      cancelAnimationFrame(animationFrameIdRef.current);
-      animationFrameIdRef.current = null;
+    if (renderTimerRef.current) {
+      clearInterval(renderTimerRef.current);
+      renderTimerRef.current = null;
     }
 
     // Stop MediaRecorder cleanly and wait for onstop event to collect final buffered chunk
@@ -407,31 +407,28 @@ export function useLessonAutoRecorder({
     room.on(RoomEvent.LocalTrackPublished, addPublication);
     room.on(RoomEvent.LocalTrackUnpublished, removePublication);
 
-    let lastFrame = -Infinity;
-    const drawFrame = (timestamp: number, schedule = true) => {
+    const drawFrame = () => {
       if (isCleanedUp || !ctx) return;
-      if (timestamp - lastFrame >= 1000 / 15) {
-        lastFrame = timestamp;
-        ctx.fillStyle = "#111018";
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        const feeds = [...cameras.values()].map(entry => entry.video).filter(video =>
-          video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0);
-        const cols = Math.max(1, Math.ceil(Math.sqrt(feeds.length)));
-        const rows = Math.ceil(feeds.length / cols);
-        feeds.forEach((video, i) => {
-          const w = canvas.width / cols, h = canvas.height / rows;
-          const scale = Math.min(w / video.videoWidth, h / video.videoHeight);
-          const dw = video.videoWidth * scale, dh = video.videoHeight * scale;
-          ctx.drawImage(video, (i % cols) * w + (w - dw) / 2, Math.floor(i / cols) * h + (h - dh) / 2, dw, dh);
-        });
-        if (!feeds.length) {
-          ctx.fillStyle = "#ece9ef";
-          ctx.font = "24px sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillText((instrument || "Music") + " lesson - Cameras off", canvas.width / 2, canvas.height / 2);
-        }
+      // Native screen-share capture does not need a second canvas compositor.
+      if (videoSource() !== stageTrack) return;
+      ctx.fillStyle = "#111018";
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      const feeds = [...cameras.values()].map(entry => entry.video).filter(video =>
+        video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0);
+      const cols = Math.max(1, Math.ceil(Math.sqrt(feeds.length)));
+      const rows = Math.ceil(feeds.length / cols);
+      feeds.forEach((video, i) => {
+        const w = canvas.width / cols, h = canvas.height / rows;
+        const scale = Math.min(w / video.videoWidth, h / video.videoHeight);
+        const dw = video.videoWidth * scale, dh = video.videoHeight * scale;
+        ctx.drawImage(video, (i % cols) * w + (w - dw) / 2, Math.floor(i / cols) * h + (h - dh) / 2, dw, dh);
+      });
+      if (!feeds.length) {
+        ctx.fillStyle = "#ece9ef";
+        ctx.font = "24px sans-serif";
+        ctx.textAlign = "center";
+        ctx.fillText((instrument || "Music") + " lesson - Cameras off", canvas.width / 2, canvas.height / 2);
       }
-      if (schedule && isRecordingRef.current) animationFrameIdRef.current = requestAnimationFrame(drawFrame);
     };
 
     // 6. Start Recording Stream
@@ -448,7 +445,7 @@ export function useLessonAutoRecorder({
         console.error("[AutoRecorder] Both video and audio are required for lesson recording.");
         return;
       }
-      drawFrame(performance.now(), false);
+      drawFrame();
       const combinedStream = new MediaStream([video, audio]);
       combinedStreamRef.current = combinedStream;
 
@@ -480,18 +477,12 @@ export function useLessonAutoRecorder({
         }, 240_000);
 
         // Draw initial frame immediately so stream has active frames
-        drawFrame(performance.now());
+        drawFrame();
+        renderTimerRef.current = setInterval(drawFrame, 1000 / 15);
       } catch (recErr) {
         console.warn("[AutoRecorder] Failed to start MediaRecorder:", recErr);
       }
     };
-
-    // Background timer to keep drawing frames even if tab is minimized/in background
-    const bgRenderInterval = setInterval(() => {
-      if (typeof document !== "undefined" && document.hidden && !isCleanedUp) {
-        drawFrame(performance.now(), false);
-      }
-    }, 150);
 
     if (room.state === "connected") {
       startMediaRecording();
@@ -511,7 +502,7 @@ export function useLessonAutoRecorder({
       room.off(RoomEvent.Connected, startMediaRecording);
       localAudioListeners.forEach(unbind => unbind());
       localAudioListeners.clear();
-      clearInterval(bgRenderInterval);
+      if (renderTimerRef.current) { clearInterval(renderTimerRef.current); renderTimerRef.current = null; }
       if (segmentIntervalRef.current) {
         clearInterval(segmentIntervalRef.current);
         segmentIntervalRef.current = null;

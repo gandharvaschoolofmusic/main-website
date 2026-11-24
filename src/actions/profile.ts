@@ -8,8 +8,8 @@ import { logger } from "@/lib/logger";
 import crypto from "crypto";
 import { sendEmailUpdateVerificationEmail } from "@/lib/email";
 
-import fs from "fs";
-import path from "path";
+import sharp from "sharp";
+import { avatarPath, avatarStorage } from "@/lib/avatar-storage";
 
 export type UpdateProfileInput = {
   name: string;
@@ -93,52 +93,27 @@ export async function uploadAvatarAction(formData: FormData): Promise<{
       };
     }
 
-    // 5MB limit
-    if (file.size > 5 * 1024 * 1024) {
-      return {
-        success: false,
-        error: "File size exceeds 5MB limit. Please upload a smaller image.",
-      };
+    // The browser resizes first, so uploads also fit Next/Vercel request limits.
+    if (!file.size || file.size > 750_000) {
+      return { success: false, error: "Please select the photo again so it can be optimized before upload." };
     }
-
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-
-    const ext = file.name.split(".").pop()?.toLowerCase() || "jpg";
-    const safeExt = ["jpeg", "jpg", "png", "webp", "gif"].includes(ext) ? ext : "jpg";
-    const fileName = `avatar-${user.id}-${Date.now()}.${safeExt}`;
-
-    const avatarsDir = path.join(process.cwd(), "public", "uploads", "avatars");
-    if (!fs.existsSync(avatarsDir)) {
-      fs.mkdirSync(avatarsDir, { recursive: true });
+    const buffer = await sharp(Buffer.from(await file.arrayBuffer()), { limitInputPixels: 20_000_000 })
+      .rotate().resize(512, 512, { fit: "inside", withoutEnlargement: true }).webp({ quality: 85 }).toBuffer();
+    const version = crypto.randomUUID();
+    const objectPath = `avatars/${user.id}/${version}.webp`;
+    const storage = avatarStorage();
+    const uploaded = await storage.upload(objectPath, buffer, { contentType: "image/webp", upsert: false });
+    if (uploaded.error) throw new Error("Profile photo storage is unavailable. Please try again or contact administration.");
+    const dbUser = await db.user.findUnique({ where: { id: user.id }, select: { image: true } });
+    const publicUrl = `/api/avatars/${user.id}?v=${version}`;
+    try {
+      await db.user.update({ where: { id: user.id }, data: { image: publicUrl } });
+    } catch (error) {
+      await storage.remove([objectPath]).catch(() => {});
+      throw error;
     }
-
-    // Remove old avatar file if stored locally
-    const dbUser = await db.user.findUnique({
-      where: { id: user.id },
-      select: { image: true },
-    });
-
-    if (dbUser?.image && dbUser.image.startsWith("/uploads/avatars/")) {
-      const oldPath = path.join(process.cwd(), "public", dbUser.image);
-      if (fs.existsSync(oldPath)) {
-        try {
-          fs.unlinkSync(oldPath);
-        } catch {
-          // Ignore removal error
-        }
-      }
-    }
-
-    const targetPath = path.join(avatarsDir, fileName);
-    fs.writeFileSync(targetPath, buffer);
-
-    const publicUrl = `/uploads/avatars/${fileName}`;
-
-    await db.user.update({
-      where: { id: user.id },
-      data: { image: publicUrl },
-    });
+    const oldPath = avatarPath(dbUser?.image, user.id);
+    if (oldPath) await storage.remove([oldPath]).catch(() => {});
 
     logger.info({ userId: user.id, image: publicUrl }, "User avatar updated");
 
@@ -167,21 +142,15 @@ export async function removeAvatarAction(): Promise<{
       select: { image: true },
     });
 
-    if (dbUser?.image && dbUser.image.startsWith("/uploads/avatars/")) {
-      const oldPath = path.join(process.cwd(), "public", dbUser.image);
-      if (fs.existsSync(oldPath)) {
-        try {
-          fs.unlinkSync(oldPath);
-        } catch {
-          // Ignore removal error
-        }
-      }
-    }
-
     await db.user.update({
       where: { id: user.id },
       data: { image: null },
     });
+
+    const oldPath = avatarPath(dbUser?.image, user.id);
+    if (oldPath) {
+      try { await avatarStorage().remove([oldPath]); } catch { /* Profile is already cleared. */ }
+    }
 
     logger.info({ userId: user.id }, "User avatar removed");
 

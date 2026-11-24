@@ -1,0 +1,54 @@
+import React from "react";
+import { createRoot } from "react-dom/client";
+import { prepareAvatar } from "../src/lib/prepare-avatar";
+import { watchLessonVideo } from "../src/lib/lesson-video-recovery";
+import { LessonChat } from "../src/components/room/LessonChat";
+import { AvatarUpload } from "../src/components/profile/AvatarUpload";
+import { RoomEvent, Track } from "livekit-client";
+const wait = ms => new Promise(resolve => setTimeout(resolve,ms));
+const check=(condition,label)=>{if(!condition)throw Error(label);window.checks.push(label);};
+window.checks=[];
+window.testChat={chatMessages:[],isSending:false,send:async text=>{window.sent.push(text);}};
+window.sent=[];
+window.avatarAction=async form=>{window.avatarFile=form.get('file');return {success:true,image:'/avatar.webp'};};
+const root=createRoot(document.querySelector('main'));
+async function run(){
+  const canvas=document.createElement('canvas');canvas.width=2000;canvas.height=1000;
+  canvas.getContext('2d').fillRect(0,0,2000,1000);
+  const original=await new Promise(resolve=>canvas.toBlob(resolve,'image/png'));
+  const file=new File([original],'photo.png',{type:'image/png'});
+  const optimized=await prepareAvatar(file);const image=await createImageBitmap(optimized);
+  check(image.width===512&&image.height===256&&optimized.size<750000,'browser resizes profile photo below action limits');image.close();
+  root.render(<AvatarUpload userName="Student"/>);await wait(100);
+  let input=document.querySelector('input[type=file]');const transfer=new DataTransfer();transfer.items.add(file);input.files=transfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));await wait(500);
+  check(window.avatarFile?.size<750000&&document.body.textContent.includes('updated successfully'),'actual profile form submits optimized file');
+  window.avatarAction=async()=>{throw Error('network failure');};const retryTransfer=new DataTransfer();retryTransfer.items.add(file);input.files=retryTransfer.files;input.dispatchEvent(new Event('change',{bubbles:true}));await wait(500);
+  check(document.body.textContent.includes('Could not upload')&&!document.querySelector('button').disabled,'upload transport failure leaves form retryable');
+
+  let wanted=true,restarts=0,enables=0,plays=0,available=true,lastEnabled;
+  let releaseRestart;
+  const track={isMuted:false,mediaStreamTrack:{readyState:'live'},restartTrack:async()=>{restarts++;await new Promise(resolve=>releaseRestart=resolve);track.mediaStreamTrack.readyState='live';}};
+  const listeners=new Map();
+  const room={state:'connected',canPlaybackVideo:true,startVideo:async()=>{plays++;},localParticipant:{getTrackPublication:source=>available&&source===Track.Source.Camera?{videoTrack:track}:null,setCameraEnabled:async enabled=>{enables++;lastEnabled=enabled;}},on:(event,fn)=>listeners.set(event,fn),off:(event,fn)=>{if(listeners.get(event)===fn)listeners.delete(event);}};
+  const stop=watchLessonVideo(room,()=>wanted,()=>"camera-a");
+  listeners.get(RoomEvent.Reconnected)();await wait(10);check(plays===1&&restarts===0,'healthy video survives reconnection without capture restart');
+  track.mediaStreamTrack.readyState='ended';listeners.get(RoomEvent.Reconnected)();listeners.get(RoomEvent.Reconnected)();await wait(10);
+  check(restarts===1,'recovery serializes overlapping reconnect events');releaseRestart();await wait(10);check(enables===1,'interrupted camera recovers');
+  wanted=false;track.mediaStreamTrack.readyState='ended';window.dispatchEvent(new Event('pageshow'));await wait(10);check(restarts===1,'camera remains off when user disabled it');
+  wanted=true;available=false;listeners.get(RoomEvent.Reconnected)();await wait(10);check(enables===2&&lastEnabled===true,'missing camera publication restored after reconnect');available=true;
+  listeners.get(RoomEvent.Reconnected)();await wait(10);wanted=false;releaseRestart();await wait(10);check(lastEnabled===false,'turning camera off during recovery wins over restart');
+  stop();wanted=true;window.dispatchEvent(new Event('pageshow'));await wait(10);check(restarts===2&&!listeners.size,'recovery listeners cleaned up on room exit');
+
+  let saved=0,fail=true;
+  window.fetch=async()=>{if(fail)return Response.json({error:'Storage test failure'},{status:403});saved++;return Response.json({success:true});};
+  root.render(<LessonChat isOpen onClose={()=>{}} isTeacher participantName="Student" lessonId="lesson-a"/>);await wait(500);
+  const text=document.querySelector('input[aria-label="Send a message"]');
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype,'value').set.call(text,'Practice slowly');text.dispatchEvent(new Event('input',{bubbles:true}));await wait(10);
+  document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait(100);
+  check(window.sent.length===0&&text.value==='Practice slowly','chat retains draft and does not send when archive fails');
+  document.querySelector('[aria-label="Dismiss message warning"]').click();fail=false;await wait(10);
+  document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}));await wait(100);
+  check(saved===1&&window.sent.length===1&&text.value==='','chat saved before live delivery and draft cleared after success');
+  return window.checks;
+}
+run().then(checks=>window.videoTestResult={checks}).catch(error=>window.videoTestResult={error:error.stack});

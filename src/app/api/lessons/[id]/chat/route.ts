@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
 import { auth } from "@/lib/auth";
 import { db } from "@/lib/db";
 import { logger } from "@/lib/logger";
@@ -191,32 +192,33 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
       (isTeacher ? "Instructor" : "Student")
     ).trim();
 
-    const timestamp =
-      typeof body.timestamp === "string" && !isNaN(Date.parse(body.timestamp))
-        ? new Date(body.timestamp).toISOString()
-        : new Date().toISOString();
-
+    const messageId = typeof body.messageId === "string" ? body.messageId : crypto.randomUUID();
+    if (!/^[a-zA-Z0-9_-]{1,100}$/.test(messageId)) {
+      return NextResponse.json({ error: "Invalid message ID" }, { status: 400 });
+    }
     const newEntry: LessonChatMessageItem = {
-      id: crypto.randomUUID(),
+      id: messageId,
       senderId: userId,
       senderName: resolvedName,
       senderRole: resolvedRole,
       message: rawMessage,
-      timestamp,
+      timestamp: new Date().toISOString(),
     };
 
-    const existingLogs = (Array.isArray(lesson.chatLogs)
-      ? lesson.chatLogs
-      : []) as unknown as LessonChatMessageItem[];
-
-    const updatedLogs = [...existingLogs, newEntry];
-
-    await db.lesson.update({
-      where: { id: lessonId },
-      data: {
-        chatLogs: updatedLogs as any,
-      },
-    });
+    // PostgreSQL locks/rechecks the row during UPDATE. Concurrent messages append
+    // to the latest array rather than replacing each other's stale snapshot.
+    // Mirror messages across the same group call, since each student has a lesson row.
+    const appended = await db.$executeRaw`
+      UPDATE "Lesson"
+      SET "chatLogs" = (CASE WHEN jsonb_typeof("chatLogs") = 'array' THEN "chatLogs" ELSE '[]'::jsonb END)
+        || ${JSON.stringify([newEntry])}::jsonb
+      WHERE ("id" = ${lessonId} OR (
+        ${lesson.groupRoomId}::text IS NOT NULL AND "groupRoomId" = ${lesson.groupRoomId}
+        AND "startsAt" = ${lesson.startsAt}
+      )) AND NOT (COALESCE("chatLogs", '[]'::jsonb) @> ${JSON.stringify([{ id: messageId, senderId: userId }])}::jsonb)
+    `;
+    if (!appended) return NextResponse.json({ success: true, item: newEntry });
+    revalidateTag("admin-recordings", { expire: 0 });
 
     // Notify the other party via email if they haven't joined the classroom yet
     if (isAdmin) {

@@ -63,9 +63,15 @@ export function getS3UploadConfig(): S3Upload | undefined {
 
 /** Reuse LiveKit's destination and credentials for private Supabase recordings. */
 export function recordingS3Object(bucket: string, key: string) {
+  if (getS3UploadConfig()?.bucket !== bucket) return null;
+  return projectStorageS3Object(bucket, key);
+}
+
+/** Use existing project-scoped S3 credentials for another Supabase bucket. */
+export function projectStorageS3Object(bucket: string, key: string) {
   const config = getS3UploadConfig();
   const project = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
-  if (!config?.endpoint || !project || config.bucket !== bucket) return null;
+  if (!config?.endpoint || !project) return null;
   const endpoint = new URL(config.endpoint);
   const projectHost = new URL(project).hostname;
   if (endpoint.protocol !== "https:" || ![projectHost, projectHost.replace(".supabase.co", ".storage.supabase.co")].includes(endpoint.hostname)) return null;
