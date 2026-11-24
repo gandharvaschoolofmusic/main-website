@@ -23,6 +23,7 @@ export function NavbarWrapper({
   signOutAction: () => Promise<void>;
 }) {
   const pathname = usePathname();
+  if (pathname === "/recording/lesson") return null;
 
   const isDashboard = Boolean(
     pathname &&

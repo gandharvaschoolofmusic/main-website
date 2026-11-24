@@ -21,6 +21,7 @@ export default function SiteChrome({
     pathname.startsWith("/dashboard") ||
     pathname.startsWith("/profile") ||
     pathname.startsWith("/lesson") ||
+    pathname.startsWith("/recording/lesson") ||
     pathname.startsWith("/login") ||
     pathname.startsWith("/signup") ||
     pathname.startsWith("/forgot-password") ||

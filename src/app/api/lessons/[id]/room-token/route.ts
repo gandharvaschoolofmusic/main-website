@@ -100,6 +100,7 @@ export async function GET(request: Request, { params }: RouteParams) {
       userName:
         session.user.name || (callerRole === "TEACHER" ? "Teacher" : "Student"),
       role: callerRole,
+      participantRole: session.user.role === "ADMIN" ? "ADMIN" : callerRole,
       instrument: lesson.instrument,
       durationMinutes: lesson.durationMinutes,
       requestHost,

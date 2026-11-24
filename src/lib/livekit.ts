@@ -17,6 +17,7 @@ export interface GenerateLessonTokenParams {
   userId: string;
   userName: string;
   role: "TEACHER" | "STUDENT";
+  participantRole?: "TEACHER" | "STUDENT" | "ADMIN";
   instrument: string;
   durationMinutes: number;
   requestHost?: string;
@@ -112,11 +113,11 @@ export async function generateLessonRoomToken(
     identity,
     name: companion ? `${userName} · Second device` : userName,
     metadata: JSON.stringify({
-      role,
+      role: params.participantRole || role,
       userId,
       companion,
       instrument,
-      isTeacher: isTeacher && !companion,
+      isTeacher: (params.participantRole || role) === "TEACHER" && !companion,
     }),
     ttl: `${ttlSeconds}s`,
   });
@@ -266,7 +267,11 @@ export async function startLessonRoomEgress(params: {
           roomName,
           fileOutput,
           {
-            layout: "single-speaker",
+            layout: "lesson-split",
+            customBaseUrl: process.env.LIVEKIT_RECORDING_TEMPLATE_URL || new URL(
+              "/recording/lesson",
+              process.env.APP_URL || process.env.NEXTAUTH_URL || "https://www.gandharvaschoolofmusic.com",
+            ).href,
             audioOnly: false,
             videoOnly: false,
             encodingOptions: EncodingOptionsPreset.H264_720P_30,

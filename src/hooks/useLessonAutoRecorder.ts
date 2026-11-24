@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useCallback, useState } from "react";
+import { startLessonFrameClock } from "@/lib/lesson-frame-clock";
+import { drawLessonStage, lessonStageItems, lessonStageLayout } from "@/lib/lesson-stage-layout";
 import { createLessonSegmentRecorder } from "@/lib/lesson-recording-segments";
 import { Room, RoomEvent, TrackEvent, LocalAudioTrack, Track, RemoteTrack, RemoteTrackPublication, LocalTrackPublication } from "livekit-client";
 
@@ -49,7 +51,7 @@ export function useLessonAutoRecorder({
   const segmentRecorder = useRef<ReturnType<typeof createLessonSegmentRecorder> | null>(null);
   const [recordingWarning, setRecordingWarning] = useState("");
   const isRecordingRef = useRef(false);
-  const renderTimerRef = useRef<ReturnType<typeof setInterval> | null>(null);
+  const stopRenderingRef = useRef<(() => void) | null>(null);
   const combinedStreamRef = useRef<MediaStream | null>(null);
 
   // Upload a completed segment blob to the backend (Supabase storage)
@@ -125,16 +127,13 @@ export function useLessonAutoRecorder({
     [lessonId],
   );
 
-  const cycleRecordingSegment = useCallback(() => segmentRecorder.current?.rotate(), []);
 
   const stopAndUpload = useCallback(async () => {
     const recorder = segmentRecorder.current;
     isRecordingRef.current = false;
     setIsRecording(false);
-    if (renderTimerRef.current) {
-      clearInterval(renderTimerRef.current);
-      renderTimerRef.current = null;
-    }
+    stopRenderingRef.current?.();
+    stopRenderingRef.current = null;
     if (!recorder) return { success: true };
     setIsUploading(true);
     try {
@@ -268,20 +267,8 @@ export function useLessonAutoRecorder({
     canvas.width = 854;
     canvas.height = 480;
     const ctx = canvas.getContext("2d", { alpha: false });
-    const cameras = new Map<string, { video: HTMLVideoElement; detach: () => void }>();
-    const presentations = new Map<string, MediaStreamTrack>();
+    const videos = new Map<string, { video: HTMLVideoElement; detach: () => void }>();
     let stageTrack: MediaStreamTrack | undefined;
-
-    // Keep a stable stream per encoded part. A native presentation track keeps
-    // producing frames when the teacher switches away from the lesson tab.
-    const videoSource = () => Array.from(presentations.values()).find(track => track.readyState === "live") ?? stageTrack;
-    const syncRecordingVideo = () => {
-      const video = videoSource();
-      const stream = combinedStreamRef.current;
-      if (!isRecordingRef.current || !stream || !video || stream.getVideoTracks()[0] === video) return;
-      combinedStreamRef.current = new MediaStream([video, ...destination.stream.getAudioTracks()]);
-      cycleRecordingSegment();
-    };
 
     type Publication = LocalTrackPublication | RemoteTrackPublication;
     const addPublication = (pub: Publication) => {
@@ -290,22 +277,18 @@ export function useLessonAutoRecorder({
       if (track.kind === Track.Kind.Audio) {
         if (pub instanceof LocalTrackPublication) bindLocalAudio(pub);
         else addAudioTrack(track.mediaStreamTrack, pub.trackSid);
-      } else if (pub.source === Track.Source.ScreenShare) {
-        presentations.set(pub.trackSid, track.mediaStreamTrack);
-        syncRecordingVideo();
-      } else if (!cameras.has(pub.trackSid)) {
+      } else if (!videos.has(pub.trackSid)) {
         const video = createHiddenVideo();
         track.attach(video);
-        cameras.set(pub.trackSid, { video, detach: () => { track.detach(video); video.remove(); } });
+        videos.set(pub.trackSid, { video, detach: () => { track.detach(video); video.remove(); } });
       }
     };
     const removePublication = (pub: Publication) => {
       localAudioListeners.get(pub.trackSid)?.();
       localAudioListeners.delete(pub.trackSid);
       removeAudioTrack(pub.trackSid);
-      cameras.get(pub.trackSid)?.detach();
-      cameras.delete(pub.trackSid);
-      if (presentations.delete(pub.trackSid)) syncRecordingVideo();
+      videos.get(pub.trackSid)?.detach();
+      videos.delete(pub.trackSid);
     };
     const subscribed = (_track: RemoteTrack, pub: RemoteTrackPublication) => addPublication(pub);
     const unsubscribed = (_track: RemoteTrack, pub: RemoteTrackPublication) => removePublication(pub);
@@ -316,26 +299,9 @@ export function useLessonAutoRecorder({
 
     const drawFrame = () => {
       if (isCleanedUp || !ctx || !segmentRecorder.current?.isCapturing) return;
-      // Native screen-share capture does not need a second canvas compositor.
-      if (videoSource() !== stageTrack) return;
-      ctx.fillStyle = "#111018";
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-      const feeds = [...cameras.values()].map(entry => entry.video).filter(video =>
-        video.readyState >= 2 && video.videoWidth > 0 && video.videoHeight > 0);
-      const cols = Math.max(1, Math.ceil(Math.sqrt(feeds.length)));
-      const rows = Math.ceil(feeds.length / cols);
-      feeds.forEach((video, i) => {
-        const w = canvas.width / cols, h = canvas.height / rows;
-        const scale = Math.min(w / video.videoWidth, h / video.videoHeight);
-        const dw = video.videoWidth * scale, dh = video.videoHeight * scale;
-        ctx.drawImage(video, (i % cols) * w + (w - dw) / 2, Math.floor(i / cols) * h + (h - dh) / 2, dw, dh);
-      });
-      if (!feeds.length) {
-        ctx.fillStyle = "#ece9ef";
-        ctx.font = "24px sans-serif";
-        ctx.textAlign = "center";
-        ctx.fillText((instrument || "Music") + " lesson - Cameras off", canvas.width / 2, canvas.height / 2);
-      }
+      drawLessonStage(ctx, lessonStageLayout(lessonStageItems([
+        room.localParticipant, ...room.remoteParticipants.values(),
+      ])), videos);
     };
 
     // 6. Start Recording Stream
@@ -346,7 +312,7 @@ export function useLessonAutoRecorder({
       room.remoteParticipants.forEach(participant => participant.trackPublications.forEach(addPublication));
 
       stageTrack = canvas.captureStream(15).getVideoTracks()[0];
-      const video = videoSource();
+      const video = stageTrack;
       const audio = destination.stream.getAudioTracks()[0];
       if (!ctx || !video || !audio) {
         console.error("[AutoRecorder] Both video and audio are required for lesson recording.");
@@ -390,7 +356,7 @@ export function useLessonAutoRecorder({
 
         // Draw initial frame immediately so stream has active frames
         drawFrame();
-        renderTimerRef.current = setInterval(drawFrame, 1000 / 15);
+        stopRenderingRef.current = startLessonFrameClock(drawFrame);
       } catch (recErr) {
         console.warn("[AutoRecorder] Failed to start MediaRecorder:", recErr);
       }
@@ -414,7 +380,8 @@ export function useLessonAutoRecorder({
       room.off(RoomEvent.Connected, startMediaRecording);
       localAudioListeners.forEach(unbind => unbind());
       localAudioListeners.clear();
-      if (renderTimerRef.current) { clearInterval(renderTimerRef.current); renderTimerRef.current = null; }
+      stopRenderingRef.current?.();
+      stopRenderingRef.current = null;
       window.removeEventListener("click", handleUserGestureUnlock);
       window.removeEventListener("touchstart", handleUserGestureUnlock);
       window.removeEventListener("keydown", handleUserGestureUnlock);
@@ -434,11 +401,10 @@ export function useLessonAutoRecorder({
       // Clean up cloned audio tracks
       for (const id of recordingInputs.keys()) removeAudioTrack(id);
 
-      cameras.forEach(entry => entry.detach());
-      cameras.clear();
-      presentations.clear();
+      videos.forEach(entry => entry.detach());
+      videos.clear();
     };
-  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopAndUpload, cycleRecordingSegment, uploadSegmentBlob]);
+  }, [isRecorderRole, room, lessonId, instrument, partnerName, stopAndUpload, uploadSegmentBlob]);
 
   return {
     stopAndUpload,

@@ -31,8 +31,6 @@ export function MeetSettings({
   onVideoDevice,
   mirror,
   setMirror,
-  showSelf,
-  setShowSelf,
   reactionsEnabled,
   setReactionsEnabled,
   onEffects,
@@ -49,8 +47,6 @@ export function MeetSettings({
   onVideoDevice: (id: string) => Promise<void>;
   mirror: boolean;
   setMirror: (value: boolean) => void;
-  showSelf: boolean;
-  setShowSelf: (value: boolean) => void;
   reactionsEnabled: boolean;
   setReactionsEnabled: (value: boolean) => void;
   onEffects: () => void;
@@ -274,11 +270,7 @@ export function MeetSettings({
           )}
           {tab === "General" && (
             <>
-              <RoomSwitch
-                label="Show my self-view"
-                checked={showSelf}
-                onChange={() => setShowSelf(!showSelf)}
-              />
+              <p className="meet-muted">Your video stays visible alongside the other participants in the lesson and recording.</p>
               <h3>Keyboard shortcuts</h3>
               <dl className="meet-shortcuts">
                 <div>
