@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { TicketCategory, TicketStatus, Role } from "@prisma/client";
 import Link from "next/link";
+import { getSupportTicketDisplaySubject } from "@/lib/support-ticket-display";
 import {
   HelpCircle,
   Search,
@@ -171,7 +172,7 @@ export function AdminTicketsManager({
                 </div>
 
                 <h3 className="text-sm font-bold text-heading group-hover:text-primary transition-colors truncate">
-                  {t.subject}
+                  {getSupportTicketDisplaySubject(t.subject, t.userName)}
                 </h3>
 
                 <div className="flex items-center gap-2 text-xs text-body flex-wrap">

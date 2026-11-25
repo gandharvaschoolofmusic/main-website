@@ -11,6 +11,7 @@ import {
 import { SupportTicketForm } from "./SupportTicketForm";
 import { FaqAccordion } from "./FaqAccordion";
 import { SplitHeading } from "@/components/ui/SplitHeading";
+import { getSupportTicketDisplaySubject } from "@/lib/support-ticket-display";
 
 export const metadata = {
   title: "Help & Support | Student Portal | Gandharva School of Music",
@@ -117,7 +118,7 @@ export default async function StudentSupportPage() {
                   </div>
 
                   <h3 className="text-sm font-bold text-heading group-hover:text-primary transition-colors truncate">
-                    {ticket.subject}
+                    {getSupportTicketDisplaySubject(ticket.subject)}
                   </h3>
                 </div>
 

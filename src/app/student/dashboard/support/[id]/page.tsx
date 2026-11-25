@@ -5,6 +5,7 @@ import Link from "next/link";
 import { Role, TicketStatus } from "@/types";
 import { ArrowLeft, Clock, User, ShieldCheck } from "lucide-react";
 import { TicketThreadReplyForm } from "./TicketThreadReplyForm";
+import { getSupportTicketDisplaySubject } from "@/lib/support-ticket-display";
 
 export default async function StudentTicketDetailPage({
   params,
@@ -64,7 +65,7 @@ export default async function StudentTicketDetailPage({
           </div>
 
           <h1 className="font-serif text-2xl font-bold text-heading">
-            {ticket.subject}
+            {getSupportTicketDisplaySubject(ticket.subject)}
           </h1>
         </div>
 

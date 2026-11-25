@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { TicketStatus, Role } from "@prisma/client";
 import { updateTicketStatusAdminAction } from "@/actions/admin";
 import { replyToTicketAction } from "@/actions/support";
+import { getSupportTicketDisplaySubject } from "@/lib/support-ticket-display";
 import Link from "next/link";
 import {
   ArrowLeft,
@@ -99,7 +100,7 @@ export function AdminTicketDetailView({
             </div>
 
             <h1 className="font-serif text-xl font-bold text-heading mt-1">
-              {ticket.subject}
+              {getSupportTicketDisplaySubject(ticket.subject, ticket.userName)}
             </h1>
 
             <div className="flex items-center gap-2 text-xs text-body flex-wrap">

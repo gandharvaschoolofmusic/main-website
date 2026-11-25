@@ -4,6 +4,7 @@ import { db } from "@/lib/db";
 import { requireUser } from "@/lib/auth-helpers";
 import { revalidatePath, updateTag } from "next/cache";
 import { logger } from "@/lib/logger";
+import { formatToIST } from "@/lib/timezone";
 
 class ReschedulePolicyError extends Error {}
 
@@ -25,6 +26,15 @@ export async function requestStudentReschedule(input: { lessonId: string; reason
       if (lesson.startsAt.getTime() - Date.now() < 6 * 60 * 60 * 1000) {
         throw new ReschedulePolicyError("Reschedule requests must be sent at least 6 hours before the lesson starts.");
       }
+      const studentName = user.name?.trim() || "Student";
+      const lessonTitle = lesson.enrollment?.course.title || lesson.instrument || "Music lesson";
+      const currentClassTime = formatToIST(lesson.startsAt);
+      const sessionReference = lesson.trackingCode || lesson.id;
+      const preferredSchedule = input.preferredSchedule.trim() || "Please coordinate with me";
+      const reason = input.reason.trim();
+      const normalizedReason = reason.replace(/\s+/g, " ");
+      const shortReason = normalizedReason.slice(0, 180);
+      const reasonForNotification = shortReason.length < normalizedReason.length ? `${shortReason}…` : shortReason;
       const prefix = `Reschedule [${lesson.enrollmentId || `trial-${lesson.id}`}] `;
       const subject = `${prefix}${lesson.id} at ${lesson.startsAt.toISOString()}`;
       const existing = await tx.supportTicket.findFirst({ where: { userId: user.id, subject } });
@@ -36,12 +46,18 @@ export async function requestStudentReschedule(input: { lessonId: string; reason
       const allowance = remaining === null ? "" : ` You have ${remaining} of 6 reschedule requests remaining for this 24-class enrollment.`;
       const ticket = await tx.supportTicket.create({ data: {
         userId: user.id, subject, category: "LESSON", status: "OPEN",
-        messages: { create: { senderId: user.id, senderRole: "STUDENT", body: `Please reschedule ${lesson.instrument} (${lesson.trackingCode || lesson.id}). Current class: ${lesson.startsAt.toISOString()}.\nReason: ${input.reason.trim()}\nPreferred schedule: ${input.preferredSchedule.trim() || "Please coordinate with me"}\nThe original class remains scheduled until administration confirms a change.${allowance}` } },
+        messages: { create: { senderId: user.id, senderRole: "STUDENT", body: `Please reschedule ${lessonTitle} (session ${sessionReference}). Current class: ${currentClassTime}.\nReason: ${reason}\nPreferred schedule: ${preferredSchedule}\nThe original class remains scheduled until administration confirms a change.${allowance}` } },
       } });
       const admins = await tx.user.findMany({ where: { role: "ADMIN" }, select: { id: true } });
       await tx.notification.createMany({ data: [
-        { userId: user.id, type: "SYSTEM" as const, title: "Reschedule request submitted", body: `Your ${lesson.instrument} reschedule request is awaiting admin approval.${allowance} Your class remains scheduled until confirmed.`, link: `/student/dashboard/support/${ticket.id}` },
-        ...admins.map(admin => ({ userId: admin.id, type: "NEW_SUPPORT_TICKET" as const, title: "Student reschedule request", body: `${user.name || "Student"} requested a new time for ${lesson.instrument}.${allowance}`, link: `/admin/support/${ticket.id}` })),
+        { userId: user.id, type: "SYSTEM" as const, title: "Reschedule request received", body: `Your ${lessonTitle} session ${sessionReference} on ${currentClassTime} is awaiting admin approval. Preferred time: ${preferredSchedule}.${allowance} Your original class remains scheduled until confirmed.`, link: `/student/dashboard/support/${ticket.id}` },
+        ...admins.map(admin => ({
+          userId: admin.id,
+          type: "NEW_SUPPORT_TICKET" as const,
+          title: `Session reschedule request from ${studentName}`,
+          body: `${lessonTitle} · Session ${sessionReference} · Current: ${currentClassTime}. Preferred: ${preferredSchedule}. Reason: ${reasonForNotification}.${allowance}`,
+          link: `/admin/support/${ticket.id}`,
+        })),
       ] });
       return { success: true, remaining, ticketId: ticket.id, message: `Request sent to administration.${allowance} Your class remains scheduled until confirmed.` };
     });
