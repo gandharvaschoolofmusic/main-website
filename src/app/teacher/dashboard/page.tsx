@@ -42,7 +42,6 @@ export default async function TeacherDashboardPage() {
             },
           },
           orderBy: { startsAt: "desc" },
-          take: 60,
         },
       },
     });
