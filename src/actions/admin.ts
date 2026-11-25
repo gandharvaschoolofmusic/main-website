@@ -24,7 +24,7 @@ import {
 } from "@prisma/client";
 import { hashPassword, verifyPassword } from "@/lib/password";
 import { generateBackupCodes } from "@/lib/totp";
-import { revalidatePath, revalidateTag } from "next/cache";
+import { revalidatePath, revalidateTag, updateTag } from "next/cache";
 import { logger } from "@/lib/logger";
 import { generateUniqueLessonTrackingCode, getLessonTrackingId } from "@/lib/lesson-tracking";
 import { generateNextStudentId, generateNextTrialId, generateNextPaymentReceiptId } from "@/lib/id-generator";
@@ -1023,6 +1023,8 @@ export async function updateLessonDateTimeAdminAction(input: {
     }
 
     revalidatePath("/admin/lessons");
+    revalidatePath("/admin");
+    updateTag("admin-overview");
     try {
       revalidateTag("admin-lessons", "max");
       revalidateTag("lessons", "max");
@@ -1106,6 +1108,8 @@ export async function deleteOrCancelEnrollmentLessonAction(
     }
 
     revalidatePath("/admin/enrollments");
+    revalidatePath("/admin");
+    updateTag("admin-overview");
     try {
       revalidateTag("admin-enrollments", "max");
     } catch {}
@@ -1916,6 +1920,8 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
     }
 
     revalidatePath("/admin/lessons");
+    revalidatePath("/admin");
+    updateTag("admin-overview");
     revalidatePath("/admin/students");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/student/dashboard");
@@ -2014,6 +2020,8 @@ export async function updateLessonStatusAdminAction(
     revalidatePath("/admin/students");
     revalidatePath("/admin/lessons");
     revalidatePath("/admin/enrollments");
+    revalidatePath("/admin");
+    updateTag("admin-overview");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/student/dashboard");
     try {

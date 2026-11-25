@@ -32,7 +32,7 @@ export interface ScheduleItem {
   title: string;
   faculty: string;
   student: string;
-  status: "COMPLETED" | "IN_PROGRESS" | "JOIN_OPENS" | "SCHEDULED";
+  status: "CANCELLED" | "COMPLETED" | "IN_PROGRESS" | "JOIN_OPENS" | "SCHEDULED";
   joinTime?: string;
   lessonId?: string;
 }
@@ -448,6 +448,11 @@ export function AdminOverviewClient({
                     {item.status === "SCHEDULED" && (
                       <span className="px-2.5 py-1 rounded-full bg-neutral-100 text-body/80 border border-neutral-200 text-[11px] font-medium">
                         Scheduled
+                      </span>
+                    )}
+                    {item.status === "CANCELLED" && (
+                      <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-medium">
+                        Cancelled
                       </span>
                     )}
                   </div>

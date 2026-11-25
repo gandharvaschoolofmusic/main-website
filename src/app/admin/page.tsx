@@ -13,6 +13,7 @@ import {
   TeacherPayoutStatus,
   CourseEmiStatus,
 } from "@prisma/client";
+import { getTimezoneDayBounds, IST_TIMEZONE } from "@/lib/timezone";
 import {
   AdminOverviewClient,
   ScheduleItem,
@@ -33,8 +34,7 @@ const getCachedAdminOverviewData = unstable_cache(
   async () => {
     return getResilientData("admin-overview-v2", async () => {
       const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
-    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+    const { start: startOfToday, endExclusive: startOfTomorrow } = getTimezoneDayBounds(now, IST_TIMEZONE);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
     const sevenDaysAgo = new Date(Date.now() - 7 * 86400000);
     const fourteenDaysAgo = new Date(Date.now() - 14 * 86400000);
@@ -147,7 +147,7 @@ const getCachedAdminOverviewData = unstable_cache(
         }),
         // 16: Today's Lessons with details (also provides today's scheduled and completed counts!)
         db.lesson.findMany({
-          where: { startsAt: { gte: startOfToday, lte: endOfToday } },
+          where: { startsAt: { gte: startOfToday, lt: startOfTomorrow } },
           include: {
             student: { select: { name: true } },
             teacher: { select: { name: true } },
@@ -318,8 +318,10 @@ const getCachedAdminOverviewData = unstable_cache(
         timeZone: "Asia/Kolkata",
       });
 
-      let status: "COMPLETED" | "IN_PROGRESS" | "JOIN_OPENS" | "SCHEDULED" = "SCHEDULED";
-      if (l.status === LessonStatus.COMPLETED) {
+      let status: "CANCELLED" | "COMPLETED" | "IN_PROGRESS" | "JOIN_OPENS" | "SCHEDULED" = "SCHEDULED";
+      if (l.status === LessonStatus.CANCELLED) {
+        status = "CANCELLED";
+      } else if (l.status === LessonStatus.COMPLETED) {
         status = "COMPLETED";
       } else {
         const diffMinutes = (startsDate.getTime() - now.getTime()) / 60000;

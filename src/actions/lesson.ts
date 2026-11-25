@@ -10,7 +10,7 @@ import {
 import { isAppError, ConflictError } from "@/lib/errors";
 import { CANCELLATION_NOTICE_HOURS } from "@/types";
 import { logger } from "@/lib/logger";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { restoreLessonAllocationTx } from "@/lib/quota-reconciliation";
 
 export type CancelLessonResponse = {
@@ -165,6 +165,8 @@ export async function cancelLessonAction(
 
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard");
+    revalidatePath("/admin");
+    updateTag("admin-overview");
     revalidatePath(`/teachers/${lesson.teacherProfileId}`);
     revalidatePath(`/lesson/${lesson.id}`);
 

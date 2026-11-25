@@ -45,6 +45,28 @@ export function formatISTTimeOnly(
   return formatToIST(dateInput, pattern);
 }
 
+/** Return the UTC instants covering one complete calendar day in a timezone. */
+export function getTimezoneDayBounds(
+  dateInput: Date | string | number,
+  timezone = IST_TIMEZONE,
+): { start: Date; endExclusive: Date } {
+  const date = dateInput instanceof Date ? dateInput : new Date(dateInput);
+  if (isNaN(date.getTime())) {
+    throw new RangeError("Cannot calculate day bounds for an invalid date.");
+  }
+
+  const localDate = formatInTimeZone(date, timezone, "yyyy-MM-dd");
+  const [year, month, day] = localDate.split("-").map(Number);
+  const nextLocalDate = new Date(Date.UTC(year, month - 1, day + 1))
+    .toISOString()
+    .slice(0, 10);
+
+  return {
+    start: fromZonedTime(`${localDate}T00:00:00`, timezone),
+    endExclusive: fromZonedTime(`${nextLocalDate}T00:00:00`, timezone),
+  };
+}
+
 /**
  * Convert a Date/ISO to a wall-clock local input string in IST for datetime pickers ("yyyy-MM-dd'T'HH:mm").
  */
