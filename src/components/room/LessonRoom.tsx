@@ -441,20 +441,26 @@ function LessonRoomContent({
 
   // Toggle Screen Share
   const handleToggleScreenShare = async () => {
+    const isPublished = Array.from(room.localParticipant.videoTrackPublications.values()).some(
+      (publication) => publication.source === Track.Source.ScreenShare && !publication.isMuted,
+    );
+    const nextShare = !isPublished;
     try {
-      const nextShare = !isScreenSharing;
       await room.localParticipant.setScreenShareEnabled(nextShare, {
-        video: { displaySurface: "monitor" },
+        video: true,
         audio: { restrictOwnAudio: true },
         selfBrowserSurface: "exclude",
         surfaceSwitching: "include",
         systemAudio: "exclude",
         contentHint: "detail",
       });
-      setIsScreenSharing(nextShare);
     } catch (err) {
       console.warn("Screen share error", err);
-      setIsScreenSharing(false);
+      setIsScreenSharing(Array.from(room.localParticipant.videoTrackPublications.values()).some(
+        (publication) => publication.source === Track.Source.ScreenShare && !publication.isMuted,
+      ));
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      throw err;
     }
   };
 
