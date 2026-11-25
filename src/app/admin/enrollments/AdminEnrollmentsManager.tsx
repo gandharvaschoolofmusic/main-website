@@ -11,6 +11,7 @@ import {
   rescheduleEnrollmentLessonAction,
   deleteOrCancelEnrollmentLessonAction,
   reassignEnrollmentTeacherAction,
+  reassignEnrollmentLessonTeacherAction,
   adminApproveAndAllotCourseAction,
   adminRecordEnrollmentPaymentAction,
 } from "@/actions/admin";
@@ -1313,29 +1314,42 @@ export function AdminEnrollmentsManager({
 
   // ─── 6. REASSIGN FACULTY TEACHER FOR A LESSON ─────────────────────────
   const handleReassignLesson = (lessonId: string, newTeacherId: string) => {
-    if (!newTeacherId) return;
+    if (!newTeacherId || !activeEnrollment) return;
     const tObj = teachers.find((t) => t.id === newTeacherId);
-    setEnrollments((prev) =>
-      prev.map((item) =>
-        item.id === activeEnrollment?.id
-          ? {
-              ...item,
-              lessons: item.lessons.map((l) =>
-                l.id === lessonId
-                  ? {
-                      ...l,
-                      teacherId: newTeacherId,
-                      teacherName: tObj?.name || "Assigned Faculty",
-                      payoutRupees: tObj?.payoutRupees || 500,
-                    }
-                  : l
-              ),
-            }
-          : item
-      )
-    );
-    showToast(`Faculty reassigned to ${tObj?.name || "Faculty"}.`, "success");
-    setReassigningLessonId(null);
+
+    startTransition(async () => {
+      const result = await reassignEnrollmentLessonTeacherAction({ lessonId, teacherId: newTeacherId });
+      if (!result.success) {
+        showToast(result.error || "Could not reassign this session.", "error");
+        return;
+      }
+
+      setEnrollments((prev) =>
+        prev.map((item) =>
+          item.id === activeEnrollment.id
+            ? {
+                ...item,
+                lessons: item.lessons.map((lesson) =>
+                  lesson.id === lessonId
+                    ? {
+                        ...lesson,
+                        teacherId: newTeacherId,
+                        teacherName: tObj?.name || "Assigned Faculty",
+                        payoutRupees:
+                          result.data?.payoutAmountMinor != null
+                            ? Math.round(result.data.payoutAmountMinor / 100)
+                            : tObj?.payoutRupees || lesson.payoutRupees,
+                      }
+                    : lesson,
+                ),
+              }
+            : item,
+        ),
+      );
+      showToast(`Faculty reassigned to ${tObj?.name || "Faculty"}.`, "success");
+      setReassigningLessonId(null);
+      router.refresh();
+    });
   };
 
   return (

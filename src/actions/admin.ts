@@ -308,6 +308,7 @@ export async function reassignEnrollmentTeacherAction(input: {
     if (!teacher || teacher.role !== Role.TEACHER || !teacher.teacherProfile) {
       return { success: false, error: "Selected user is not a registered teacher." };
     }
+    const teacherProfileId = teacher.teacherProfile.id;
 
     const enrollment = await db.enrollment.findUnique({
       where: { id: input.enrollmentId },
@@ -317,24 +318,26 @@ export async function reassignEnrollmentTeacherAction(input: {
       return { success: false, error: "Enrollment not found." };
     }
 
-    await db.enrollment.update({
-      where: { id: input.enrollmentId },
-      data: { teacherId: input.teacherId },
-    });
-
-    if (input.updateUpcomingLessons) {
-      await db.lesson.updateMany({
-        where: {
-          enrollmentId: input.enrollmentId,
-          status: LessonStatus.SCHEDULED,
-          startsAt: { gt: new Date() },
-        },
-        data: {
-          teacherId: input.teacherId,
-          teacherProfileId: teacher.teacherProfile.id,
-        },
+    await db.$transaction(async (tx) => {
+      await tx.enrollment.update({
+        where: { id: input.enrollmentId },
+        data: { teacherId: input.teacherId },
       });
-    }
+
+      if (input.updateUpcomingLessons) {
+        await tx.lesson.updateMany({
+          where: {
+            enrollmentId: input.enrollmentId,
+            status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+            startsAt: { gte: new Date() },
+          },
+          data: {
+            teacherId: input.teacherId,
+            teacherProfileId,
+          },
+        });
+      }
+    });
 
     logger.info(
       { enrollmentId: input.enrollmentId, teacherId: input.teacherId },
@@ -342,14 +345,92 @@ export async function reassignEnrollmentTeacherAction(input: {
     );
 
     revalidatePath("/admin/enrollments");
+    revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard");
+    try {
+      revalidateTag("admin-enrollments", "max");
+      revalidateTag("admin-lessons", "max");
+      revalidateTag("lessons", "max");
+      revalidateTag("admin-overview", "max");
+    } catch {}
 
     return { success: true };
   } catch (error) {
     logger.error({ error }, "Error reassigning enrollment teacher");
     return { success: false, error: "Failed to assign teacher." };
+  }
+}
+
+export async function reassignEnrollmentLessonTeacherAction(input: {
+  lessonId: string;
+  teacherId: string;
+}): Promise<AdminActionResponse<{ payoutAmountMinor: number | null }>> {
+  try {
+    await requireRole(Role.ADMIN);
+
+    const teacher = await db.user.findUnique({
+      where: { id: input.teacherId },
+      include: { teacherProfile: true },
+    });
+    if (!teacher || teacher.role !== Role.TEACHER || !teacher.teacherProfile) {
+      return { success: false, error: "Selected user is not a registered teacher." };
+    }
+
+    const lesson = await db.lesson.findUnique({
+      where: { id: input.lessonId },
+      select: {
+        id: true,
+        enrollmentId: true,
+        startsAt: true,
+        lessonSource: true,
+        payoutStatus: true,
+      },
+    });
+    if (!lesson || !lesson.enrollmentId) {
+      return { success: false, error: "Enrollment session not found." };
+    }
+    if (lesson.payoutStatus === TeacherPayoutStatus.PAID) {
+      return { success: false, error: "This session has already been paid and cannot be reassigned." };
+    }
+
+    const payoutAmountMinor = calculateLessonPayoutMinor(
+      lesson.startsAt,
+      teacher.teacherProfile,
+      lesson.lessonSource,
+    );
+
+    await db.lesson.update({
+      where: { id: lesson.id },
+      data: {
+        teacherId: teacher.id,
+        teacherProfileId: teacher.teacherProfile.id,
+        payoutAmountMinor,
+      },
+    });
+
+    logger.info(
+      { lessonId: lesson.id, enrollmentId: lesson.enrollmentId, teacherId: teacher.id },
+      "Enrollment lesson teacher reassigned by admin",
+    );
+
+    revalidatePath("/admin/enrollments");
+    revalidatePath("/admin/lessons");
+    revalidatePath("/admin");
+    revalidatePath("/student/dashboard");
+    revalidatePath("/teacher/dashboard");
+    try {
+      revalidateTag("admin-enrollments", "max");
+      revalidateTag("admin-lessons", "max");
+      revalidateTag("lessons", "max");
+      revalidateTag("admin-overview", "max");
+    } catch {}
+
+    return { success: true, data: { payoutAmountMinor } };
+  } catch (error) {
+    logger.error({ error, lessonId: input.lessonId }, "Error reassigning enrollment lesson teacher");
+    return { success: false, error: "Failed to reassign session teacher." };
   }
 }
 
@@ -1078,7 +1159,13 @@ export async function saveFullEnrollmentPlanAction(input: {
         where: { id: input.teacherId },
         include: { teacherProfile: true },
       });
+
+      if (!teacher || teacher.role !== Role.TEACHER || !teacher.teacherProfile) {
+        return { success: false, error: "Selected user is not a registered teacher." };
+      }
     }
+    const assignedTeacherId = teacher?.teacherProfile ? teacher.id : null;
+    const assignedTeacherProfileId = teacher?.teacherProfile?.id || null;
 
     const totalSessions =
       input.sessionsRemaining !== undefined && input.sessionsRemaining > 0
@@ -1093,37 +1180,60 @@ export async function saveFullEnrollmentPlanAction(input: {
       targetStatus === EnrollmentStatus.CANCELLED || targetStatus === EnrollmentStatus.REFUNDED;
 
     if (targetEnrollmentId) {
-      await db.enrollment.update({
-        where: { id: targetEnrollmentId },
-        data: {
-          courseId: course.id,
-          teacherId: input.teacherId || null,
-          sessionsRemaining: totalSessions,
-          status: targetStatus,
-          completedAt: isCompletedStatus ? new Date() : null,
-          adminNotes: input.adminNotes !== undefined ? input.adminNotes : undefined,
-          customFeeMinorUnits:
-            input.paymentFeeRupees !== undefined
-              ? Math.round(input.paymentFeeRupees * 100)
-              : undefined,
-        },
-      });
+      const existingEnrollmentId = targetEnrollmentId;
+      await db.$transaction(async (tx) => {
+        const existingEnrollment = await tx.enrollment.findUnique({
+          where: { id: existingEnrollmentId },
+          select: { teacherId: true },
+        });
+        const teacherAssignmentChanged =
+          existingEnrollment?.teacherId !== (input.teacherId || null);
 
-      // If enrollment cancelled or refunded, cancel all future scheduled lessons
-      if (isTerminatedStatus) {
-        await db.lesson.updateMany({
-          where: {
-            enrollmentId: targetEnrollmentId,
-            status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
-            startsAt: { gte: new Date() },
-          },
+        await tx.enrollment.update({
+          where: { id: existingEnrollmentId },
           data: {
-            status: LessonStatus.CANCELLED,
-            cancelledBy: "ADMIN",
-            cancelledAt: new Date(),
+            courseId: course.id,
+            teacherId: input.teacherId || null,
+            sessionsRemaining: totalSessions,
+            status: targetStatus,
+            completedAt: isCompletedStatus ? new Date() : null,
+            adminNotes: input.adminNotes !== undefined ? input.adminNotes : undefined,
+            customFeeMinorUnits:
+              input.paymentFeeRupees !== undefined
+                ? Math.round(input.paymentFeeRupees * 100)
+                : undefined,
           },
         });
-      }
+
+        if (isTerminatedStatus) {
+          // If enrollment is cancelled or refunded, cancel its future sessions.
+          await tx.lesson.updateMany({
+            where: {
+              enrollmentId: existingEnrollmentId,
+              status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+              startsAt: { gte: new Date() },
+            },
+            data: {
+              status: LessonStatus.CANCELLED,
+              cancelledBy: "ADMIN",
+              cancelledAt: new Date(),
+            },
+          });
+        } else if (teacherAssignmentChanged && assignedTeacherId && assignedTeacherProfileId) {
+          // Keep future lesson assignments aligned with the enrollment's allotted teacher.
+          await tx.lesson.updateMany({
+            where: {
+              enrollmentId: existingEnrollmentId,
+              status: { in: [LessonStatus.SCHEDULED, LessonStatus.RESCHEDULED] },
+              startsAt: { gte: new Date() },
+            },
+            data: {
+              teacherId: assignedTeacherId,
+              teacherProfileId: assignedTeacherProfileId,
+            },
+          });
+        }
+      });
     } else {
       const created = await db.enrollment.create({
         data: {
@@ -1212,8 +1322,15 @@ export async function saveFullEnrollmentPlanAction(input: {
     revalidatePath("/admin/trials");
     revalidatePath("/admin/students");
     revalidatePath("/admin/lessons");
+    revalidatePath("/admin");
     revalidatePath("/student/dashboard");
     revalidatePath("/teacher/dashboard");
+    try {
+      revalidateTag("admin-enrollments", "max");
+      revalidateTag("admin-lessons", "max");
+      revalidateTag("lessons", "max");
+      revalidateTag("admin-overview", "max");
+    } catch {}
 
     return {
       success: true,
