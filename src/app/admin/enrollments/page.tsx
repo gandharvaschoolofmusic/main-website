@@ -427,6 +427,71 @@ export default async function AdminEnrollmentsPage(props: {
     }
   }
 
+  // A converted trial opens the planner with its own student as the only selectable match.
+  if (initialTrialId && !data.formattedTrialLeads.some((trial) => trial.id === initialTrialId)) {
+    try {
+      const trial = await db.trialRequest.findFirst({
+        where: { id: initialTrialId, isConverted: true },
+        select: {
+          id: true,
+          customId: true,
+          studentId: true,
+          studentName: true,
+          studentEmail: true,
+          instrument: true,
+          status: true,
+          isConverted: true,
+          preferredTimeSlot: true,
+          allottedTeacherId: true,
+          student: {
+            select: {
+              id: true,
+              customId: true,
+              name: true,
+              email: true,
+              phone: true,
+              timezone: true,
+              guardianName: true,
+              country: true,
+              age: true,
+            },
+          },
+        },
+      });
+
+      if (trial) {
+        data.formattedTrialLeads.unshift({
+          id: trial.id,
+          customId: trial.customId,
+          studentId: trial.studentId,
+          studentName: trial.studentName,
+          studentEmail: trial.studentEmail,
+          instrument: trial.instrument,
+          status: trial.status,
+          isConverted: trial.isConverted,
+          preferredTimeSlot: trial.preferredTimeSlot,
+          allottedTeacherId: trial.allottedTeacherId,
+        });
+
+        if (!data.formattedStudents.some((student) => student.id === trial.student.id)) {
+          data.formattedStudents.unshift({
+            id: trial.student.id,
+            customId: trial.student.customId,
+            name: trial.student.name || trial.studentName || "Student",
+            email: trial.student.email,
+            timezone: trial.student.timezone || "Asia/Kolkata",
+            guardianName: trial.student.guardianName,
+            age: trial.student.age,
+            phone: trial.student.phone,
+            country: trial.student.country,
+          });
+        }
+      }
+    } catch (err) {
+      console.error("[AdminEnrollmentsPage] Failed to fetch selected converted trial:", err);
+    }
+  }
+
   return (
     <Suspense fallback={<div className="p-12 text-center text-xs text-body">Loading enrollment planner...</div>}>
       <AdminEnrollmentsManager

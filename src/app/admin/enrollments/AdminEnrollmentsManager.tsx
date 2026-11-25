@@ -237,6 +237,9 @@ export function AdminEnrollmentsManager({
   const paramStudentId = searchParams.get("studentId") || initialStudentId || "";
   const paramTrialId = searchParams.get("trialId") || initialTrialId || "";
   const isDirectParam = searchParams.get("direct") === "true" || Boolean(initialDirect);
+  const trialStudentId = paramTrialId
+    ? trialLeads.find((trial) => trial.id === paramTrialId)?.studentId || ""
+    : "";
 
   const [enrollments, setEnrollments] = useState<EnrollmentRecord[]>(initialEnrollments);
 
@@ -266,7 +269,7 @@ export function AdminEnrollmentsManager({
 
   // Direct enrolment mode lock: when initiated from direct enrolment, locked strictly to this student
   const [isDirectEnrolmentScoped, setIsDirectEnrolmentScoped] = useState<boolean>(() => {
-    return Boolean(paramStudentId || isDirectParam);
+    return Boolean(paramStudentId || isDirectParam || trialStudentId);
   });
 
   // Keep selected student in sync when navigating or URL changes
@@ -276,8 +279,10 @@ export function AdminEnrollmentsManager({
       setSelectedStudentId(sId);
       setIsDirectEnrolmentScoped(true);
       setIsManualAddOpen(true);
+    } else if (trialStudentId) {
+      setIsDirectEnrolmentScoped(true);
     }
-  }, [paramStudentId, initialStudentId]);
+  }, [paramStudentId, initialStudentId, trialStudentId]);
 
   useEffect(() => {
     const eId = paramEnrollmentId || initialEnrollmentId;
@@ -288,12 +293,15 @@ export function AdminEnrollmentsManager({
 
   // Scoped students list: in direct enrolment mode, only the target student is presented
   const visibleStudents = useMemo(() => {
+    if (paramTrialId) {
+      return trialStudentId ? students.filter((s) => s.id === trialStudentId) : [];
+    }
     if (isDirectEnrolmentScoped && selectedStudentId) {
       const single = students.filter((s) => s.id === selectedStudentId);
       if (single.length > 0) return single;
     }
     return students;
-  }, [students, isDirectEnrolmentScoped, selectedStudentId]);
+  }, [students, isDirectEnrolmentScoped, selectedStudentId, paramTrialId, trialStudentId]);
 
   // Global pending course admission requests across converted students
   const allPendingCourseRequests = useMemo(() => {
@@ -1630,7 +1638,11 @@ export function AdminEnrollmentsManager({
 
               <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-purple-50 text-[#3C096C] border border-purple-200/70 self-start sm:self-auto font-numeric shrink-0">
                 <Users className="w-3.5 h-3.5" />
-                <span>{isDirectEnrolmentScoped ? "1 Student (Direct Mode)" : `${students.length} Converted Students`}</span>
+                <span>
+                  {isDirectEnrolmentScoped
+                    ? `${visibleStudents.length} Student${visibleStudents.length === 1 ? "" : "s"} (Direct Mode)`
+                    : `${students.length} Students`}
+                </span>
               </span>
             </div>
 
@@ -1648,6 +1660,7 @@ export function AdminEnrollmentsManager({
                   enrollments={enrollments}
                   courseRequests={courseRequests}
                   isDirectMode={isDirectEnrolmentScoped}
+                  lockDirectMode={Boolean(trialStudentId)}
                   onUnlockDirectMode={() => setIsDirectEnrolmentScoped(false)}
                 />
               </div>

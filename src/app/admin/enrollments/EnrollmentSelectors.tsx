@@ -35,6 +35,7 @@ interface SearchableStudentSelectorProps {
   enrollments: EnrollmentRecord[];
   courseRequests: AdminCourseEnrollmentRequestItem[];
   isDirectMode?: boolean;
+  lockDirectMode?: boolean;
   onUnlockDirectMode?: () => void;
 }
 
@@ -45,6 +46,7 @@ export function SearchableStudentSelector({
   enrollments,
   courseRequests,
   isDirectMode = false,
+  lockDirectMode = false,
   onUnlockDirectMode,
 }: SearchableStudentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
@@ -447,7 +449,7 @@ export function SearchableStudentSelector({
               Showing {filteredStudents.length} of {students.length} {students.length === 1 ? "student" : "students"}
             </span>
             <div className="flex items-center gap-2">
-              {isDirectMode && onUnlockDirectMode && (
+              {isDirectMode && !lockDirectMode && onUnlockDirectMode && (
                 <button
                   type="button"
                   onClick={() => {
