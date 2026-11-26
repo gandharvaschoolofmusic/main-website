@@ -71,3 +71,21 @@ export function isStudentInActiveTrialPeriod(student: {
   // Active trial lead waiting for or currently in trial session
   return true;
 }
+
+/**
+ * Admin's converted-student roster includes students with an enrollment record
+ * or a trial that admissions explicitly marked as converted.
+ */
+export function isStudentConvertedOrEnrolled(student: {
+  enrollments?: Array<{ status?: string }>;
+  trials?: Array<{ isConverted: boolean }>;
+  trialRequestsAsStudent?: Array<{ isConverted: boolean }>;
+}): boolean {
+  const hasEnrollment = student.enrollments?.some(
+    (enrollment) => enrollment.status !== "CANCELLED",
+  );
+  const trialRequests = student.trialRequestsAsStudent ?? student.trials ?? [];
+  const hasConvertedTrial = trialRequests.some((trial) => trial.isConverted);
+
+  return Boolean(hasEnrollment || hasConvertedTrial);
+}

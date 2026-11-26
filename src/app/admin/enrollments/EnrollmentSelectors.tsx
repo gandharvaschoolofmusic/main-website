@@ -35,8 +35,6 @@ interface SearchableStudentSelectorProps {
   enrollments: EnrollmentRecord[];
   courseRequests: AdminCourseEnrollmentRequestItem[];
   isDirectMode?: boolean;
-  lockDirectMode?: boolean;
-  onUnlockDirectMode?: () => void;
 }
 
 export function SearchableStudentSelector({
@@ -46,12 +44,9 @@ export function SearchableStudentSelector({
   enrollments,
   courseRequests,
   isDirectMode = false,
-  lockDirectMode = false,
-  onUnlockDirectMode,
 }: SearchableStudentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [filterTab, setFilterTab] = useState<"ALL" | "PENDING" | "ENROLLED" | "LEADS">("ALL");
 
   const containerRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -94,7 +89,6 @@ export function SearchableStudentSelector({
       }, 50);
     } else {
       setSearchQuery("");
-      setFilterTab("ALL");
     }
   }, [isOpen]);
 
@@ -111,7 +105,9 @@ export function SearchableStudentSelector({
 
     students.forEach((s) => {
       const pending = courseRequests.filter((r) => r.studentId === s.id && r.status === "PENDING").length;
-      const enrolled = enrollments.filter((e) => e.studentId === s.id);
+      const enrolled = enrollments.filter(
+        (e) => e.studentId === s.id && e.status === "ACTIVE",
+      );
       map.set(s.id, {
         pendingCount: pending,
         enrolledCount: enrolled.length,
@@ -123,36 +119,22 @@ export function SearchableStudentSelector({
   }, [students, courseRequests, enrollments]);
 
   // Counts for filter pills
-  const totalPendingStudents = useMemo(() => {
-    return students.filter((s) => (studentMetaMap.get(s.id)?.pendingCount || 0) > 0).length;
-  }, [students, studentMetaMap]);
-
   const totalEnrolledStudents = useMemo(() => {
     return students.filter((s) => (studentMetaMap.get(s.id)?.enrolledCount || 0) > 0).length;
   }, [students, studentMetaMap]);
 
-  const totalLeads = useMemo(() => {
-    return students.filter((s) => {
-      const meta = studentMetaMap.get(s.id);
-      return (meta?.pendingCount || 0) === 0 && (meta?.enrolledCount || 0) === 0;
-    }).length;
-  }, [students, studentMetaMap]);
+  const enrolledStudents = useMemo(
+    () => students.filter(
+      (student) =>
+        (studentMetaMap.get(student.id)?.enrolledCount || 0) > 0 ||
+        (isDirectMode && student.id === selectedStudentId),
+    ),
+    [students, studentMetaMap, isDirectMode, selectedStudentId],
+  );
 
-  // Filtered students
+  // The enrollment planner only offers students with an active enrollment.
   const filteredStudents = useMemo(() => {
-    let result = students;
-
-    // Apply tab filter
-    if (filterTab === "PENDING") {
-      result = result.filter((s) => (studentMetaMap.get(s.id)?.pendingCount || 0) > 0);
-    } else if (filterTab === "ENROLLED") {
-      result = result.filter((s) => (studentMetaMap.get(s.id)?.enrolledCount || 0) > 0);
-    } else if (filterTab === "LEADS") {
-      result = result.filter((s) => {
-        const meta = studentMetaMap.get(s.id);
-        return (meta?.pendingCount || 0) === 0 && (meta?.enrolledCount || 0) === 0;
-      });
-    }
+    let result = enrolledStudents;
 
     // Apply search query
     if (searchQuery.trim()) {
@@ -169,7 +151,7 @@ export function SearchableStudentSelector({
     }
 
     return result;
-  }, [students, filterTab, searchQuery, studentMetaMap]);
+  }, [enrolledStudents, searchQuery]);
 
   const selectedStudent = useMemo(() => {
     if (!selectedStudentId) return null;
@@ -245,7 +227,7 @@ export function SearchableStudentSelector({
           ) : selectedStudent ? (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold bg-purple-50 text-[#3C096C] border border-purple-200">
               <Sparkles className="w-3 h-3 text-[#3C096C]" />
-              <span>Converted Lead</span>
+              <span>Ready for Enrollment</span>
             </span>
           ) : (
             <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-semibold bg-neutral-100 text-body/70 border border-neutral-200">
@@ -272,7 +254,7 @@ export function SearchableStudentSelector({
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={`Search ${students.length} students by name, email, or student ID (e.g. S0001)...`}
+                placeholder={`Search ${enrolledStudents.length} enrolled students by name, email, or student ID (e.g. S0001)...`}
                 className="w-full pl-9 pr-8 py-2 rounded-xl border border-slate-200 bg-white text-xs text-heading placeholder:text-gray-400 focus:outline-none focus:border-[#3C096C] focus:ring-2 focus:ring-[#3C096C]/15 shadow-2xs transition-all"
               />
               {searchQuery && (
@@ -286,63 +268,12 @@ export function SearchableStudentSelector({
               )}
             </div>
 
-            {/* Quick Filter Segment Pills */}
+            {/* Only enrolled students are selectable in this planner. */}
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-0.5 text-[11px]">
-              <button
-                type="button"
-                onClick={() => setFilterTab("ALL")}
-                className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                  filterTab === "ALL"
-                    ? "bg-[#3C096C] text-white shadow-2xs"
-                    : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                }`}
-              >
-                All ({students.length})
-              </button>
-
-              {totalPendingStudents > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("PENDING")}
-                  className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                    filterTab === "PENDING"
-                      ? "bg-amber-600 text-white shadow-2xs"
-                      : "bg-amber-50 text-amber-800 hover:bg-amber-100 border border-amber-200"
-                  }`}
-                >
-                  <Clock className="w-3 h-3" />
-                  <span>Awaiting ({totalPendingStudents})</span>
-                </button>
-              )}
-
-              {totalEnrolledStudents > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("ENROLLED")}
-                  className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all cursor-pointer flex items-center gap-1 ${
-                    filterTab === "ENROLLED"
-                      ? "bg-emerald-700 text-white shadow-2xs"
-                      : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-200"
-                  }`}
-                >
-                  <CheckCircle2 className="w-3 h-3" />
-                  <span>Enrolled ({totalEnrolledStudents})</span>
-                </button>
-              )}
-
-              {totalLeads > 0 && (
-                <button
-                  type="button"
-                  onClick={() => setFilterTab("LEADS")}
-                  className={`px-2.5 py-1 rounded-lg font-semibold whitespace-nowrap transition-all cursor-pointer ${
-                    filterTab === "LEADS"
-                      ? "bg-purple-800 text-white shadow-2xs"
-                      : "bg-white text-slate-600 hover:bg-slate-100 border border-slate-200"
-                  }`}
-                >
-                  Leads ({totalLeads})
-                </button>
-              )}
+              <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-emerald-50 text-emerald-800 font-semibold whitespace-nowrap">
+                <CheckCircle2 className="w-3 h-3" />
+                Enrolled ({totalEnrolledStudents})
+              </span>
             </div>
           </div>
 
@@ -351,15 +282,18 @@ export function SearchableStudentSelector({
             {filteredStudents.length === 0 ? (
               <div className="p-8 text-center text-xs text-body-muted space-y-2">
                 <GraduationCap className="w-8 h-8 text-slate-300 mx-auto" />
-                <p className="font-semibold text-heading">No students match your search</p>
-                <p className="text-[11px]">Try adjusting the search terms or clearing the filter.</p>
-                {(searchQuery || filterTab !== "ALL") && (
+                <p className="font-semibold text-heading">
+                  {enrolledStudents.length === 0 ? "No enrolled students available" : "No enrolled students match your search"}
+                </p>
+                <p className="text-[11px]">
+                  {enrolledStudents.length === 0
+                    ? "Students appear here after they have an active enrollment."
+                    : "Try adjusting the search terms or clearing the search."}
+                </p>
+                {searchQuery && (
                   <button
                     type="button"
-                    onClick={() => {
-                      setSearchQuery("");
-                      setFilterTab("ALL");
-                    }}
+                    onClick={() => setSearchQuery("")}
                     className="mt-1 text-xs text-[#3C096C] font-bold hover:underline cursor-pointer"
                   >
                     Reset Filter & Search
@@ -370,8 +304,6 @@ export function SearchableStudentSelector({
               filteredStudents.map((s) => {
                 const isSelected = s.id === selectedStudentId;
                 const meta = studentMetaMap.get(s.id);
-                const hasPending = (meta?.pendingCount || 0) > 0;
-                const hasEnrolled = (meta?.enrolledCount || 0) > 0;
 
                 return (
                   <div
@@ -416,18 +348,13 @@ export function SearchableStudentSelector({
 
                     {/* Right status badge + Check */}
                     <div className="flex items-center gap-2 shrink-0">
-                      {hasPending ? (
-                        <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-50 text-amber-800 border border-amber-200 flex items-center gap-1">
-                          <Clock className="w-2.5 h-2.5 text-amber-600" />
-                          <span>{meta?.pendingCount} Request</span>
-                        </span>
-                      ) : hasEnrolled ? (
+                      {meta?.enrolledCount ? (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200">
-                          {meta?.enrolledCount} Active
+                          {meta.enrolledCount} Active
                         </span>
                       ) : (
                         <span className="px-2 py-0.5 rounded-full text-[10px] font-bold bg-purple-50 text-purple-800 border border-purple-200">
-                          Lead
+                          Ready for Enrollment
                         </span>
                       )}
 
@@ -446,25 +373,11 @@ export function SearchableStudentSelector({
           {/* Footer count summary */}
           <div className="p-2.5 bg-neutral-50 border-t border-slate-100 flex items-center justify-between text-[11px] text-body-muted px-4">
             <span>
-              Showing {filteredStudents.length} of {students.length} {students.length === 1 ? "student" : "students"}
+              Showing {filteredStudents.length} of {enrolledStudents.length} enrolled {enrolledStudents.length === 1 ? "student" : "students"}
             </span>
-            <div className="flex items-center gap-2">
-              {isDirectMode && !lockDirectMode && onUnlockDirectMode && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    onUnlockDirectMode();
-                    setIsOpen(false);
-                  }}
-                  className="font-bold text-[#3C096C] hover:underline cursor-pointer"
-                >
-                  Show All Students
-                </button>
-              )}
-              <span className="text-[10px] font-medium text-slate-500">
-                Press Esc to close
-              </span>
-            </div>
+            <span className="text-[10px] font-medium text-slate-500">
+              Press Esc to close
+            </span>
           </div>
         </div>
       )}

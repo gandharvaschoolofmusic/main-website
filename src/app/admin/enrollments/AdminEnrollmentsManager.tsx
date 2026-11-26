@@ -291,8 +291,15 @@ export function AdminEnrollmentsManager({
     }
   }, [paramEnrollmentId, initialEnrollmentId]);
 
-  // Scoped students list: in direct enrolment mode, only the target student is presented
+  // Normal roster selection is limited to currently enrolled students. Explicit direct
+  // enrollment links can still open their one requested student.
   const visibleStudents = useMemo(() => {
+    const enrolledStudentIds = new Set(
+      enrollments
+        .filter((enrollment) => enrollment.status === "ACTIVE")
+        .map((enrollment) => enrollment.studentId),
+    );
+
     if (paramTrialId) {
       return trialStudentId ? students.filter((s) => s.id === trialStudentId) : [];
     }
@@ -300,8 +307,8 @@ export function AdminEnrollmentsManager({
       const single = students.filter((s) => s.id === selectedStudentId);
       if (single.length > 0) return single;
     }
-    return students;
-  }, [students, isDirectEnrolmentScoped, selectedStudentId, paramTrialId, trialStudentId]);
+    return students.filter((student) => enrolledStudentIds.has(student.id));
+  }, [students, enrollments, isDirectEnrolmentScoped, selectedStudentId, paramTrialId, trialStudentId]);
 
   // Global pending course admission requests across converted students
   const allPendingCourseRequests = useMemo(() => {
@@ -1641,7 +1648,7 @@ export function AdminEnrollmentsManager({
                 <span>
                   {isDirectEnrolmentScoped
                     ? `${visibleStudents.length} Student${visibleStudents.length === 1 ? "" : "s"} (Direct Mode)`
-                    : `${students.length} Students`}
+                    : `${visibleStudents.length} Enrolled Students`}
                 </span>
               </span>
             </div>
@@ -1660,8 +1667,6 @@ export function AdminEnrollmentsManager({
                   enrollments={enrollments}
                   courseRequests={courseRequests}
                   isDirectMode={isDirectEnrolmentScoped}
-                  lockDirectMode={Boolean(trialStudentId)}
-                  onUnlockDirectMode={() => setIsDirectEnrolmentScoped(false)}
                 />
               </div>
             )}
@@ -1769,7 +1774,7 @@ export function AdminEnrollmentsManager({
                   ) : (
                     <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-purple-50 text-[#3C096C] text-[10px] font-bold border border-purple-200">
                       <Sparkles className="w-3 h-3 text-[#3C096C]" />
-                      <span>Converted Lead</span>
+                      <span>Ready for Enrollment</span>
                     </span>
                   )}
                 </div>
@@ -1821,7 +1826,7 @@ export function AdminEnrollmentsManager({
                     </span>
                   </div>
                   <p className="text-[11px] text-body/70 mt-0.5">
-                    Only {currentStudent.name} is enrolled here. Fill in course details below to allot directly without trial.
+                    Only {currentStudent.name} is selected here. Fill in course details below to allot directly without trial.
                   </p>
                 </div>
               </div>
@@ -1833,7 +1838,7 @@ export function AdminEnrollmentsManager({
                 title="Unlock full student roster"
               >
                 <Users className="w-3.5 h-3.5 text-[#3C096C]" />
-                <span>Show All Students ({students.length})</span>
+                <span>Show Enrolled Roster ({visibleStudents.length})</span>
               </button>
             </div>
           )}
@@ -1925,11 +1930,13 @@ export function AdminEnrollmentsManager({
                   <div>
                     <label className="text-xs font-bold text-heading flex items-center gap-1.5">
                       <GraduationCap className="w-4 h-4 text-[#3C096C]" />
-                      <span>Student (Enrolled &amp; Registered Roster)</span>
+                      <span>Enrolled Students</span>
                     </label>
                   </div>
                   <span className="text-[11px] font-semibold text-purple-900 bg-purple-50 px-2.5 py-1 rounded-full border border-purple-200/70 self-start sm:self-auto font-numeric">
-                    {isDirectEnrolmentScoped ? "1 Student (Direct Mode)" : `${students.length} Students`}
+                    {isDirectEnrolmentScoped
+                      ? `${visibleStudents.length} Student${visibleStudents.length === 1 ? "" : "s"} (Direct Mode)`
+                      : `${visibleStudents.length} Enrolled Students`}
                   </span>
                 </div>
 
@@ -1941,16 +1948,15 @@ export function AdminEnrollmentsManager({
                     enrollments={enrollments}
                     courseRequests={courseRequests}
                     isDirectMode={isDirectEnrolmentScoped}
-                    onUnlockDirectMode={() => setIsDirectEnrolmentScoped(false)}
                   />
                 ) : (
                   <div className="p-3.5 rounded-xl bg-purple-50/80 border border-purple-200/80 text-xs text-purple-900 space-y-1.5">
                     <div className="font-semibold flex items-center gap-1.5">
                       <GraduationCap className="w-4 h-4 text-[#3C096C]" />
-                      <span>No Converted Trial Students Yet</span>
+                      <span>No Enrolled Students Yet</span>
                     </div>
                     <p className="text-[11px] text-purple-700 leading-snug">
-                      Only students converted by admin through the Trial Bookings CRM portal appear in this list.
+                      Only students with an active enrollment appear in this list.
                     </p>
                     <button
                       type="button"

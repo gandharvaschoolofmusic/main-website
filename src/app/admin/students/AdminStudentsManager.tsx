@@ -54,7 +54,7 @@ import {
   toggleStudentAccessAction,
   updateStudentLessonStatusAction,
 } from "@/actions/student-admin";
-import { isStudentInActiveTrialPeriod } from "@/lib/student-filters";
+import { isStudentConvertedOrEnrolled } from "@/lib/student-filters";
 
 export interface StudentRecord {
   id: string;
@@ -174,8 +174,6 @@ interface TeacherOption {
   name: string;
   instruments: string[];
 }
-
-export { isStudentInActiveTrialPeriod };
 
 interface AdminStudentsManagerProps {
   initialStudents: StudentRecord[];
@@ -315,13 +313,13 @@ export function AdminStudentsManager({
     }
   };
 
-  // Students who have either completed their trial period or enrolled/converted
+  // Show converted trial students and students with an enrollment record only.
   const eligibleStudents: StudentRecord[] = useMemo(() => {
-    return students.filter((s: StudentRecord) => !isStudentInActiveTrialPeriod(s));
+    return students.filter(isStudentConvertedOrEnrolled);
   }, [students]);
 
   const selectedStudent =
-    eligibleStudents.find((s) => s.id === selectedStudentId) || eligibleStudents[0] || students[0];
+    eligibleStudents.find((s) => s.id === selectedStudentId) || eligibleStudents[0];
 
   // Filter students for left directory
   const filteredStudents = eligibleStudents.filter((s) => {

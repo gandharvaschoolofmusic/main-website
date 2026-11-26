@@ -7,7 +7,7 @@ import {
   AdminStudentsManager,
   StudentRecord,
 } from "./AdminStudentsManager";
-import { isStudentInActiveTrialPeriod } from "@/lib/student-filters";
+import { isStudentConvertedOrEnrolled } from "@/lib/student-filters";
 import { autoResolvePastLessons } from "@/lib/attendance";
 
 export const metadata = {
@@ -325,10 +325,8 @@ const getCachedAdminStudentsData = unstable_cache(
       instruments: t.teacherProfile?.instruments || [],
     }));
 
-    // Exclude students who are currently in their trial period until trial is completed or enrolled
-    const eligibleStudents = formattedStudents.filter(
-      (s) => !isStudentInActiveTrialPeriod(s)
-    );
+    // Keep only converted trial students and students with an enrollment record.
+    const eligibleStudents = formattedStudents.filter(isStudentConvertedOrEnrolled);
 
     return {
       formattedStudents: eligibleStudents,
