@@ -1,3 +1,5 @@
+import Link from "next/link";
+import { getTeacherConflictLessonIds } from "@/lib/teacher-conflicts";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role, LessonSource } from "@prisma/client";
@@ -14,6 +16,44 @@ export const metadata = {
   description: "Global schedule inspector across all faculty members and enrolled students.",
 };
 
+async function loadLessons(lessonIds?: string[]): Promise<AdminLessonItem[]> {
+  const dbLessons = await db.lesson.findMany({
+    where: lessonIds ? { id: { in: lessonIds } } : undefined,
+    include: {
+      teacher: { select: { name: true, email: true } },
+      student: { select: { name: true, email: true } },
+      enrollment: {
+        select: {
+          id: true,
+          course: {
+            select: { id: true, title: true, instrument: true },
+          },
+        },
+      },
+    },
+    orderBy: [
+      { startsAt: "asc" },
+    ],
+  });
+
+  return dbLessons.map((l) => ({
+    id: l.id,
+    trackingCode: getLessonTrackingId(l),
+    startsAt: l.startsAt.toISOString(),
+    createdAt: l.createdAt.toISOString(),
+    formattedTime: formatToIST(l.startsAt),
+    formattedCreatedDate: formatToIST(l.createdAt, "MMM d, yyyy"),
+    durationMinutes: l.durationMinutes,
+    instrument: l.instrument,
+    courseTitle: l.enrollment?.course?.title || null,
+    status: l.status,
+    lessonSource: l.lessonSource || (l.enrollmentId ? LessonSource.ENROLLMENT : LessonSource.TRIAL),
+    teacherName: l.teacher?.name || "Teacher",
+    studentName: l.student?.name || "Student",
+    studentEmail: l.student?.email || "",
+  }));
+}
+
 const getCachedAdminLessonsData = unstable_cache(
   async () => {
     return getResilientData(`admin-lessons-ist`, async () => {
@@ -24,52 +64,14 @@ const getCachedAdminLessonsData = unstable_cache(
         console.warn("[AdminLessonsPage] autoResolvePastLessons error:", err);
       }
 
-      const dbLessons = await db.lesson.findMany({
-        include: {
-          teacher: { select: { name: true, email: true } },
-          student: { select: { name: true, email: true } },
-          enrollment: {
-            select: {
-              id: true,
-              course: {
-                select: { id: true, title: true, instrument: true },
-              },
-            },
-          },
-        },
-        orderBy: [
-          { startsAt: "asc" },
-        ],
-      });
-
-      const formattedLessons: AdminLessonItem[] = dbLessons.map((l) => ({
-        id: l.id,
-        trackingCode: getLessonTrackingId(l),
-        startsAt: l.startsAt.toISOString(),
-        createdAt: l.createdAt.toISOString(),
-        formattedTime: formatToIST(l.startsAt),
-        formattedCreatedDate: formatToIST(l.createdAt, "MMM d, yyyy"),
-        durationMinutes: l.durationMinutes,
-        instrument: l.instrument,
-        courseTitle: l.enrollment?.course?.title || null,
-        status: l.status,
-        lessonSource: l.lessonSource || (l.enrollmentId ? LessonSource.ENROLLMENT : LessonSource.TRIAL),
-        teacherName: l.teacher?.name || "Teacher",
-        studentName: l.student?.name || "Student",
-        studentEmail: l.student?.email || "",
-      }));
-
-      return formattedLessons;
+      return loadLessons();
     });
   },
   ["admin-lessons-data-v4"],
   { revalidate: 30, tags: ["admin-lessons", "lessons"] }
 );
 
-export default async function AdminLessonsPage() {
-  await requireRole(Role.ADMIN);
-  const adminTimezone = "Asia/Kolkata";
-
+async function loadGlobalLessons() {
   let formattedLessons: AdminLessonItem[] = [];
   try {
     formattedLessons = await getCachedAdminLessonsData();
@@ -83,6 +85,19 @@ export default async function AdminLessonsPage() {
       formattedLessons = fallback;
     }
   }
+  return formattedLessons;
+}
+
+export default async function AdminLessonsPage({ searchParams }: {
+  searchParams: Promise<{ filter?: string | string[] }>;
+}) {
+  await requireRole(Role.ADMIN);
+  const adminTimezone = "Asia/Kolkata";
+
+  const conflictsOnly = (await searchParams).filter === "teacher-conflicts";
+  const formattedLessons = conflictsOnly
+    ? await loadLessons(await getTeacherConflictLessonIds())
+    : await loadGlobalLessons();
 
   return (
     <div className="space-y-6">
@@ -91,18 +106,29 @@ export default async function AdminLessonsPage() {
           Classroom Monitoring
         </span>
         <SplitHeading
-          firstClause="Global Lesson"
-          accentClause="Operations"
+          firstClause={conflictsOnly ? "Teacher" : "Global Lesson"}
+          accentClause={conflictsOnly ? "Conflicts" : "Operations"}
           as="h1"
           size="lg"
           className="mt-1"
         />
         <p className="text-sm text-body mt-1">
-          Monitor all scheduled, delivered, and cancelled live video lessons. Audit attendance or intervene as administrative host.
+          {conflictsOnly
+            ? "Lessons with overlapping times for the same teacher, from today onward (IST)."
+            : "Monitor all scheduled, delivered, and cancelled live video lessons. Audit attendance or intervene as administrative host."}
         </p>
+        {conflictsOnly && <Link href="/admin/lessons" className="text-sm underline">View all lessons</Link>}
       </div>
 
-      <AdminLessonsManager initialLessons={formattedLessons} adminTimezone={adminTimezone} />
+      {conflictsOnly && formattedLessons.length === 0 ? (
+        <p className="text-sm text-body">No teacher scheduling conflicts found.</p>
+      ) : (
+        <AdminLessonsManager
+          key={conflictsOnly ? "conflicts" : "global"}
+          initialLessons={formattedLessons}
+          adminTimezone={adminTimezone}
+        />
+      )}
     </div>
   );
 }

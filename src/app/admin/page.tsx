@@ -1,3 +1,4 @@
+import { getTeacherConflictLessonIds } from "@/lib/teacher-conflicts";
 import { getCurrentUser } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { redirect } from "next/navigation";
@@ -73,7 +74,7 @@ const getCachedAdminOverviewData = unstable_cache(
     let dbTrialsQualifiedCount = 0;
     let dbTrialsConvertedCount = 0;
     let dbPayments7DaysRaw: any[] = [];
-    let dbScheduledLessonsForConflict: any[] = [];
+    let conflictCount = 0;
 
     try {
       const results = await Promise.allSettled([
@@ -166,12 +167,7 @@ const getCachedAdminOverviewData = unstable_cache(
           select: { amountMinorUnits: true, createdAt: true },
         }),
         // 19: Scheduled lessons for conflict detection
-        db.lesson.findMany({
-          where: { startsAt: { gte: startOfToday }, status: LessonStatus.SCHEDULED },
-          select: { id: true, teacherId: true, startsAt: true, durationMinutes: true },
-          orderBy: { startsAt: "asc" },
-          take: 50,
-        }),
+        getTeacherConflictLessonIds(startOfToday),
       ]);
 
       if (results[0].status === "fulfilled") dbActiveStudents = results[0].value;
@@ -228,7 +224,7 @@ const getCachedAdminOverviewData = unstable_cache(
         dbPayments7DaysRaw = results[18].value;
         dbThisWeekRevenueMinor = dbPayments7DaysRaw.reduce((acc, p) => acc + (p.amountMinorUnits || 0), 0);
       }
-      if (results[19].status === "fulfilled") dbScheduledLessonsForConflict = results[19].value;
+      if (results[19].status === "fulfilled") conflictCount = results[19].value.length;
 
       const rejected = results.filter((r) => r.status === "rejected");
       if (rejected.length > 3 || results[0].status === "rejected") {
@@ -440,27 +436,6 @@ const getCachedAdminOverviewData = unstable_cache(
     const payoutApproveCount = dbUnpaidLessonsCount;
 
     // ─── 6. REAL NEEDS ATTENTION EXCEPTIONS ────────────────────────────────────
-    let conflictCount = 0;
-    const lessonsByTeacher: Record<string, any[]> = {};
-    for (const l of dbScheduledLessonsForConflict) {
-      if (!lessonsByTeacher[l.teacherId]) lessonsByTeacher[l.teacherId] = [];
-      lessonsByTeacher[l.teacherId].push(l);
-    }
-    for (const teacherId in lessonsByTeacher) {
-      const tLessons = lessonsByTeacher[teacherId];
-      for (let i = 0; i < tLessons.length; i++) {
-        for (let j = i + 1; j < tLessons.length; j++) {
-          const t1 = new Date(tLessons[i].startsAt).getTime();
-          const d1 = (tLessons[i].durationMinutes || 60) * 60000;
-          const t2 = new Date(tLessons[j].startsAt).getTime();
-          const d2 = (tLessons[j].durationMinutes || 60) * 60000;
-          if (Math.max(t1, t2) < Math.min(t1 + d1, t2 + d2)) {
-            conflictCount++;
-          }
-        }
-      }
-    }
-
     const attentionItems: NeedsAttentionItem[] = [];
 
     if (dbPendingCourseRequests > 0) {
@@ -479,7 +454,7 @@ const getCachedAdminOverviewData = unstable_cache(
         title: "Teacher conflict",
         description: `${conflictCount} overlapping ${conflictCount === 1 ? "session" : "sessions"} detected`,
         color: "rose",
-        href: "/admin/lessons",
+        href: "/admin/lessons?filter=teacher-conflicts",
       });
     }
 
