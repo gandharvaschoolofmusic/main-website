@@ -301,7 +301,8 @@ const getCachedAdminTeachersData = unstable_cache(
   { revalidate: 30, tags: ["admin-teachers", "teachers"] }
 );
 
-export default async function AdminTeachersPage() {
+export default async function AdminTeachersPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
+  const pendingOnly = (await searchParams).status === "PENDING";
   await requireRole(Role.ADMIN);
 
   let formattedTeachers: TeacherRecord[] = [];
@@ -321,5 +322,5 @@ export default async function AdminTeachersPage() {
     }
   }
 
-  return <AdminTeachersManager initialTeachers={formattedTeachers} />;
+  return <AdminTeachersManager key={pendingOnly ? "pending" : "all"} initialTeachers={formattedTeachers} initialStatusFilter={pendingOnly ? "PENDING" : "ALL"} />;
 }

@@ -1,6 +1,6 @@
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
-import { Role } from "@prisma/client";
+import { Role, TicketStatus } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { AdminTicketsManager, AdminTicketItem } from "./AdminTicketsManager";
 import { SplitHeading } from "@/components/ui/SplitHeading";
@@ -48,7 +48,8 @@ const getCachedAdminSupportData = unstable_cache(
   { revalidate: 30, tags: ["admin-support", "support"] }
 );
 
-export default async function AdminSupportPage() {
+export default async function AdminSupportPage({ searchParams }: { searchParams: Promise<{ filter?: string }> }) {
+  const reschedulesOnly = (await searchParams).filter === "reschedule";
   await requireRole(Role.ADMIN);
 
   let formattedTickets: AdminTicketItem[] = [];
@@ -76,7 +77,8 @@ export default async function AdminSupportPage() {
         </p>
       </div>
 
-      <AdminTicketsManager initialTickets={formattedTickets} />
+      {reschedulesOnly && <p className="text-sm font-semibold text-primary">Pending session reschedule requests</p>}
+      <AdminTicketsManager key={reschedulesOnly ? "reschedules" : "all"} initialTickets={reschedulesOnly ? formattedTickets.filter(t => t.subject.startsWith("Reschedule [") && (t.status === TicketStatus.OPEN || t.status === TicketStatus.IN_PROGRESS)) : formattedTickets} />
     </div>
   );
 }

@@ -19,7 +19,7 @@ export const metadata = {
 
 const getCachedAdminTrialsData = unstable_cache(
   async () => {
-    return getResilientData("admin-trials-v4", async () => {
+    return getResilientData("admin-trials-v5", async () => {
       const [dbRequests, dbTeachers, dbCourses] = await Promise.all([
       db.trialRequest.findMany({
         include: {
@@ -122,7 +122,7 @@ const getCachedAdminTrialsData = unstable_cache(
         durationMinutes: duration,
         allottedLessonId: r.allottedLessonId || r.allottedLesson?.id || null,
         trackingCode: r.allottedLesson?.trackingCode || null,
-        lessonStatus: r.allottedLesson?.status || null,
+        lessonStatus: r.allottedLesson?.status || (r.status === TrialRequestStatus.COMPLETED ? "COMPLETED" : null),
         isContacted: r.isContacted ?? false,
         contactedAt: r.contactedAt ? r.contactedAt.toISOString() : null,
         followUpAt: r.followUpAt ? r.followUpAt.toISOString() : null,
@@ -188,7 +188,7 @@ const getCachedAdminTrialsData = unstable_cache(
     };
     });
   },
-  ["admin-trials-data-v4"],
+  ["admin-trials-data-v5"],
   { revalidate: 30, tags: ["admin-trials", "trials"] }
 );
 
@@ -215,13 +215,13 @@ export default async function AdminTrialsPage() {
     data = await getCachedAdminTrialsData();
   } catch (err) {
     console.error("[AdminTrialsPage] Failed to load cached trials data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v5");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedRequests is empty, check resilient cache for last known good data
   if (!data.formattedRequests || data.formattedRequests.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v5");
     if (fallback && fallback.formattedRequests.length > 0) {
       data = fallback;
     }

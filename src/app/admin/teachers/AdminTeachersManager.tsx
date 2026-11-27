@@ -167,16 +167,17 @@ export interface TeacherRecord {
 
 interface AdminTeachersManagerProps {
   initialTeachers: TeacherRecord[];
+  initialStatusFilter?: "ALL" | TeacherApprovalStatus;
 }
 
-export function AdminTeachersManager({ initialTeachers }: AdminTeachersManagerProps) {
+export function AdminTeachersManager({ initialTeachers, initialStatusFilter = "ALL" }: AdminTeachersManagerProps) {
   const [teachers, setTeachers] = useState<TeacherRecord[]>(initialTeachers);
   useEffect(() => setTeachers(initialTeachers), [initialTeachers]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
-    initialTeachers[0]?.id || ""
+    initialTeachers.find(t => initialStatusFilter === "ALL" || t.approvalStatus === initialStatusFilter)?.id || ""
   );
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<"ALL" | TeacherApprovalStatus>("ALL");
+  const [statusFilter, setStatusFilter] = useState<"ALL" | TeacherApprovalStatus>(initialStatusFilter);
   const [activeTab, setActiveTab] = useState<
     | "OVERVIEW"
     | "CLASSES"

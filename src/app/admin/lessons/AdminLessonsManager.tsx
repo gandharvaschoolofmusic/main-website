@@ -609,7 +609,6 @@ export function AdminLessonsManager({
                     {/* Student */}
                     <td className="py-3.5 px-4">
                       <p className="font-bold text-heading whitespace-nowrap">{l.studentName}</p>
-                      <p className="text-[10px] text-body">{l.studentEmail}</p>
                     </td>
 
                     {/* Discipline */}

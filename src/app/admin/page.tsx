@@ -33,7 +33,7 @@ export const metadata = {
 // Minimizes load on remote Supabase PostgreSQL by 95% and guarantees < 50ms responses on navigation.
 const getCachedAdminOverviewData = unstable_cache(
   async () => {
-    return getResilientData("admin-overview-v2", async () => {
+    return getResilientData("admin-overview-v3", async () => {
       const now = new Date();
     const { start: startOfToday, endExclusive: startOfTomorrow } = getTimezoneDayBounds(now, IST_TIMEZONE);
     const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -67,7 +67,7 @@ const getCachedAdminOverviewData = unstable_cache(
     let dbPendingCourseRequests = 0;
     let dbPendingTeacherApprovals = 0;
     let dbPendingTickets = 0;
-    let dbPendingRecordingsCount = 0;
+    let dbPendingReschedulesCount = 0;
     let dbTodayLessonsRaw: any[] = [];
     let dbTrials30DaysCount = 0;
     let dbTrialsAttendedCount = 0;
@@ -142,9 +142,9 @@ const getCachedAdminOverviewData = unstable_cache(
         db.teacherProfile.count({ where: { approvalStatus: "PENDING" } }),
         // 14: Open Support Tickets
         db.supportTicket.count({ where: { status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] } } }),
-        // 15: Completed lessons pending recording
-        db.lesson.count({
-          where: { status: LessonStatus.COMPLETED, recordingUrl: null },
+        // 15: Unresolved session reschedule requests
+        db.supportTicket.count({
+          where: { status: { in: [TicketStatus.OPEN, TicketStatus.IN_PROGRESS] }, subject: { startsWith: "Reschedule [" } },
         }),
         // 16: Today's Lessons with details (also provides today's scheduled and completed counts!)
         db.lesson.findMany({
@@ -205,7 +205,7 @@ const getCachedAdminOverviewData = unstable_cache(
       if (results[12].status === "fulfilled") dbPendingCourseRequests = results[12].value;
       if (results[13].status === "fulfilled") dbPendingTeacherApprovals = results[13].value;
       if (results[14].status === "fulfilled") dbPendingTickets = results[14].value;
-      if (results[15].status === "fulfilled") dbPendingRecordingsCount = results[15].value;
+      if (results[15].status === "fulfilled") dbPendingReschedulesCount = results[15].value;
       if (results[16].status === "fulfilled") {
         dbTodayLessonsRaw = results[16].value;
         dbTodayScheduledLessons = dbTodayLessonsRaw.filter((l) => l.status === LessonStatus.SCHEDULED).length;
@@ -458,15 +458,13 @@ const getCachedAdminOverviewData = unstable_cache(
       });
     }
 
-    if (dbPendingRecordingsCount > 0) {
+    if (dbPendingReschedulesCount > 0) {
       attentionItems.push({
-        id: "att-recording",
-        title: "Recording pending",
-        description: `${dbPendingRecordingsCount} completed ${
-          dbPendingRecordingsCount === 1 ? "class" : "classes"
-        } awaiting secure recording`,
+        id: "att-reschedule",
+        title: "Session reschedule requests",
+        description: `${dbPendingReschedulesCount} pending reschedule ${dbPendingReschedulesCount === 1 ? "request" : "requests"}`,
         color: "amber",
-        href: "/admin/lessons",
+        href: "/admin/support?filter=reschedule",
       });
     }
 
@@ -478,7 +476,7 @@ const getCachedAdminOverviewData = unstable_cache(
           dbPendingTeacherApprovals === 1 ? "profile" : "profiles"
         } awaiting approval`,
         color: "rose",
-        href: "/admin/teachers",
+        href: "/admin/teachers?status=PENDING",
       });
     }
 
@@ -542,7 +540,7 @@ const getCachedAdminOverviewData = unstable_cache(
     };
     });
   },
-  ["admin-overview-metrics-v2"],
+  ["admin-overview-metrics-v3"],
   {
     revalidate: 30,
     tags: ["admin-overview"],
@@ -617,7 +615,7 @@ export default async function AdminOverviewPage() {
 
   // Resilient fallback if overview has 0 active students (transient DB drop or uninitialized state)
   if (!data || data.kpis.activeStudents === 0) {
-    const fallback = getLastKnownGood<typeof FALLBACK_OVERVIEW_DATA>("admin-overview-v2");
+    const fallback = getLastKnownGood<typeof FALLBACK_OVERVIEW_DATA>("admin-overview-v3");
     if (fallback && fallback.kpis?.activeStudents > 0) {
       data = fallback;
     }

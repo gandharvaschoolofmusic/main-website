@@ -17,7 +17,7 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-students-v5", async () => {
+    return getResilientData("admin-students-v6", async () => {
     // 0. Auto-resolve concluded lessons based on verified attendance
     try {
       await autoResolvePastLessons();
@@ -335,7 +335,7 @@ const getCachedAdminStudentsData = unstable_cache(
     };
     });
   },
-  ["admin-students-data-v5"],
+  ["admin-students-data-v6"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
@@ -352,13 +352,13 @@ export default async function AdminStudentsPage() {
     data = await getCachedAdminStudentsData();
   } catch (err) {
     console.error("[AdminStudentsPage] Failed to load cached students data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-students-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v6");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedStudents is empty, check resilient cache for last known good data
   if (!data.formattedStudents || data.formattedStudents.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-students-v4");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v6");
     if (fallback && fallback.formattedStudents.length > 0) {
       data = fallback;
     }

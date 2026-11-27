@@ -2540,6 +2540,10 @@ export async function updateTrialLeadStatusAction(input: {
         updateData.convertedAt = new Date();
       }
     }
+    // Historical trials can be completed without inventing a lesson or teacher payout.
+    if (input.lessonStatus === "COMPLETED" && !currentLead.allottedLessonId) {
+      updateData.status = TrialRequestStatus.COMPLETED;
+    }
     if (input.requestedStartsAt !== undefined) {
       updateData.requestedStartsAt = new Date(input.requestedStartsAt);
     }

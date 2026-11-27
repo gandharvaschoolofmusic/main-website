@@ -644,7 +644,7 @@ export function AdminOverviewClient({
                     All systems operational
                   </p>
                   <p className="text-[11px] text-emerald-800/80 mt-0.5">
-                    No teacher conflicts, pending recordings, or reconciliation gaps detected.
+                    No pending requests, teacher verifications, conflicts, or reconciliation gaps detected.
                   </p>
                 </div>
               </div>
