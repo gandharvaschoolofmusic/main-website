@@ -14,6 +14,7 @@ import {
   UserCheck,
   MessageSquare,
   FolderArchive,
+  FileText,
   Menu,
   X,
   PanelLeftClose,
@@ -73,6 +74,11 @@ const navItems: NavItem[] = [
     name: "Profile & Settings",
     href: "/teacher/dashboard/profile",
     icon: UserCheck,
+  },
+  {
+    name: "Terms & Conditions",
+    href: "/teacher/dashboard/terms",
+    icon: FileText,
   },
 ];
 
