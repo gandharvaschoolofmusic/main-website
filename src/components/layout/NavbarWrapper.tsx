@@ -1,5 +1,6 @@
 "use client";
 
+import { ProfileImage } from "@/components/profile/ProfileImage";
 import Link from "next/link";
 import Image from "next/image";
 import { usePathname } from "next/navigation";
@@ -104,7 +105,7 @@ export function NavbarWrapper({
               >
                 {user.image ? (
                   <div className="relative w-5 h-5 sm:w-6 sm:h-6 rounded-full overflow-hidden shrink-0">
-                    <Image
+                    <ProfileImage
                       src={user.image}
                       alt={user.name || "Profile"}
                       fill

@@ -264,3 +264,9 @@
 
 .meet-companion-choice{display:flex;align-items:center;gap:12px;padding:12px 20px;background:#25324a;color:#e3e9f4;font-size:14px;line-height:1.5}.meet-companion-choice input{width:20px;height:20px;flex-shrink:0;accent-color:#a8c7fa}.meet-self-drag{position:absolute;top:6px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:5px;padding:7px 10px;border:0;border-radius:20px;background:#25324a;color:#e3e9f4;cursor:grab;touch-action:none;font-size:12px;z-index:6}.meet-self-drag:active{cursor:grabbing}.meet-self-drag:focus-visible{outline:2px solid #a8c7fa;outline-offset:2px}.has-floating-self .meet-movable-self{max-width:100%;max-height:100%}
 .meet-recording-indicator { display: inline-flex; align-items: center; gap: .4rem; font-size: .78rem; font-weight: 600; } .meet-recording-indicator i { width: .6rem; height: .6rem; border-radius: 50%; background: #ef4444; }
+
+.meet-recording-indicator[data-recording="false"] { color: #d6b574; }
+.meet-recording-indicator[data-recording="false"] i { background: #d6b574; }
+
+.meet-recording-indicator i { flex-shrink: 0; }
+@media (max-width: 600px) { .meet-recording-indicator { max-width: 90px; font-size: 11px; line-height: 1.2; } }

@@ -523,8 +523,13 @@ export function AdminOverviewClient({
                 {collectionsBars.map((bar, i) => (
                   <div
                     key={`${bar.day}-${i}`}
-                    className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer"
+                    tabIndex={0}
+                    aria-label={`${["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i]}: ₹${bar.amountRupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+                    className="relative flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer focus-visible:outline-primary"
                   >
+                    <span role="tooltip" className={`pointer-events-none absolute bottom-full mb-2 z-20 whitespace-nowrap rounded-lg bg-heading px-3 py-2 text-xs text-white shadow-lg opacity-0 group-hover:opacity-100 group-focus:opacity-100 transition-opacity ${i === 0 ? "left-0" : i === collectionsBars.length - 1 ? "right-0" : "left-1/2 -translate-x-1/2"}`}>
+                      {["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"][i]} · ₹{bar.amountRupees.toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+                    </span>
                     <div
                       style={{
                         height:
@@ -539,7 +544,6 @@ export function AdminOverviewClient({
                             : "bg-[#3C096C] rounded-t-[3px] shadow-2xs"
                           : "bg-purple-100/90 rounded-[1px] hover:bg-purple-200"
                       }`}
-                      title={`${bar.day}: ₹${bar.amountRupees.toLocaleString("en-IN")}`}
                     />
                     <span className="text-[11px] font-medium text-body/70 mt-0.5">
                       {bar.day}

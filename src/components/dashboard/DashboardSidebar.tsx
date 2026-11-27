@@ -1,8 +1,8 @@
 "use client";
 
+import { ProfileImage } from "@/components/profile/ProfileImage";
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import Image from "next/image";
 import { usePathname } from "next/navigation";
 import {
   Clock,
@@ -266,7 +266,7 @@ export function DashboardSidebar({ user }: { user: SidebarUserInfo }) {
             >
               {user.image ? (
                 <div className="relative w-8 h-8 rounded-full overflow-hidden shrink-0 shadow-xs">
-                  <Image
+                  <ProfileImage
                     src={user.image}
                     alt={user.name || "Student"}
                     fill
@@ -297,7 +297,7 @@ export function DashboardSidebar({ user }: { user: SidebarUserInfo }) {
               >
                 {user.image ? (
                   <div className="relative w-8 h-8 rounded-full overflow-hidden shadow-xs">
-                    <Image
+                    <ProfileImage
                       src={user.image}
                       alt={user.name || "Student"}
                       fill
@@ -423,7 +423,7 @@ export function DashboardSidebar({ user }: { user: SidebarUserInfo }) {
               >
                 {user.image ? (
                   <div className="relative w-9 h-9 rounded-full overflow-hidden shrink-0 shadow-xs">
-                    <Image
+                    <ProfileImage
                       src={user.image}
                       alt={user.name || "Student"}
                       fill

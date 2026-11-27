@@ -1,7 +1,7 @@
+import { ProfileImage } from "@/components/profile/ProfileImage";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import Link from "next/link";
-import Image from "next/image";
 import { Role } from "@prisma/client";
 import { PublishStatusButton } from "@/components/teacher/PublishStatusButton";
 import { formatInViewerTimezone, getTimezoneAbbr, formatDeterministicDate } from "@/lib/timezone";
@@ -154,7 +154,7 @@ export default async function TeacherDashboardPage() {
           >
             {user.image ? (
               <div className="relative w-16 h-16 sm:w-20 sm:h-20 rounded-2xl overflow-hidden border-2 border-primary/20 shadow-md">
-                <Image
+                <ProfileImage
                   src={user.image}
                   alt={user.name || "Teacher"}
                   fill

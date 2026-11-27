@@ -1,5 +1,6 @@
 "use client";
 
+import { ProfileImage } from "@/components/profile/ProfileImage";
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Image from "next/image";
@@ -378,7 +379,7 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                   >
                     {user.image ? (
                       <div className="relative w-5 h-5 xl:w-6 xl:h-6 rounded-full overflow-hidden shrink-0">
-                        <Image
+                        <ProfileImage
                           src={user.image}
                           alt={user.name || "Profile"}
                           fill
@@ -464,7 +465,7 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                 >
                   {user.image ? (
                     <div className="relative w-full h-full rounded-full overflow-hidden">
-                      <Image src={user.image} alt={user.name || "Profile"} fill sizes="32px" className="object-cover" />
+                      <ProfileImage src={user.image} alt={user.name || "Profile"} fill sizes="32px" className="object-cover" />
                     </div>
                   ) : (
                     user.name?.slice(0, 1).toUpperCase() || "U"
@@ -702,7 +703,7 @@ export function LandingHeader({ user, signOutAction }: LandingHeaderProps = {}) 
                 <div className="flex items-center gap-2">
                   {user.image ? (
                     <div className="relative w-6 h-6 rounded-full overflow-hidden border border-purple-300">
-                      <Image src={user.image} alt={user.name || "Profile"} fill sizes="24px" className="object-cover" />
+                      <ProfileImage src={user.image} alt={user.name || "Profile"} fill sizes="24px" className="object-cover" />
                     </div>
                   ) : (
                     <div className="w-6 h-6 rounded-full bg-purple-200 text-purple-900 font-bold text-xs flex items-center justify-center">

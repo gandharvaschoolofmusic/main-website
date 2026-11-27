@@ -1,7 +1,7 @@
 "use client";
 
+import { ProfileImage } from "@/components/profile/ProfileImage";
 import { useState, useRef, useTransition, useEffect } from "react";
-import Image from "next/image";
 import { prepareAvatar } from "@/lib/prepare-avatar";
 import { uploadAvatarAction, removeAvatarAction } from "@/actions/profile";
 import { Camera, Trash2, Upload, Loader2, Check, AlertCircle } from "lucide-react";
@@ -138,7 +138,7 @@ export function AvatarUpload({
         {/* Avatar Ring Container */}
         <div className="relative group shrink-0 w-24 h-24 rounded-full overflow-hidden border-2 border-primary/20 shadow-md bg-[#160A29] flex items-center justify-center transition-all hover:border-cta hover:shadow-lg">
           {displayImage ? (
-            <Image
+            <ProfileImage
               src={displayImage}
               alt={userName}
               width={96}

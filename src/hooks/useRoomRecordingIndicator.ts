@@ -11,8 +11,8 @@ export function useRoomRecordingIndicator(room: Room, localRecording: boolean) {
   useEffect(() => {
     const sync = () => setServerRecording(room.isRecording);
     sync();
-    room.on(RoomEvent.RecordingStatusChanged, sync);
-    return () => { room.off(RoomEvent.RecordingStatusChanged, sync); };
+    room.on(RoomEvent.RecordingStatusChanged, sync).on(RoomEvent.Connected, sync).on(RoomEvent.Reconnected, sync);
+    return () => { room.off(RoomEvent.RecordingStatusChanged, sync).off(RoomEvent.Connected, sync).off(RoomEvent.Reconnected, sync); };
   }, [room]);
   useEffect(() => {
     const send = (state: number) => {
