@@ -33,6 +33,8 @@ model User {
   guardianPhone           String?
   teacherTermsAcceptedAt  DateTime?                 @db.Timestamptz(6)
   teacherTermsVersion     String?
+  studentTermsAcceptedAt  DateTime?                 @db.Timestamptz(6)
+  studentTermsVersion     String?
   accounts                Account[]
   conversationsAsStudent  Conversation[]            @relation("ConversationStudent")
   conversationsAsTeacher  Conversation[]            @relation("ConversationTeacher")

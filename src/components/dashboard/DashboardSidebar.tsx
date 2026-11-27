@@ -16,6 +16,7 @@ import {
   Music2,
   MessageSquare,
   FolderArchive,
+  FileText,
   Video,
   Menu,
   X,
@@ -91,6 +92,11 @@ const STUDENT_NAV_ITEMS = [
     label: "Profile",
     href: "/student/dashboard/profile",
     icon: UserIcon,
+  },
+  {
+    label: "Terms & Conditions",
+    href: "/student/dashboard/terms",
+    icon: FileText,
   },
 ];
 
