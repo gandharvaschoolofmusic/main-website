@@ -1,10 +1,12 @@
 "use client";
 
+import { removeLessonParticipant } from "@/actions/room-moderation";
+import { useRoomRecordingIndicator } from "@/hooks/useRoomRecordingIndicator";
 import { archiveLessonChat } from "@/lib/archive-lesson-chat";
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { useChat, useParticipants, useRoomContext, useAudioPlayback } from "@livekit/components-react";
 import { ConnectionQuality, RoomEvent } from "livekit-client";
-import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp, Volume2, VolumeX } from "lucide-react";
+import { Info, Users, MessageSquare, Grid3X3, ShieldCheck, X, Copy, Search, Mic, MicOff, UserMinus, Pin, LayoutGrid, Maximize, PictureInPicture2, Sparkles, Settings, CircleHelp, Circle, FileText, Radio, Columns3, ChartNoAxesColumnIncreasing, MessageCircleQuestion, Timer, ChevronRight, Music2, Camera, Captions, Hand, Keyboard, LockKeyhole, MonitorUp, Volume2, VolumeX } from "lucide-react";
 import type { AudioMode } from "@/lib/audio-engine";
 import type { MultiCameraState } from "@/hooks/useMultiCamera";
 import { MeetStage, type MeetLayout } from "./MeetStage";
@@ -18,6 +20,7 @@ import { TurnTakingControls, type TurnTakingState } from "./TurnTakingControls";
 type Panel = "people" | "chat" | "tools" | "host" | "details" | "effects" | "help" | null;
 type Modal = "settings" | "layout" | "captions" | "hand" | "recording" | null;
 interface Props {
+  localRecording: boolean;
   lesson: { id: string; instrument: string; partnerName: string; isTeacher: boolean; startsAt: string; durationMinutes: number };
   audioMode: AudioMode; isSwitchingAudioMode: boolean; isMuted: boolean; isVideoOff: boolean; isScreenSharing: boolean;
   activeFloorState: TurnTakingState; onFloorChange: (value: TurnTakingState) => void;
@@ -32,8 +35,14 @@ const reactions = [{ emoji: "💖", name: "Love" }, { emoji: "👍", name: "Thum
 const unavailableTools = [{ label: "Speech translation", description: "Translate speech into another language", icon: Captions }, { label: "Transcribe", description: "Capture the conversation", icon: FileText }, { label: "Live streaming", description: "Stream to view-only users", icon: Radio }, { label: "Breakout rooms", description: "Break into smaller groups", icon: Columns3 }, { label: "Polls", description: "Send polls to the audience", icon: ChartNoAxesColumnIncreasing }, { label: "Q&A", description: "Ask and answer questions", icon: MessageCircleQuestion }];
 const layouts = [{ id: "auto", title: "Auto", description: "Focus on your partner, with a floating self-view" }, { id: "tiled", title: "Tiled", description: "See everyone in a grid" }, { id: "spotlight", title: "Spotlight", description: "Fill the stage with one person or presentation" }, { id: "sidebar", title: "Sidebar", description: "A main speaker with a strip of participants" }, { id: "studio", title: "Multi-camera studio", description: "Original lesson view with instrument angles" }] as const;
 
+function participantRole(metadata?: string) {
+  try { return JSON.parse(metadata || "{}").role; } catch { return undefined; }
+}
+
 export function MeetRoomUI(props: Props) {
   const room = useRoomContext();
+  const recording = useRoomRecordingIndicator(room, props.localRecording);
+  const isAdmin = participantRole(room.localParticipant.metadata) === "ADMIN";
   const { canPlayAudio, startAudio } = useAudioPlayback(room);
   const participants = useParticipants({ updateOnlyOn: [RoomEvent.ParticipantConnected, RoomEvent.ParticipantDisconnected, RoomEvent.TrackMuted, RoomEvent.TrackUnmuted, RoomEvent.ParticipantNameChanged] });
   const { send } = useChat();
@@ -94,7 +103,7 @@ export function MeetRoomUI(props: Props) {
   const floorControls = <TurnTakingControls isTeacher={props.lesson.isTeacher} activeState={props.activeFloorState} onStateChange={props.onFloorChange}/>;
   return <div className="meet-room">
     <header className="meet-topbar"><div className="meet-room-heading"><time suppressHydrationWarning>{clock || "--:--"}</time><span className="meet-divider"/><h1>{props.lesson.instrument} lesson</h1><RoomIconButton label="Meeting details" active={panel === "details"} onClick={() => togglePanel("details")}><Info size={17}/></RoomIconButton></div>
-      <div className="meet-top-actions"><button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} aria-label="Sound settings: microphone and speaker" title="Sound settings">
+      <div className="meet-top-actions">{recording && <span className="meet-recording-indicator" role="status"><i aria-hidden="true"/>Recording</span>}<button className="meet-audio-status" type="button" onClick={() => openSettings("Audio")} aria-label="Sound settings: microphone and speaker" title="Sound settings">
         <span className="meet-desktop-sound"><Mic size={14}/>{props.audioMode === "TALKING" ? "Talking mode" : "Instrument mode"}</span>
         <span className="meet-mobile-sound"><Volume2 size={18}/>Sound</span>
       </button><button type="button" className="meet-people-pill" aria-label={`People (${participants.length})`} aria-expanded={panel === "people"} onClick={() => togglePanel("people")}><span className="meet-mini-avatar">{(room.localParticipant.name || "Y")[0]}</span><Users size={16}/><span>{participants.length}</span></button></div>
@@ -124,8 +133,16 @@ export function MeetRoomUI(props: Props) {
       </div>
       <LessonChat isOpen={panel === "chat"} onClose={() => setPanel(null)} isTeacher={props.lesson.isTeacher} participantName={props.lesson.partnerName} onNewMessage={(count) => setUnread((current) => count === 0 ? 0 : current + count)} lessonId={props.lesson.id}/>
       {panel === "people" && <RoomPanel title="People" onClose={() => setPanel(null)}><button type="button" className="meet-primary-button" onClick={() => void run(copyLink)}><Copy size={18}/>Copy joining info</button><label className="meet-search"><Search size={20}/><input aria-label="Search for people" placeholder="Search for people" value={search} onChange={(event) => setSearch(event.target.value)}/></label><h3 className="meet-overline">In the meeting</h3><div className="meet-participant-list"><h3>Contributors <span>{participants.length}</span></h3>{participants.filter((person) => (person.name || person.identity).toLowerCase().includes(search.toLowerCase())).map((person) => {
-        let host = false; try { host = JSON.parse(person.metadata || "{}").role === "TEACHER"; } catch { /* A participant can have no role metadata. */ }
-        return <div className="meet-person" key={person.identity}><span className="meet-mini-avatar">{(person.name || "P")[0]}</span><div><strong>{person.name || "Participant"}{person.isLocal ? " (You)" : ""}</strong><p>{host ? "Lesson teacher" : "Participant"}</p></div><span aria-label={person.isMicrophoneEnabled ? "Microphone on" : "Microphone off"}>{person.isMicrophoneEnabled ? <Mic size={18}/> : <MicOff size={18}/>}</span><RoomIconButton label={`Pin ${person.name || "participant"}`} active={pinned === person.identity} onClick={() => { setPinned(pinned === person.identity ? null : person.identity); setLayout("spotlight"); }}><Pin size={18}/></RoomIconButton></div>;
+        const role = participantRole(person.metadata);
+        const host = role === "TEACHER";
+        const canRemove = isAdmin && !person.isLocal && (host || role === "STUDENT");
+        return <div className="meet-person" key={person.identity}><span className="meet-mini-avatar">{(person.name || "P")[0]}</span><div><strong>{person.name || "Participant"}{person.isLocal ? " (You)" : ""}</strong><p>{host ? "Lesson teacher" : "Participant"}</p></div><span aria-label={person.isMicrophoneEnabled ? "Microphone on" : "Microphone off"}>{person.isMicrophoneEnabled ? <Mic size={18}/> : <MicOff size={18}/>}</span><RoomIconButton label={`Pin ${person.name || "participant"}`} active={pinned === person.identity} onClick={() => { setPinned(pinned === person.identity ? null : person.identity); setLayout("spotlight"); }}><Pin size={18}/></RoomIconButton>
+          {canRemove && <RoomIconButton label={`Remove ${person.name || "participant"} from the call`} onClick={() => void run(async () => {
+            if (!window.confirm(`Remove ${person.name || "this participant"} from this call?`)) return;
+            await removeLessonParticipant(props.lesson.id, person.identity);
+            notify("Participant removed from the call.");
+          })}><UserMinus size={18}/></RoomIconButton>}
+        </div>;
       })}{!participants.some((person) => (person.name || person.identity).toLowerCase().includes(search.toLowerCase())) && <p className="meet-muted meet-pad">No matching participants</p>}</div></RoomPanel>}
       {panel === "details" && <RoomPanel title="Meeting details" onClose={() => setPanel(null)}><h3>{props.lesson.instrument} lesson</h3><p className="meet-muted">with {props.lesson.partnerName}</p><div className="meet-detail-card"><span>Time remaining</span><strong>{props.timeFormatted}</strong></div><h3>Joining info</h3><p className="meet-link">{typeof window !== "undefined" ? `${window.location.origin}/lesson/${props.lesson.id}` : `/lesson/${props.lesson.id}`}</p><button type="button" className="meet-text-button" onClick={() => void run(copyLink)}><Copy size={18}/>Copy joining info</button><p className="meet-note"><LockKeyhole size={18}/>Only participants assigned to this lesson can join.</p><hr/><h3>Lesson participation</h3>{floorControls}</RoomPanel>}
       {panel === "tools" && <RoomPanel title="Meeting tools" onClose={() => setPanel(null)}><div className="meet-tabs"><button type="button" className={toolsTab === "tools" ? "is-selected" : ""} onClick={() => setToolsTab("tools")}>Tools</button><button type="button" className={toolsTab === "addons" ? "is-selected" : ""} onClick={() => setToolsTab("addons")}>Add-ons</button></div>{toolsTab === "tools" ? <>
@@ -136,7 +153,7 @@ export function MeetRoomUI(props: Props) {
         <ToolButton icon={<Circle/>} label="Lesson recording" description="Automatic lesson recording information" onClick={() => setModal("recording")}/>
         <h3 className="meet-section-title">Unavailable in this lesson room</h3><p className="meet-muted">These meeting tools are not enabled for this classroom.</p>{unavailableTools.map((tool) => <ToolButton key={tool.label} icon={<tool.icon/>} label={tool.label} description={tool.description} disabled/>)}
       </> : <div className="meet-empty-panel"><Grid3X3 size={36}/><h3>No add-ons installed</h3><p>Music and camera tools are available in the Tools tab.</p><button type="button" className="meet-text-button" onClick={() => setToolsTab("tools")}>View lesson tools</button></div>}</RoomPanel>}
-      {panel === "host" && <RoomPanel title="Host controls" onClose={() => setPanel(null)}><p className="meet-muted">Lesson access and permissions are managed by the school. Your existing lesson settings remain in effect.</p><h3 className="meet-overline">Meeting moderation</h3><RoomSwitch label="Host management" description="Additional host moderation is not available in this room." checked={false} disabled/><h3 className="meet-overline">Let contributors</h3>{["Share their screen", "Send reactions in chat", "Turn on their microphone", "Turn on their video", "Send messages"].map((label) => <RoomSwitch key={label} label={label} checked disabled/>)}<h3 className="meet-overline">Meeting access</h3><p className="meet-note"><LockKeyhole size={20}/><span><strong>Restricted to lesson participants</strong><br/>Students and teachers sign in with their assigned account.</span></p><h3 className="meet-overline">Lesson participation</h3>{floorControls}</RoomPanel>}
+      {panel === "host" && <RoomPanel title="Host controls" onClose={() => setPanel(null)}><p className="meet-muted">Lesson access and permissions are managed by the school. Your existing lesson settings remain in effect.</p><h3 className="meet-overline">Meeting moderation</h3><p className="meet-muted">{isAdmin ? "Open People to remove a teacher or student from this call." : "School admins can remove participants from the call."}</p><h3 className="meet-overline">Let contributors</h3>{["Share their screen", "Send reactions in chat", "Turn on their microphone", "Turn on their video", "Send messages"].map((label) => <RoomSwitch key={label} label={label} checked disabled/>)}<h3 className="meet-overline">Meeting access</h3><p className="meet-note"><LockKeyhole size={20}/><span><strong>Restricted to lesson participants</strong><br/>Students and teachers sign in with their assigned account.</span></p><h3 className="meet-overline">Lesson participation</h3>{floorControls}</RoomPanel>}
       {panel === "effects" && <RoomPanel title="Backgrounds and effects" onClose={() => setPanel(null)}><div className="meet-effect-preview"><Camera size={36}/><span>Video appearance</span></div><RoomSwitch label="Mirror my video" description="Only changes your self-view." checked={mirror} onChange={() => setMirror(!mirror)}/><div className="meet-tabs"><span className="is-selected">Backgrounds</span><span>Filters</span><span>Appearance</span></div><div className="meet-background-options"><button type="button" aria-pressed="true"><X/>No effect</button><button type="button" disabled><Sparkles/>Blur</button><button type="button" disabled><Grid3X3/>Background</button></div><p className="meet-muted">Background replacement, blur, and filters are not available in this lesson room. Your camera feed stays unchanged.</p></RoomPanel>}
       {panel === "help" && <RoomPanel title="Troubleshooting and help" onClose={() => setPanel(null)}><div className="meet-detail-card"><span>Connection</span><strong>{props.isReconnecting ? "Reconnecting" : props.connectionQuality}</strong></div><h3>Audio and video</h3><p className="meet-muted">Check your selected microphone and camera in Settings. If a device is unavailable, close other apps using it and try again.</p><button type="button" className="meet-text-button" onClick={() => openSettings("Audio")}><Settings size={18}/>Open settings</button><h3>Keyboard shortcuts</h3><dl className="meet-shortcuts"><div><dt>Microphone</dt><dd>Ctrl + D</dd></div><div><dt>Camera</dt><dd>Ctrl + E</dd></div><div><dt>Lesson participation</dt><dd>Ctrl + Alt + H</dd></div></dl><h3>Need help with your lesson?</h3><p className="meet-muted">Contact your school administrator through your dashboard after the call.</p></RoomPanel>}
     </main>

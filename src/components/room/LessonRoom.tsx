@@ -80,7 +80,7 @@ export function LessonRoom(props: LessonRoomProps) {
   const handleDisconnected = useCallback((reason?: DisconnectReason) => {
     if (isIntentionalLeaveRef.current) return;
     console.warn("[LessonRoom] Disconnected", { reason, lessonId: lesson.id });
-    setDisconnectedError("The lesson connection was lost. Check your connection and retry joining.");
+    setDisconnectedError(reason === DisconnectReason.PARTICIPANT_REMOVED ? "An admin removed you from this call." : "The lesson connection was lost. Check your connection and retry joining.");
   }, [lesson.id]);
   const handleError = useCallback((err: Error) => {
     if (isIntentionalLeaveRef.current || /Client initiated disconnect|cancelled|aborted/i.test(err.message)) return;
@@ -615,6 +615,7 @@ function LessonRoomContent({
       {autoRecorder.recordingWarning && <div className="meet-call-banner" role="status">{autoRecorder.recordingWarning}</div>}
       {lesson.companion && <div className="meet-companion-choice" role="status">Second device: camera and screen sharing only. Audio stays on your main device.</div>}
       <MeetRoomUI
+        localRecording={autoRecorder.isRecording}
         lesson={lesson}
         audioMode={mic.settings.mode}
         isSwitchingAudioMode={mic.busy}
