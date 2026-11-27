@@ -13,3 +13,10 @@ Students and teachers connect from their dashboard Calendar page. School lessons
 6. Connect a student and teacher Google account. Check the connected email, run Sync now, and verify lesson time, classroom link, rescheduling and cancellation in Google Calendar.
 
 Tokens are encrypted with AUTH_SECRET and stored under a dedicated google-calendar Account provider. Rotating AUTH_SECRET requires users to reconnect. Disconnect stops future synchronization and retains existing Google events. Sync failures are shown on manual sync and reported as a failed count by the scheduled endpoint. Google authorization and live delivery require production setup and have not been exercised locally.
+
+## Where users connect
+
+- Students: `/student/dashboard/calendar` → **Connect Google Calendar**.
+- Teachers: `/teacher/dashboard/calendar` → **Connect Google Calendar**.
+- The button stays visible while configuration is unavailable, with an explanation. It becomes an active Google authorization link after the required environment variables are set and the deployment finishes.
+- A Google service account email/private key is not a substitute for the OAuth web client ID/secret used to connect personal student and teacher calendars.
