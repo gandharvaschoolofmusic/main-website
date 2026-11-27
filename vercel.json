@@ -3,7 +3,10 @@
     {
       "path": "/api/cron/reminders",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/google-calendar",
+      "schedule": "*/5 * * * *"
     }
   ]
 }
-

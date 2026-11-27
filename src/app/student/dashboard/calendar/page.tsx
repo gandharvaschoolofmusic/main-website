@@ -1,3 +1,4 @@
+import { GoogleCalendarConnection } from "@/components/dashboard/GoogleCalendarConnection";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { Role } from "@prisma/client";
@@ -215,6 +216,7 @@ export default async function StudentCalendarPage() {
         </p>
       </div>
 
+      <GoogleCalendarConnection />
       <CalendarView
         lessons={formattedLessons}
         events={formattedEvents}
