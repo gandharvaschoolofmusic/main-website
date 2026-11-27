@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
+import { formatInTimeZone, toZonedTime } from "date-fns-tz";
 import Link from "next/link";
 import {
   ChevronLeft,
@@ -43,6 +44,17 @@ export type CalendarEvent = {
   teacherInstruments?: string[];
 };
 
+function groupByLocalDay<T extends { startsAt: string }>(items: T[], timezone: string) {
+  const days = new Map<string, T[]>();
+  for (const item of items) {
+    const key = formatInTimeZone(item.startsAt, timezone, "yyyy-MM-dd");
+    const group = days.get(key);
+    if (group) group.push(item);
+    else days.set(key, [item]);
+  }
+  return days;
+}
+
 export function CalendarView({
   lessons,
   events = [],
@@ -52,8 +64,9 @@ export function CalendarView({
   events?: CalendarEvent[];
   userTimezone: string;
 }) {
-  const [currentMonth, setCurrentMonth] = useState(new Date());
-  const [selectedDay, setSelectedDay] = useState<Date | null>(new Date());
+  const today = toZonedTime(new Date(), userTimezone);
+  const [currentMonth, setCurrentMonth] = useState(today);
+  const [selectedDay, setSelectedDay] = useState<Date | null>(today);
   const [selectedLesson, setSelectedLesson] = useState<CalendarLesson | null>(null);
 
   const monthStart = startOfMonth(currentMonth);
@@ -63,13 +76,10 @@ export function CalendarView({
 
   const days = eachDayOfInterval({ start: calendarStart, end: calendarEnd });
 
-  const getLessonsForDay = (day: Date) => {
-    return lessons.filter((l) => isSameDay(new Date(l.startsAt), day));
-  };
-
-  const getEventsForDay = (day: Date) => {
-    return events.filter((e) => isSameDay(new Date(e.startsAt), day));
-  };
+  const lessonsByDay = useMemo(() => groupByLocalDay(lessons, userTimezone), [lessons, userTimezone]);
+  const eventsByDay = useMemo(() => groupByLocalDay(events, userTimezone), [events, userTimezone]);
+  const getLessonsForDay = (day: Date) => lessonsByDay.get(format(day, "yyyy-MM-dd")) ?? [];
+  const getEventsForDay = (day: Date) => eventsByDay.get(format(day, "yyyy-MM-dd")) ?? [];
 
   const selectedDayLessons = selectedDay ? getLessonsForDay(selectedDay) : [];
   const selectedDayEvents = selectedDay ? getEventsForDay(selectedDay) : [];
@@ -94,7 +104,7 @@ export function CalendarView({
 
         <div className="flex items-center gap-2">
           <button
-            onClick={() => setCurrentMonth(new Date())}
+            onClick={() => setCurrentMonth(today)}
             className="btn-tactile px-3.5 py-1.5 rounded-lg border border-surface-muted/80 bg-bg-alt/30 hover:bg-bg-alt text-heading text-xs font-bold transition-colors"
           >
             Today
@@ -139,7 +149,7 @@ export function CalendarView({
               const dayLessons = getLessonsForDay(day);
               const dayEvents = getEventsForDay(day);
               const isSelected = selectedDay && isSameDay(day, selectedDay);
-              const isToday = isSameDay(day, new Date());
+              const isToday = isSameDay(day, today);
               const isCurrentMonth = isSameMonth(day, currentMonth);
 
               return (
@@ -198,7 +208,7 @@ export function CalendarView({
                         key={ev.id}
                         className="px-1.5 py-0.5 rounded text-[10px] font-bold truncate bg-accent-subtle text-accent-dark border border-accent/25"
                       >
-                        {format(new Date(ev.startsAt), "h:mm a")} {ev.title}
+                        {formatInTimeZone(ev.startsAt, userTimezone, "h:mm a")} {ev.title}
                       </div>
                     ))}
                     {dayLessons.slice(0, 2).map((lesson) => (
@@ -210,7 +220,7 @@ export function CalendarView({
                             : "bg-primary/10 text-primary border border-primary/20"
                         }`}
                       >
-                        {format(new Date(lesson.startsAt), "h:mm a")} {lesson.instrument}
+                        {formatInTimeZone(lesson.startsAt, userTimezone, "h:mm a")} {lesson.instrument}
                       </div>
                     ))}
                     {dayLessons.length + dayEvents.length > 2 && (

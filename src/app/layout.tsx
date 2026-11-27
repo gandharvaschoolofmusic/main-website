@@ -53,6 +53,7 @@ export const metadata: Metadata = {
 
 import { Navbar } from "@/components/layout/Navbar";
 import SiteChrome from "@/components/SiteChrome";
+import { MetaPixel } from "@/components/MetaPixel";
 import { getServerCurrency } from "@/lib/currency-server";
 import { CurrencyProvider } from "@/context/CurrencyContext";
 
@@ -62,6 +63,7 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const initialCurrency = await getServerCurrency();
+  const pixelId = process.env.META_PIXEL_ID?.trim();
 
   return (
     <html
@@ -78,6 +80,7 @@ export default async function RootLayout({
         className="min-h-screen bg-bg text-body font-sans antialiased"
       >
         <CurrencyProvider initialCurrency={initialCurrency}>
+          {pixelId && /^\d+$/.test(pixelId) && <MetaPixel id={pixelId} />}
           <Navbar />
           <SiteChrome>
             <main>{children}</main>

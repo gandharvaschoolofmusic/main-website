@@ -1,3 +1,4 @@
+import { formatInViewerTimezone } from "@/lib/timezone";
 import Link from "next/link";
 import { Sparkles, ArrowRight, Clock } from "lucide-react";
 
@@ -24,7 +25,7 @@ export type TrialStatusData = {
   isConverted?: boolean;
 };
 
-export function TrialStatusStrip({ data }: { data: TrialStatusData }) {
+export function TrialStatusStrip({ data, timezone }: { data: TrialStatusData; timezone: string }) {
   const { trialStatus, activeEnrollment, pendingTrialRequest, isConverted } = data;
 
   const lessonsGranted = trialStatus?.lessonsGranted ?? 2;
@@ -35,16 +36,8 @@ export function TrialStatusStrip({ data }: { data: TrialStatusData }) {
   // Case 0: Pending Trial Request awaiting Admin teacher allotment
   if (pendingTrialRequest) {
     const requestDate = new Date(pendingTrialRequest.requestedStartsAt);
-    const formattedDate = requestDate.toLocaleDateString("en-US", {
-      weekday: "short",
-      month: "short",
-      day: "numeric",
-      year: "numeric",
-    });
-    const formattedTime = pendingTrialRequest.preferredTimeSlot || requestDate.toLocaleTimeString("en-US", {
-      hour: "numeric",
-      minute: "2-digit",
-    });
+    const formattedDate = formatInViewerTimezone(requestDate, timezone, "EEE, MMM d, yyyy");
+    const formattedTime = formatInViewerTimezone(requestDate, timezone, "h:mm a zzz");
 
     return (
       <div className="relative overflow-hidden rounded-2xl border-2 border-primary/30 bg-gradient-to-r from-bg-alt/60 via-white to-surface-muted/30 p-6 shadow-md shadow-primary/5">

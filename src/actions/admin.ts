@@ -1025,6 +1025,7 @@ export async function updateLessonDateTimeAdminAction(input: {
     revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     updateTag("admin-overview");
+    updateTag("admin-teachers");
     try {
       revalidateTag("admin-lessons", "max");
       revalidateTag("lessons", "max");
@@ -1110,6 +1111,7 @@ export async function deleteOrCancelEnrollmentLessonAction(
     revalidatePath("/admin/enrollments");
     revalidatePath("/admin");
     updateTag("admin-overview");
+    updateTag("admin-teachers");
     try {
       revalidateTag("admin-enrollments", "max");
     } catch {}
@@ -1922,6 +1924,7 @@ export async function cancelLessonAdminAction(lessonId: string): Promise<AdminAc
     revalidatePath("/admin/lessons");
     revalidatePath("/admin");
     updateTag("admin-overview");
+    updateTag("admin-teachers");
     revalidatePath("/admin/students");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/student/dashboard");
@@ -2022,6 +2025,7 @@ export async function updateLessonStatusAdminAction(
     revalidatePath("/admin/enrollments");
     revalidatePath("/admin");
     updateTag("admin-overview");
+    updateTag("admin-teachers");
     revalidatePath("/teacher/dashboard");
     revalidatePath("/student/dashboard");
     try {

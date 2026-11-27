@@ -171,6 +171,7 @@ interface AdminTeachersManagerProps {
 
 export function AdminTeachersManager({ initialTeachers }: AdminTeachersManagerProps) {
   const [teachers, setTeachers] = useState<TeacherRecord[]>(initialTeachers);
+  useEffect(() => setTeachers(initialTeachers), [initialTeachers]);
   const [selectedTeacherId, setSelectedTeacherId] = useState<string>(
     initialTeachers[0]?.id || ""
   );

@@ -1,9 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
 import { redirect } from "next/navigation";
-import { auth } from "@/lib/auth";
+
 import { db } from "@/lib/db";
-import { requireLessonParticipant } from "@/lib/auth-helpers";
+import { getCurrentUser, requireLessonParticipant } from "@/lib/auth-helpers";
 import { formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
 import { JOIN_WINDOW_MINUTES_BEFORE, JOIN_WINDOW_MINUTES_AFTER } from "@/types";
 import { LessonRoomClient } from "@/components/room/LessonRoomClient";
@@ -28,15 +28,15 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
   const query = searchParams ? await searchParams : {};
   const isEarlyRequested = query?.early === "true";
 
-  const session = await auth();
-  if (!session?.user?.id) {
+  const viewer = await getCurrentUser();
+  if (!viewer?.id) {
     redirect(`/login?callbackUrl=/lesson/${lessonId}`);
   }
 
   // 1. Participant authorization
   let lessonData;
   try {
-    lessonData = await requireLessonParticipant(lessonId, session.user.id);
+    lessonData = await requireLessonParticipant(lessonId, viewer.id);
   } catch (err: unknown) {
     return (
       <div className="min-h-screen bg-gradient-to-b from-bg via-bg-alt/25 to-bg flex items-center justify-center p-4 sm:p-6">
@@ -82,7 +82,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
   }
 
   const { lesson, callerRole } = lessonData;
-  const userTimezone = session.user.timezone || "UTC";
+  const userTimezone = viewer.timezone || "UTC";
 
   // 2. Fetch partner name
   const isGroupLesson = !!lesson.groupRoomId;
@@ -164,7 +164,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
   );
 
   // Too early — only teachers and admins can enter early via pre-flight
-  const canEnterEarly = callerRole === "TEACHER" || session.user.role === "ADMIN";
+  const canEnterEarly = callerRole === "TEACHER" || viewer.role === "ADMIN";
   if (now < earlyOpenTime && !(isEarlyRequested && canEnterEarly)) {
     const formattedStartTime = formatInViewerTimezone(
       startsAt,
@@ -246,7 +246,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
   }
 
   // Too late (session concluded)
-  if (now > expiryTime && session.user.role !== "ADMIN") {
+  if (now > expiryTime && viewer.role !== "ADMIN") {
     const formattedEndTime = formatInViewerTimezone(
       endsAt,
       userTimezone,

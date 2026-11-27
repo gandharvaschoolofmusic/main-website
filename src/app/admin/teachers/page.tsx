@@ -14,7 +14,7 @@ const getCachedAdminTeachersData = unstable_cache(
   async () => {
     return getResilientData("admin-teachers-v2", async () => {
       // Run both queries in parallel
-      const [dbUsers, dbEnrollments] = await Promise.all([
+      const [dbUsers, dbEnrollments, completedCounts] = await Promise.all([
     // Query teacher users with trimmed relational profiles
     db.user.findMany({
       where: { role: Role.TEACHER },
@@ -113,8 +113,16 @@ const getCachedAdminTeachersData = unstable_cache(
       },
       orderBy: { startedAt: "desc" },
     }),
+    db.lesson.groupBy({
+      by: ["teacherId", "studentId"],
+      where: { status: "COMPLETED" },
+      _count: { _all: true },
+    }),
   ]);
 
+  const completedByPair = new Map(completedCounts.map(row => [
+    row.teacherId + ":" + row.studentId, row._count._all,
+  ]));
   const teacherUserIds = new Set(dbUsers.map((u) => u.id));
 
   // Map into TeacherRecord format without dummy data
@@ -184,15 +192,16 @@ const getCachedAdminTeachersData = unstable_cache(
           };
           studentMap.set(l.student.id, entry);
         }
-        if (l.status === "COMPLETED") {
-          entry.completedLessonsCount += 1;
-        } else if (l.status === "SCHEDULED") {
+        if (l.status === "SCHEDULED") {
           entry.upcomingLessonsCount += 1;
         }
       }
     });
 
-    const allottedStudents = Array.from(studentMap.values());
+    const allottedStudents = Array.from(studentMap.values(), student => ({
+      ...student,
+      completedLessonsCount: completedByPair.get(u.id + ":" + student.id) ?? 0,
+    }));
 
     return {
       id: profile?.id || u.id,

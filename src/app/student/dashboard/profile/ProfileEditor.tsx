@@ -331,12 +331,17 @@ export function ProfileEditor({ user }: ProfileEditorProps) {
                 onChange={(e) => setTimezone(e.target.value)}
                 className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-border-default text-xs text-heading focus:outline-none focus:border-primary focus:ring-2 focus:ring-primary/10 transition-all cursor-pointer"
               >
+                {!POPULAR_TIMEZONES.some(tz => tz.value === timezone) && <option value={timezone}>{timezone}</option>}
                 {POPULAR_TIMEZONES.map((tz) => (
                   <option key={tz.value} value={tz.value}>
                     {tz.label} ({tz.value})
                   </option>
                 ))}
               </select>
+              <button type="button" className="mt-2 text-xs font-semibold text-primary"
+                onClick={() => setTimezone(Intl.DateTimeFormat().resolvedOptions().timeZone)}>
+                Use my device timezone
+              </button>
             </div>
           </div>
         </div>

@@ -141,6 +141,7 @@ export default async function StudentDashboardPage() {
       {/* 1. High-Priority Trial Indicator (hidden for active enrolled students) */}
       {!activeEnrollment && (
         <TrialStatusStrip
+          timezone={studentTimezone}
           data={{
             trialStatus: trialStatus
               ? {
