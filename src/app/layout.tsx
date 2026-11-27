@@ -63,7 +63,12 @@ export default async function RootLayout({
   children: React.ReactNode;
 }) {
   const initialCurrency = await getServerCurrency();
-  const pixelId = process.env.META_PIXEL_ID?.trim();
+  // Pixel IDs are public identifiers. Keep the academy's Pixel active even if
+  // a deployment is missing the optional Vercel environment override.
+  const configuredPixelId = process.env.META_PIXEL_ID?.trim();
+  const pixelId = configuredPixelId && /^\d+$/.test(configuredPixelId)
+    ? configuredPixelId
+    : "1184604515521676";
 
   return (
     <html
@@ -80,7 +85,7 @@ export default async function RootLayout({
         className="min-h-screen bg-bg text-body font-sans antialiased"
       >
         <CurrencyProvider initialCurrency={initialCurrency}>
-          {pixelId && /^\d+$/.test(pixelId) && <MetaPixel id={pixelId} />}
+          <MetaPixel id={pixelId} />
           <Navbar />
           <SiteChrome>
             <main>{children}</main>
