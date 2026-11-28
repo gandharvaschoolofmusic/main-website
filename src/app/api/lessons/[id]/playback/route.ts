@@ -4,6 +4,7 @@ import { recordingPlaybackUrl } from "@/lib/supabase-storage";
 import { readLessonRecordingMedia } from "@/lib/lesson-recording-media";
 import { storedFileDownload } from "@/lib/file-download";
 import { attachmentDisposition } from "@/lib/download";
+import { recordingFilename, recordingExtension } from "@/lib/recording-filename";
 
 export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const session = await auth();
@@ -14,18 +15,27 @@ export async function GET(request: Request, { params }: { params: Promise<{ id: 
   const lesson = await db.lesson.findUnique({
     where: { id },
     select: { studentId: true, teacherId: true, groupRoomId: true, recordingUrl: true,
-      recordings: { where: { id: part || "" }, select: { fileUrl: true, fileName: true, storageBackend: true } } },
+      trackingCode: true, instrument: true, startsAt: true,
+      enrollment: { select: { course: { select: { title: true } } } },
+      trialRequest: { select: { customId: true } },
+      recordings: { orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+        select: { id: true, fileUrl: true, fileName: true, storageBackend: true } } },
   });
   if (!lesson || (session.user.role !== "ADMIN" && session.user.id !== lesson.studentId && session.user.id !== lesson.teacherId)) {
     return new Response(null, { status: 404 });
   }
-  const stored = part ? lesson.recordings[0]?.fileUrl : lesson.recordingUrl;
+  const recordingIndex = lesson.recordings.findIndex(recording => part ? recording.id === part : recording.fileUrl === lesson.recordingUrl);
+  const recording = lesson.recordings[recordingIndex];
+  const stored = part ? recording?.fileUrl : lesson.recordingUrl;
   if (!stored) return new Response(null, { status: 404 });
   const download = query.get("download") === "1";
-  const filename = lesson.recordings[0]?.fileName || stored.split("?")[0].split("/").pop() || `lesson-${id}.mp4`;
+  const filename = recordingFilename(lesson, {
+    extension: recordingExtension(recording?.fileName || stored),
+    part: recordingIndex >= 0 ? recordingIndex + 1 : undefined,
+  });
   try {
-    let mediaId = lesson.recordings[0]?.storageBackend === "DATABASE" ? part : null;
-    if (!part && stored.startsWith("/api/lessons/")) {
+    let mediaId = recording?.storageBackend === "DATABASE" ? recording.id : null;
+    if (!mediaId && !part && stored.startsWith("/api/lessons/")) {
       const shared = await db.lessonRecording.findFirst({
         where: { fileUrl: stored, storageBackend: "DATABASE", lesson: lesson.groupRoomId ? { groupRoomId: lesson.groupRoomId } : { id } },
         select: { id: true },

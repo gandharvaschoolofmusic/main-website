@@ -12,25 +12,29 @@ function load(file, dependencies = {}, globals = {}) {
 
 async function main() {
   const helpers = load('src/lib/download.ts');
+  const recordingNames = load('src/lib/recording-filename.ts');
   assert.equal(helpers.fileDownloadHref('/api/lessons/one/playback?part=two&resolve=1'), '/api/lessons/one/playback?part=two&download=1');
   const disposition = helpers.attachmentDisposition('../Lesson\r\n"音.mp4');
   assert.ok(disposition.startsWith('attachment;'));
   assert.ok(!disposition.includes('\r') && !disposition.includes('\n'));
   assert.ok(disposition.includes('filename*=UTF-8'));
   let session = { user: { id: 'student', role: 'STUDENT' } };
-  let lesson = { studentId: 'student', teacherId: 'teacher', recordingUrl: 'https://storage.example/file.mp4', recordings: [{ fileUrl: 'https://storage.example/part.mp4', fileName: 'Part 1.mp4', storageBackend: 'SUPABASE' }] };
-  let downloads = 0, playback = 0, requestedPart;
+  let lesson = { studentId: 'student', teacherId: 'teacher', trackingCode: 'S0005-SE004', instrument: 'Keyboard', startsAt: '2026-11-18T15:30:00Z', enrollment: { course: { title: 'Electronic Keyboard Foundation' } }, recordingUrl: 'https://storage.example/file.mp4', recordings: [{ id: 'two', fileUrl: 'https://storage.example/part.mp4', fileName: 'Gandharva_Lesson_random.mp4', storageBackend: 'SUPABASE' }] };
+  let downloads = 0, playback = 0;
   const route = load('src/app/api/lessons/[id]/playback/route.ts', {
     '@/lib/auth': { auth: async () => session },
-    '@/lib/db': { db: { lesson: { findUnique: async args => { requestedPart = args.select.recordings.where.id; return lesson; } }, lessonRecording: { findFirst: async () => ({ id: 'db-part' }) } } },
+    '@/lib/db': { db: { lesson: { findUnique: async () => lesson }, lessonRecording: { findFirst: async () => ({ id: 'db-part' }) } } },
     '@/lib/supabase-storage': { recordingPlaybackUrl: async () => { playback++; return 'https://storage.example/inline'; } },
     '@/lib/file-download': { storedFileDownload: async (_url, name) => { downloads++; return new Response(null, { status: 307, headers: { Location: 'https://storage.example/download', 'Content-Disposition': helpers.attachmentDisposition(name) } }); } },
     '@/lib/lesson-recording-media': { readLessonRecordingMedia: async () => new Response('video') },
     '@/lib/download': helpers,
+    '@/lib/recording-filename': recordingNames,
   });
   const get = query => route.GET(new Request('https://school.example/api/lessons/one/playback' + query), { params: Promise.resolve({ id: 'one' }) });
-  assert.equal((await get('?part=two&download=1')).status, 307);
-  assert.equal(requestedPart, 'two'); assert.equal(downloads, 1); assert.equal(playback, 0);
+  const oldDownload = await get('?part=two&download=1');
+  assert.equal(oldDownload.status, 307);
+  assert.ok(oldDownload.headers.get('content-disposition').includes('S0005-SE004_Electronic_Keyboard_Foundation_2026-11-18_Part-01.mp4'));
+  assert.equal(downloads, 1); assert.equal(playback, 0);
   assert.equal((await get('?part=two&resolve=1')).status, 200); assert.equal(playback, 1);
   session = { user: { id: 'outsider', role: 'STUDENT' } };
   assert.equal((await get('?download=1')).status, 404); assert.equal(downloads, 1);
@@ -41,6 +45,9 @@ async function main() {
   const media = await get('?part=two&download=1');
   assert.equal(media.status, 200); assert.ok(media.headers.get('content-disposition').startsWith('attachment;'));
   assert.equal(await media.text(), 'video');
+  lesson.recordings.push({ id: 'third', fileUrl: 'https://storage.example/next.webm', fileName: 'old-random.webm', storageBackend: 'DATABASE' });
+  const second = await get('?part=third&download=1');
+  assert.ok(second.headers.get('content-disposition').includes('Part-02.webm'));
   lesson.recordings = [];
   assert.equal((await get('?part=not-in-lesson&download=1')).status, 404);
 

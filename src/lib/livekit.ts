@@ -11,6 +11,8 @@ import {
 import { getS3UploadConfig, recordingS3Object } from "./recording-s3";
 export { getS3UploadConfig } from "./recording-s3";
 import { logger } from "@/lib/logger";
+import { db } from "@/lib/db";
+import { recordingFilename } from "./recording-filename";
 
 export interface GenerateLessonTokenParams {
   lessonId: string;
@@ -245,12 +247,17 @@ export async function startLessonRoomEgress(params: {
     }
 
     // 2. Build recording destination path
-    const now = new Date();
-    const dateStamp = now.toISOString().slice(0, 10);
-    const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
-    const identifier = lessonId || groupRoomId || roomName.replace(/[^a-zA-Z0-9]/g, "_");
-    const fileName = `Gandharva_Lesson_${identifier}_${dateStamp}_${timeStamp}_${crypto.randomUUID()}.mp4`;
-    const filepath = fileName;
+    const lesson = await db.lesson.findFirst({
+      where: groupRoomId ? { groupRoomId } : { id: lessonId || roomName.replace(/^lesson-/, "") },
+      orderBy: [{ createdAt: "asc" }, { id: "asc" }],
+      select: { trackingCode: true, instrument: true, startsAt: true,
+        enrollment: { select: { course: { select: { title: true } } } },
+        trialRequest: { select: { customId: true } } },
+    });
+    if (!lesson) return { success: false, error: "LESSON_NOT_FOUND" };
+    const fileName = recordingFilename(lesson, { recordedAt: new Date() });
+    // Keep uniqueness in the storage directory, not in the visible filename.
+    const filepath = `${crypto.randomUUID()}/${fileName}`;
 
     const fileOutput = new EncodedFileOutput({
       fileType: EncodedFileType.MP4,

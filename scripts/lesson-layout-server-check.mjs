@@ -7,9 +7,10 @@ const { EgressClient, EgressStatus } = require("livekit-server-sdk");
 
 const output = await build({ entryPoints: ["src/lib/livekit.ts"], bundle: true, platform: "node", format: "cjs", packages: "external", write: false,
   plugins: [{ name: "boundaries", setup(b) {
-    b.onResolve({ filter: /recording-s3|@\/lib\/logger/ }, a => ({ path: a.path, namespace: "mock" }));
+    b.onResolve({ filter: /recording-s3|@\/lib\/logger|@\/lib\/db/ }, a => ({ path: a.path, namespace: "mock" }));
     b.onLoad({ filter: /.*/, namespace: "mock" }, a => ({ contents: a.path.includes("logger")
       ? "export const logger={info(){},warn(){},error(){}}"
+      : a.path.endsWith("/db") ? 'export const db={lesson:{findFirst:async()=>({trackingCode:"S0005-SE004",instrument:"Keyboard",startsAt:new Date("2026-11-18T15:30:00Z"),enrollment:{course:{title:"Electronic Keyboard Foundation"}}})}};'
       : 'export const getS3UploadConfig=()=>({bucket:"test-archive",accessKey:"test",secret:"test",region:"us-east-1"}); export const recordingS3Object=()=>null;' }));
   } }],
 });
@@ -26,9 +27,11 @@ assert.equal(calls[0][2].customBaseUrl, "https://school.example/recording/lesson
 assert.equal(calls[0][2].layout, "lesson-split");
 assert.equal(calls[0][2].audioOnly, false);
 assert.equal(calls[0][2].videoOnly, false);
+assert.match(calls[0][1].filepath, /^[^/]+\/S0005-SE004_Electronic_Keyboard_Foundation_2026-11-18_Recorded-\d{8}T\d{9}Z\.mp4$/);
 console.log("PASS server recording uses the shared split-screen template with video and mixed audio");
 process.env.LIVEKIT_RECORDING_TEMPLATE_URL = "https://preview.example/recording/lesson";
 await api.startLessonRoomEgress({ roomName: "lesson-test" });
+assert.notEqual(calls[0][1].filepath.split('/')[0], calls[1][1].filepath.split('/')[0], "Each recording uses a separate storage directory");
 assert.equal(calls[1][2].customBaseUrl, process.env.LIVEKIT_RECORDING_TEMPLATE_URL);
 existing = [{ egressId: "EG_existing", status: EgressStatus.EGRESS_ACTIVE, request: { case: "roomComposite", value: { audioOnly: false, videoOnly: false, fileOutputs: [calls[0][1]], output: {} } } }];
 assert.equal((await api.startLessonRoomEgress({ roomName: "lesson-test" })).egressId, "EG_existing");

@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { uploadToSupabase } from "@/lib/supabase-storage";
 import { logger } from "@/lib/logger";
 import { createHash, randomUUID } from "node:crypto";
+import { recordingFilename } from "@/lib/recording-filename";
 
 /**
  * POST /api/lessons/[id]/recording
@@ -39,6 +40,8 @@ export async function POST(
       include: {
         teacher: { select: { id: true, name: true } },
         student: { select: { id: true, name: true } },
+        enrollment: { select: { course: { select: { title: true } } } },
+        trialRequest: { select: { customId: true } },
       },
     });
 
@@ -85,19 +88,10 @@ export async function POST(
     const isMp4 = buffer.toString("ascii", 4, 8) === "ftyp";
     if (!isWebm && !isMp4) return Response.json({ error: "Invalid recording file" }, { status: 422 });
 
-    const sanitize = (val: string) =>
-      val.replace(/[^a-zA-Z0-9]/g, "_").replace(/_+/g, "_").trim();
-
-    const safeInstrument = sanitize(lesson.instrument || "Lesson");
-    const safeStudent = sanitize(lesson.student?.name?.split(" ")[0] || "Student");
-    const safeTeacher = sanitize(lesson.teacher?.name?.split(" ")[0] || "Teacher");
-    const now = new Date();
-    const dateStamp = now.toISOString().slice(0, 10); // YYYY-MM-DD
-    const timeStamp = `${String(now.getUTCHours()).padStart(2, "0")}h${String(now.getUTCMinutes()).padStart(2, "0")}m`;
-    const partSuffix = `_${recordingId}`;
     const mimeType = isMp4 ? "video/mp4" : "video/webm";
     const extension = mimeType.split(";")[0].toLowerCase() === "video/mp4" ? "mp4" : "webm";
-    const fileName = `Gandharva_${safeInstrument}_${safeStudent}_${safeTeacher}_${dateStamp}_${timeStamp}${partSuffix}.${extension}`;
+    const now = new Date();
+    const fileName = recordingFilename(lesson, { extension, recordedAt: now });
 
     let fileUrl = "";
     let fileId: string | null = null;
@@ -109,6 +103,7 @@ export async function POST(
       const uploadResult = await uploadToSupabase(buffer, fileName, mimeType, {
         bucket: "recordings",
         preserveExactName: true,
+        directory: recordingId,
       });
       fileUrl = uploadResult.fileUrl;
       fileId = uploadResult.fileId;

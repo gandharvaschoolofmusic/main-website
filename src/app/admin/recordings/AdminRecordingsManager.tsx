@@ -1450,7 +1450,7 @@ export function AdminRecordingsManager({
                             {/* Download file */}
                             <a
                               href={fileDownloadHref(recording.fileUrl)}
-                              download={recording.fileName}
+                              download
                               className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
                               title="Download file"
                             >

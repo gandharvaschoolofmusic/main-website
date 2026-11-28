@@ -112,13 +112,16 @@ export async function uploadToSupabase(
   options?: {
     bucket?: StorageBucket | string;
     preserveExactName?: boolean;
+    directory?: string;
   },
 ): Promise<StorageUploadResult> {
   let bucket = options?.bucket || "resources";
   const sanitized = fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
-  const finalName = options?.preserveExactName
+  const baseName = options?.preserveExactName
     ? sanitized
     : `${Date.now()}_${sanitized}`;
+  if (options?.directory && !/^[a-zA-Z0-9_-]+$/.test(options.directory)) throw new Error("Invalid upload directory");
+  const finalName = options?.directory ? `${options.directory}/${baseName}` : baseName;
 
   if (bucket === "recordings") {
     const s3 = recordingS3Object(bucket, finalName);
