@@ -18,6 +18,7 @@ import {
   FolderArchive,
   FileText,
   Video,
+  ListVideo,
   Menu,
   X,
   PanelLeftClose,
@@ -42,6 +43,7 @@ const STUDENT_NAV_ITEMS = [
     href: "/student/dashboard/recordings",
     icon: Video,
   },
+  { label: "YouTube", href: "/student/dashboard/youtube", icon: ListVideo },
   {
     label: "Learning Materials",
     href: "/student/dashboard/resources",

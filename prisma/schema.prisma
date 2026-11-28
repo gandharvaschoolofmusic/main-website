@@ -379,6 +379,8 @@ model Enrollment {
   paymentPlan       CoursePaymentPlan @default(FULL_PAYMENT)
   convertedFromTrial Boolean          @default(false)
   trialRequestId    String?
+  youtubePlaylistUrl String?
+  youtubePlaylistUpdatedAt DateTime? @db.Timestamptz(6)
   certificate       Certificate?
   course            Course            @relation(fields: [courseId], references: [id])
   payment           Payment?          @relation("PrimaryEnrollmentPayment", fields: [paymentId], references: [id])

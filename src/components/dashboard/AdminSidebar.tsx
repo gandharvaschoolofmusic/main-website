@@ -18,6 +18,7 @@ import {
   Settings,
   HelpCircle,
   LogOut,
+  ListVideo,
   Menu,
   X,
   PanelLeftClose,
@@ -74,6 +75,7 @@ const navItems: NavItem[] = [
     href: "/admin/recordings",
     icon: Video,
   },
+  { name: "YouTube", href: "/admin/youtube", icon: ListVideo },
   {
     name: "Payments",
     href: "/admin/payments",
