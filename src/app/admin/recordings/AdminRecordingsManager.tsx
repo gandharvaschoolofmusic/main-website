@@ -4,6 +4,8 @@ import { fileDownloadHref } from "@/lib/download";
 import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
 import { RecordingDialog } from "./RecordingDialog";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
+import { resolveRecordingSelection, recordingsNavigationHref, type RecordingSelection } from "@/lib/recordings-navigation";
 import {
   Music,
   Users,
@@ -227,9 +229,7 @@ export function AdminRecordingsManager({
   // Step 2: Student (selectedStudentId)
   // Step 3: Session Lesson (selectedSessionId)
   // Step 4: Particular Session Recordings Tab (active inside selectedSession)
-  const [selectedCourseId, setSelectedCourseId] = useState<string | null>(null);
-  const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
-  const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const searchParams = useSearchParams();
 
   // Search & Global state
   const [searchQuery, setSearchQuery] = useState("");
@@ -238,20 +238,20 @@ export function AdminRecordingsManager({
 
   const [isPending, startTransition] = useTransition();
 
-  // Derived selected entities
-  const selectedCourse = useMemo(() => {
-    return courses.find((c) => c.id === selectedCourseId) || null;
-  }, [courses, selectedCourseId]);
-
-  const selectedStudent = useMemo(() => {
-    if (!selectedCourse) return null;
-    return selectedCourse.students.find((s) => s.id === selectedStudentId) || null;
-  }, [selectedCourse, selectedStudentId]);
-
-  const selectedSession = useMemo(() => {
-    if (!selectedStudent) return null;
-    return selectedStudent.lessons.find((l) => l.id === selectedSessionId) || null;
-  }, [selectedStudent, selectedSessionId]);
+  // The URL is the source of truth across refresh and browser Back/Forward.
+  const { course: selectedCourse, student: selectedStudent, session: selectedSession } = useMemo(
+    () => resolveRecordingSelection(courses, searchParams), [courses, searchParams],
+  );
+  function navigate(selection: RecordingSelection) {
+    const href = recordingsNavigationHref(window.location.href, selection);
+    if (href !== window.location.pathname + window.location.search + window.location.hash) {
+      window.history.pushState(null, "", href);
+    }
+    setSearchQuery("");
+    setPlayingRecording(null);
+  }
+  const courseStep = { course: selectedCourse?.id };
+  const studentStep = { ...courseStep, student: selectedStudent?.id, enrollment: selectedStudent?.enrollmentId };
 
   // Global Statistics
   const globalStats = useMemo(() => {
@@ -437,9 +437,7 @@ export function AdminRecordingsManager({
           <button
             type="button"
             onClick={() => {
-              setSelectedCourseId(null);
-              setSelectedStudentId(null);
-              setSelectedSessionId(null);
+              navigate({});
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all active:scale-[0.98] cursor-pointer whitespace-nowrap ${
               !selectedCourse
@@ -459,8 +457,7 @@ export function AdminRecordingsManager({
             type="button"
             disabled={!selectedCourse}
             onClick={() => {
-              setSelectedStudentId(null);
-              setSelectedSessionId(null);
+              navigate(courseStep);
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all active:scale-[0.98] whitespace-nowrap ${
               selectedCourse && !selectedStudent
@@ -486,7 +483,7 @@ export function AdminRecordingsManager({
             type="button"
             disabled={!selectedStudent}
             onClick={() => {
-              setSelectedSessionId(null);
+              navigate(studentStep);
             }}
             className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl transition-all active:scale-[0.98] whitespace-nowrap ${
               selectedStudent && !selectedSession
@@ -530,9 +527,7 @@ export function AdminRecordingsManager({
           <button
             type="button"
             onClick={() => {
-              setSelectedCourseId(null);
-              setSelectedStudentId(null);
-              setSelectedSessionId(null);
+              navigate({});
             }}
             className="font-medium hover:text-primary transition-colors cursor-pointer"
           >
@@ -545,8 +540,7 @@ export function AdminRecordingsManager({
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedStudentId(null);
-                  setSelectedSessionId(null);
+                  navigate(courseStep);
                 }}
                 className={`font-medium transition-colors cursor-pointer ${
                   !selectedStudent ? "text-heading font-bold" : "hover:text-primary"
@@ -563,7 +557,7 @@ export function AdminRecordingsManager({
               <button
                 type="button"
                 onClick={() => {
-                  setSelectedSessionId(null);
+                  navigate(studentStep);
                 }}
                 className={`font-medium transition-colors cursor-pointer ${
                   !selectedSession ? "text-heading font-bold" : "hover:text-primary"
@@ -676,7 +670,7 @@ export function AdminRecordingsManager({
             {filteredCourses.map((course) => (
               <div
                 key={course.id}
-                onClick={() => setSelectedCourseId(course.id)}
+                onClick={() => navigate({ course: course.id })}
                 className="group relative rounded-2xl bg-white border border-primary/10 p-5 shadow-xs hover:shadow-md hover:border-primary/25 transition-all flex flex-col justify-between cursor-pointer active:scale-[0.99]"
               >
                 <div className="space-y-3">
@@ -751,7 +745,7 @@ export function AdminRecordingsManager({
             <div className="flex items-center gap-3.5">
               <button
                 type="button"
-                onClick={() => setSelectedCourseId(null)}
+                onClick={() => navigate({})}
                 className="w-10 h-10 rounded-xl bg-bg-alt/40 hover:bg-bg-alt text-primary flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
                 title="Back to Course Catalog"
               >
@@ -826,7 +820,7 @@ export function AdminRecordingsManager({
               {filteredStudents.map((student) => (
                 <div
                   key={student.id}
-                  onClick={() => setSelectedStudentId(student.id)}
+                  onClick={() => navigate({ ...courseStep, student: student.id, enrollment: student.enrollmentId })}
                   className="group relative rounded-2xl bg-white border border-primary/10 p-5 shadow-xs hover:shadow-md hover:border-primary/25 transition-all flex flex-col justify-between cursor-pointer active:scale-[0.99]"
                 >
                   <div className="space-y-3">
@@ -892,7 +886,7 @@ export function AdminRecordingsManager({
             <div className="flex items-center gap-3.5">
               <button
                 type="button"
-                onClick={() => setSelectedStudentId(null)}
+                onClick={() => navigate(courseStep)}
                 className="w-10 h-10 rounded-xl bg-bg-alt/40 hover:bg-bg-alt text-primary flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
                 title="Back to Enrolled Students"
               >
@@ -948,7 +942,7 @@ export function AdminRecordingsManager({
                 return (
                   <div
                     key={lesson.id}
-                    onClick={() => setSelectedSessionId(lesson.id)}
+                    onClick={() => navigate({ ...studentStep, session: lesson.id })}
                     className="group rounded-2xl bg-white border border-primary/10 p-4 sm:p-5 shadow-xs hover:shadow-md hover:border-primary/25 transition-all flex flex-col md:flex-row md:items-center justify-between gap-4 cursor-pointer active:scale-[0.99]"
                   >
                     <div className="flex items-start sm:items-center gap-4">
@@ -1039,7 +1033,7 @@ export function AdminRecordingsManager({
             <div className="flex items-center gap-3.5">
               <button
                 type="button"
-                onClick={() => setSelectedSessionId(null)}
+                onClick={() => navigate(studentStep)}
                 className="w-10 h-10 rounded-xl bg-bg-alt/40 hover:bg-bg-alt text-primary flex items-center justify-center transition-all active:scale-95 cursor-pointer shrink-0"
                 title="Back to Sessions List"
               >
@@ -1368,7 +1362,7 @@ export function AdminRecordingsManager({
               </div>
               <button
                 type="button"
-                onClick={() => setSelectedSessionId(null)}
+                onClick={() => navigate(studentStep)}
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-bg-alt/50 hover:bg-bg-alt text-primary text-xs font-semibold transition-all active:scale-95 cursor-pointer"
               >
                 <ArrowLeft className="w-3.5 h-3.5" />
@@ -1616,7 +1610,7 @@ export function AdminRecordingsManager({
         </div>
       )}
 
-      {playingRecording && <RecordingDialog recording={playingRecording} instrument={selectedSession?.instrument || "Lesson recording"}
+      {playingRecording && selectedSession?.recordings.some(recording => recording.id === playingRecording.id) && <RecordingDialog recording={playingRecording} instrument={selectedSession?.instrument || "Lesson recording"}
         onClose={() => setPlayingRecording(null)}/>}
     </div>
   );
