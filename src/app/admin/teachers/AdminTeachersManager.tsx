@@ -793,7 +793,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           )}
                         </div>
                         <div className="text-[11px] text-body/70 truncate mt-0.5">
-                          {primaryInst} · {teacher.country || "India"}
+                          {primaryInst} · {teacher.country || "Not provided"}
                         </div>
                         <div className="mt-1">
                           <span
@@ -997,7 +997,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 <div>
                   <div className="text-[11px] text-body/60 font-medium">Country / Timezone</div>
                   <div className="font-bold text-heading mt-0.5">
-                    {selectedTeacher.country || "India"} · {selectedTeacher.timezone}
+                    {selectedTeacher.country || "Not provided"} · {selectedTeacher.timezone}
                   </div>
                 </div>
                 <div>
@@ -2414,7 +2414,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     <div className="p-3.5 rounded-xl bg-neutral-50/70 border border-neutral-100">
                       <div className="text-[11px] text-body/60 font-medium">Country & Timezone</div>
                       <div className="font-bold text-heading mt-1">
-                        {selectedTeacher.country || "India"} · {selectedTeacher.timezone}
+                        {selectedTeacher.country || "Not provided"} · {selectedTeacher.timezone}
                       </div>
                     </div>
                   </div>
@@ -2756,7 +2756,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 <div>
                   <div className="text-body/60 font-medium">Country / Timezone</div>
                   <div className="font-bold text-heading mt-0.5">
-                    {selectedTeacher.country || "India"} · {selectedTeacher.timezone}
+                    {selectedTeacher.country || "Not provided"} · {selectedTeacher.timezone}
                   </div>
                 </div>
               </div>

@@ -9,6 +9,7 @@ import {
 } from "./AdminStudentsManager";
 import { isStudentConvertedOrEnrolled } from "@/lib/student-filters";
 import { autoResolvePastLessons } from "@/lib/attendance";
+import { resolveProfileCountry } from "@/lib/timezone";
 
 export const metadata = {
   title: "Students | Admin Portal | Gandharva School of Music",
@@ -17,7 +18,7 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-students-v6", async () => {
+    return getResilientData("admin-students-v7", async () => {
     // 0. Auto-resolve concluded lessons based on verified attendance
     try {
       await autoResolvePastLessons();
@@ -237,8 +238,8 @@ const getCachedAdminStudentsData = unstable_cache(
         name: s.name || "Student",
         email: s.email,
         phone: s.phone,
-        country: s.country,
-        timezone: s.timezone || "Asia/Kolkata",
+        country: resolveProfileCountry(s.country, s.timezone),
+        timezone: s.timezone || "UTC",
         guardianName: s.guardianName,
         guardianPhone: s.guardianPhone,
         age: s.age,
@@ -335,7 +336,7 @@ const getCachedAdminStudentsData = unstable_cache(
     };
     });
   },
-  ["admin-students-data-v6"],
+  ["admin-students-data-v7"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
@@ -352,13 +353,13 @@ export default async function AdminStudentsPage() {
     data = await getCachedAdminStudentsData();
   } catch (err) {
     console.error("[AdminStudentsPage] Failed to load cached students data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-students-v6");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v7");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedStudents is empty, check resilient cache for last known good data
   if (!data.formattedStudents || data.formattedStudents.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-students-v6");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v7");
     if (fallback && fallback.formattedStudents.length > 0) {
       data = fallback;
     }

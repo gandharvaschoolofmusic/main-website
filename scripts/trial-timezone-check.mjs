@@ -46,6 +46,7 @@ try {
       assert.equal(request.formattedTime, ist);
       assert.equal(request.requestedStartsAt, utc);
       assert.equal(request.timezone, "America/New_York");
+      assert.equal(request.country, "United States");
       state.requests[0].allottedLesson = { startsAt: new Date("2026-11-25T19:00:00Z"), durationMinutes: 60 };
       const updatedPage = await api.adminPage();
       assert.equal(updatedPage.props.children.props.initialRequests[0].formattedTime, "Nov 26, 2026 at 12:30 AM IST");
@@ -55,6 +56,28 @@ try {
   assert.equal(api.formatTimezoneLabel("Asia/Calcutta", "2026-11-23T16:30:00Z"), "India · Kolkata · IST");
   assert.equal(api.formatTimezoneLabel("invalid", new Date()), "Timezone unavailable");
   console.log("PASS timezone country/city labels and IST alias");
+  for (const [country, timezone, expected] of [
+    [null, "America/Chicago", "United States"],
+    ["  ", "America/Toronto", "Canada"],
+    [null, "Europe/Amsterdam", "Netherlands"],
+    [null, "Asia/Calcutta", "India"],
+    [null, "US/Central", "United States"],
+    [null, "UTC", null],
+    [null, "Etc/GMT+6", null],
+    [null, "invalid", null],
+    [null, null, null],
+    [" India ", "America/Chicago", "India"],
+    ["United States", "invalid", "United States"],
+  ]) assert.equal(api.resolveProfileCountry(country, timezone), expected);
+  state.requests = [{ id: "chicago-trial", studentId: "student", timezone: "America/Chicago",
+    requestedStartsAt: new Date("2026-11-28T16:00:00Z"), createdAt: new Date("2026-11-28T16:00:00Z"),
+    student: { country: null, timezone: "America/Chicago" }, status: "PENDING" }];
+  const chicago = await api.adminPage();
+  assert.equal(chicago.props.children.props.initialRequests[0].country, "United States");
+  state.requests[0].student.country = "Canada";
+  const explicitCountry = await api.adminPage();
+  assert.equal(explicitCountry.props.children.props.initialRequests[0].country, "Canada");
+  console.log("PASS missing-country resolution, unknown/UTC handling, saved-country priority and Chicago trial regression");
 } finally {
   if (originalTZ === undefined) delete process.env.TZ; else process.env.TZ = originalTZ;
   delete globalThis.trialTimezoneTest;

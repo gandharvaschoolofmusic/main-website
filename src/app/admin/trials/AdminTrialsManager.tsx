@@ -2253,7 +2253,7 @@ export function AdminTrialsManager({
                         </h3>
                       </div>
                       <div className="text-[11px] text-body/70 mt-0.5 leading-snug">
-                        {drawerLead.instrument} • Age {drawerLead.age || 16} • {drawerLead.country || "India"}
+                        {drawerLead.instrument} • Age {drawerLead.age || 16} • {drawerLead.country || "Not provided"}
                       </div>
                     </div>
                   </div>
@@ -2411,7 +2411,7 @@ export function AdminTrialsManager({
                         <div className="flex items-center justify-between py-0.5">
                           <span className="text-body/60">Country</span>
                           <span className="font-medium text-heading">
-                            {drawerLead.country || "India"}
+                            {drawerLead.country || "Not provided"}
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">

@@ -227,6 +227,20 @@ const TIMEZONE_LOCATIONS: Record<string, { country: string; code?: string; city?
   "Africa/Johannesburg": { country: "South Africa" },
 };
 
+/**
+ * Prefer an explicitly saved profile country. When it is missing, use only a
+ * known IANA location as a display fallback; UTC/offsets do not identify a country.
+ * This must not be used to overwrite a person's saved country or infer nationality.
+ */
+export function resolveProfileCountry(country?: string | null, timezone?: string | null): string | null {
+  const saved = country?.trim();
+  if (saved) return saved;
+  const zone = timezone?.trim();
+  if (!zone || !isValidTimezone(zone)) return null;
+  const canonical = Intl.DateTimeFormat("en-US", { timeZone: zone }).resolvedOptions().timeZone;
+  return (TIMEZONE_LOCATIONS[zone] || TIMEZONE_LOCATIONS[canonical])?.country || null;
+}
+
 /** Human-readable booking timezone; seasonal codes use the lesson date. */
 export function formatTimezoneLabel(timezone: string, date: Date | string | number, country?: string | null): string {
   if (!isValidTimezone(timezone)) return "Timezone unavailable";

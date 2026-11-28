@@ -4,6 +4,7 @@ import { Role } from "@prisma/client";
 import { unstable_cache } from "next/cache";
 import { getResilientData, getLastKnownGood } from "@/lib/db-resilience";
 import { AdminTeachersManager, TeacherRecord } from "./AdminTeachersManager";
+import { resolveProfileCountry } from "@/lib/timezone";
 
 export const metadata = {
   title: "Teachers | Admin Portal | Gandharva School of Music",
@@ -12,7 +13,7 @@ export const metadata = {
 
 const getCachedAdminTeachersData = unstable_cache(
   async () => {
-    return getResilientData("admin-teachers-v2", async () => {
+    return getResilientData("admin-teachers-v3", async () => {
       // Run both queries in parallel
       const [dbUsers, dbEnrollments, completedCounts] = await Promise.all([
     // Query teacher users with trimmed relational profiles
@@ -212,8 +213,8 @@ const getCachedAdminTeachersData = unstable_cache(
       phone: u.phone,
       phoneVerified: !!u.phoneVerified,
       image: u.image,
-      timezone: u.timezone || "Asia/Kolkata",
-      country: u.country || "India",
+      timezone: u.timezone || "UTC",
+      country: resolveProfileCountry(u.country, u.timezone),
       createdAt: u.createdAt.toISOString(),
       isActive: u.isActive,
       bio: profile?.bio || "",
@@ -297,7 +298,7 @@ const getCachedAdminTeachersData = unstable_cache(
     return formattedTeachers;
     });
   },
-  ["admin-teachers-data-v2"],
+  ["admin-teachers-data-v3"],
   { revalidate: 30, tags: ["admin-teachers", "teachers"] }
 );
 
@@ -310,13 +311,13 @@ export default async function AdminTeachersPage({ searchParams }: { searchParams
     formattedTeachers = await getCachedAdminTeachersData();
   } catch (err) {
     console.error("[AdminTeachersPage] Failed to load cached teachers data, using fallback:", err);
-    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v2");
+    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v3");
     if (fallback) formattedTeachers = fallback;
   }
 
   // Safety net: if formattedTeachers is empty, check resilient cache for last known good data
   if (!formattedTeachers || formattedTeachers.length === 0) {
-    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v2");
+    const fallback = getLastKnownGood<TeacherRecord[]>("admin-teachers-v3");
     if (fallback && fallback.length > 0) {
       formattedTeachers = fallback;
     }

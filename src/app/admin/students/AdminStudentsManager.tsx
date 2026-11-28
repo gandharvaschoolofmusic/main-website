@@ -866,7 +866,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           )}
                         </div>
                         <div className="text-[11px] text-body/70 truncate mt-0.5">
-                          {primaryCourse} · {st.country || "India"}
+                          {primaryCourse} · {st.country || "Not provided"}
                         </div>
                         <div className="mt-1">
                           {isDue ? (
@@ -1035,7 +1035,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 <div>
                   <div className="text-[11px] text-body/60 font-medium">Country / timezone</div>
                   <div className="font-bold text-heading mt-0.5">
-                    {selectedStudent.country || "India"} · {selectedStudent.timezone}
+                    {selectedStudent.country || "Not provided"} · {selectedStudent.timezone}
                   </div>
                 </div>
                 <div>
@@ -2584,7 +2584,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                     gender: String(formData.get("gender") || ""),
                     guardianName: String(formData.get("guardianName") || ""),
                     guardianPhone: String(formData.get("guardianPhone") || ""),
-                    country: String(formData.get("country") || "India"),
+                    country: String(formData.get("country") || ""),
                   });
                   if (res.success) {
                     showToast(res.message || "Student created successfully.");

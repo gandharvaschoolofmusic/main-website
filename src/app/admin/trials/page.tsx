@@ -10,7 +10,7 @@ import {
   CourseOption,
   TrialCrmKpiStats,
 } from "./AdminTrialsManager";
-import { formatToIST, getLocalDateString, IST_TIMEZONE } from "@/lib/timezone";
+import { formatToIST, getLocalDateString, IST_TIMEZONE, resolveProfileCountry } from "@/lib/timezone";
 
 export const metadata = {
   title: "Trial Bookings CRM | Admin Portal | Gandharva School of Music",
@@ -19,7 +19,7 @@ export const metadata = {
 
 const getCachedAdminTrialsData = unstable_cache(
   async () => {
-    return getResilientData("admin-trials-v5", async () => {
+    return getResilientData("admin-trials-v6", async () => {
       const [dbRequests, dbTeachers, dbCourses] = await Promise.all([
       db.trialRequest.findMany({
         include: {
@@ -91,7 +91,7 @@ const getCachedAdminTrialsData = unstable_cache(
     const formattedRequests: AdminTrialRequestItem[] = dbRequests.map((r) => {
       const activeStartsAt = r.allottedLesson?.startsAt || r.requestedStartsAt;
       const duration = r.allottedLesson?.durationMinutes || 60;
-      const studentTz = r.timezone || r.student?.timezone || "Asia/Kolkata";
+      const studentTz = r.timezone || r.student?.timezone || "UTC";
 
       return {
         id: r.id,
@@ -102,7 +102,7 @@ const getCachedAdminTrialsData = unstable_cache(
         studentPhone: r.studentPhone || r.student?.phone || null,
         guardianName: r.student?.guardianName || null,
         guardianPhone: r.student?.guardianPhone || null,
-        country: r.student?.country || null,
+        country: resolveProfileCountry(r.student?.country, studentTz),
         age: r.student?.age || null,
         gender: r.student?.gender || null,
         category: r.category,
@@ -188,7 +188,7 @@ const getCachedAdminTrialsData = unstable_cache(
     };
     });
   },
-  ["admin-trials-data-v5"],
+  ["admin-trials-data-v6"],
   { revalidate: 30, tags: ["admin-trials", "trials"] }
 );
 
@@ -215,13 +215,13 @@ export default async function AdminTrialsPage() {
     data = await getCachedAdminTrialsData();
   } catch (err) {
     console.error("[AdminTrialsPage] Failed to load cached trials data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v5");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v6");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedRequests is empty, check resilient cache for last known good data
   if (!data.formattedRequests || data.formattedRequests.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-trials-v5");
+    const fallback = getLastKnownGood<typeof data>("admin-trials-v6");
     if (fallback && fallback.formattedRequests.length > 0) {
       data = fallback;
     }
