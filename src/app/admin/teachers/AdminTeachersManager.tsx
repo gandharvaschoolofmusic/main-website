@@ -1922,13 +1922,12 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                                 })}
                               </span>
                               <a
-                                href={r.fileUrl}
-                                target="_blank"
-                                rel="noopener noreferrer"
+                                href={`/api/files/resource/${encodeURIComponent(r.id)}/download`}
+                                download
                                 className="inline-flex items-center gap-1 text-[11px] font-bold text-[#3C096C] hover:underline"
                               >
                                 <span>Download</span>
-                                <ExternalLink className="w-3 h-3" />
+                                <Download className="w-3 h-3" />
                               </a>
                             </div>
                           </div>

@@ -1,5 +1,6 @@
 "use client";
 
+import { fileDownloadHref } from "@/lib/download";
 import { useState, useTransition, useMemo, useEffect, useCallback } from "react";
 import { RecordingDialog } from "./RecordingDialog";
 import Link from "next/link";
@@ -12,13 +13,10 @@ import {
   ChevronRight,
   Play,
   Download,
-  ExternalLink,
   HardDrive,
   Cloud,
   Clock,
   RefreshCw,
-  Copy,
-  Check,
   Trash2,
   X,
   Search,
@@ -237,7 +235,6 @@ export function AdminRecordingsManager({
   const [searchQuery, setSearchQuery] = useState("");
   const [playingRecording, setPlayingRecording] = useState<RecordingFileItem | null>(null);
   const [syncingId, setSyncingId] = useState<string | null>(null);
-  const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const [isPending, startTransition] = useTransition();
 
@@ -326,19 +323,6 @@ export function AdminRecordingsManager({
   }, [selectedCourse, searchQuery]);
 
   // Actions
-  const handleCopyLink = async (recording: RecordingFileItem) => {
-    try {
-      const urlToCopy = recording.fileUrl.startsWith("http")
-        ? recording.fileUrl
-        : `${window.location.origin}${recording.fileUrl}`;
-      await navigator.clipboard.writeText(urlToCopy);
-      setCopiedId(recording.id);
-      setTimeout(() => setCopiedId(null), 2000);
-    } catch {
-      alert("Failed to copy link.");
-    }
-  };
-
   const handleSyncToDrive = (recordingId: string) => {
     setSyncingId(recordingId);
     startTransition(async () => {
@@ -1405,9 +1389,7 @@ export function AdminRecordingsManager({
 
               <div className="space-y-6">
                 {selectedSession.recordings.map((recording, idx) => {
-                  const isSupabaseCloud = recording.storageBackend === "SUPABASE";
                   const isSyncing = syncingId === recording.id;
-                  const isCopied = copiedId === recording.id;
 
                   return (
                     <div
@@ -1441,10 +1423,6 @@ export function AdminRecordingsManager({
                                 Size: {formatBytes(recording.fileSizeBytes)}
                               </span>
                             </div>
-
-                            <div className="text-[11px] text-body-muted font-mono truncate" title={recording.fileName}>
-                              {recording.fileName}
-                            </div>
                           </div>
                         </div>
 
@@ -1461,20 +1439,6 @@ export function AdminRecordingsManager({
                               Watch
                             </button>
 
-                            {/* Open in Drive */}
-                            {isSupabaseCloud && recording.fileUrl && (
-                              <a
-                                href={recording.fileUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white hover:bg-bg-alt text-heading border border-primary/10 text-xs font-semibold transition-all active:scale-[0.98] cursor-pointer"
-                                title="Open in Supabase Cloud"
-                              >
-                                <ExternalLink className="w-3 h-3" />
-                                Open file
-                              </a>
-                            )}
-
                             {/* Sync to Drive button (if stored locally) */}
                             {recording.storageBackend === "LOCAL" && (
                               <button
@@ -1489,31 +1453,15 @@ export function AdminRecordingsManager({
                               </button>
                             )}
 
-                            {/* Download Link */}
+                            {/* Download file */}
                             <a
-                              href={recording.fileUrl}
+                              href={fileDownloadHref(recording.fileUrl)}
                               download={recording.fileName}
-                              target="_blank"
-                              rel="noreferrer"
                               className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
                               title="Download file"
                             >
                               <Download className="w-3.5 h-3.5" />
                             </a>
-
-                            {/* Copy Link */}
-                            <button
-                              type="button"
-                              onClick={() => handleCopyLink(recording)}
-                              className="p-1.5 rounded-lg text-body hover:text-heading hover:bg-white border border-transparent hover:border-primary/10 transition-all cursor-pointer"
-                              title="Copy link to clipboard"
-                            >
-                              {isCopied ? (
-                                <Check className="w-3.5 h-3.5 text-emerald-600" />
-                              ) : (
-                                <Copy className="w-3.5 h-3.5" />
-                              )}
-                            </button>
                           </div>
 
                           {/* Delete button */}

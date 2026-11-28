@@ -112,6 +112,7 @@ export interface StudentRecord {
   }[];
   resources: {
     id: string;
+    resourceId: string;
     title: string;
     description?: string | null;
     category: string;
@@ -1742,15 +1743,12 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                             ) : null}
                           </div>
 
-                          <Link
-                            href={r.fileUrl}
-                            target="_blank"
-                            download
+                          <a href={`/api/files/resource/${encodeURIComponent(r.resourceId)}/download`} download
                             className="w-full inline-flex items-center justify-center gap-2 px-3 py-2 rounded-xl bg-neutral-50 hover:bg-neutral-100 border border-neutral-200 text-heading font-semibold text-xs transition-all active:scale-95"
                           >
                             <Download className="w-3.5 h-3.5 text-[#3C096C]" />
                             <span>Download Material</span>
-                          </Link>
+                          </a>
                         </div>
                       </div>
                     ))}

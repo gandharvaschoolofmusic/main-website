@@ -18,7 +18,7 @@ export const metadata = {
 
 const getCachedAdminStudentsData = unstable_cache(
   async () => {
-    return getResilientData("admin-students-v7", async () => {
+    return getResilientData("admin-students-v8", async () => {
     // 0. Auto-resolve concluded lessons based on verified attendance
     try {
       await autoResolvePastLessons();
@@ -271,6 +271,7 @@ const getCachedAdminStudentsData = unstable_cache(
           createdAt: p.createdAt.toISOString(),
         })),
         resources: s.resourcesReceived.map((r) => ({
+        resourceId: r.resourceId,
         id: r.id,
         title: r.resource.title,
         description: r.resource.description || null,
@@ -336,7 +337,7 @@ const getCachedAdminStudentsData = unstable_cache(
     };
     });
   },
-  ["admin-students-data-v7"],
+  ["admin-students-data-v8"],
   { revalidate: 30, tags: ["admin-students", "students"] }
 );
 
@@ -353,13 +354,13 @@ export default async function AdminStudentsPage() {
     data = await getCachedAdminStudentsData();
   } catch (err) {
     console.error("[AdminStudentsPage] Failed to load cached students data, using fallback:", err);
-    const fallback = getLastKnownGood<typeof data>("admin-students-v7");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v8");
     if (fallback) data = fallback;
   }
 
   // Safety net: if formattedStudents is empty, check resilient cache for last known good data
   if (!data.formattedStudents || data.formattedStudents.length === 0) {
-    const fallback = getLastKnownGood<typeof data>("admin-students-v7");
+    const fallback = getLastKnownGood<typeof data>("admin-students-v8");
     if (fallback && fallback.formattedStudents.length > 0) {
       data = fallback;
     }

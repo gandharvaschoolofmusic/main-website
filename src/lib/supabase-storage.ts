@@ -1,6 +1,7 @@
 import { createClient, SupabaseClient } from "@supabase/supabase-js";
 import { logger } from "@/lib/logger";
 import { recordingS3Object } from "@/lib/recording-s3";
+import { attachmentDisposition, downloadFilename } from "@/lib/download";
 
 export type StorageBucket = "chat-attachments" | "resources" | "recordings";
 
@@ -58,7 +59,7 @@ export function getSupabaseClient(): SupabaseClient | null {
 
 // ─── Check Configuration ─────────────────────────────────────────────────────
 /** Resolve stored object references at playback time, including private buckets. */
-export async function recordingPlaybackUrl(stored: string) {
+export async function recordingPlaybackUrl(stored: string, options?: { download: string }) {
   const project = process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL;
   if (!project || !URL.canParse(stored)) return stored;
   const url = new URL(stored);
@@ -72,16 +73,18 @@ export async function recordingPlaybackUrl(stored: string) {
     const head = await s3.client.fetch(s3.url, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(8000) });
     if (head.ok && Number(head.headers.get("content-length")) > 0) {
       s3.url.searchParams.set("X-Amz-Expires", "7200");
+      if (options) s3.url.searchParams.set("response-content-disposition", attachmentDisposition(options.download));
       return (await s3.client.sign(s3.url, { aws: { signQuery: true } })).url;
     }
     if (head.status === 404 || head.ok) return null;
     if (head.status !== 401 && head.status !== 403) throw new Error("Recording storage could not be reached");
   }
   const client = getSupabaseClient();
-  const signed = await client?.storage.from(bucket).createSignedUrl(path, 7200);
+  const signed = await client?.storage.from(bucket).createSignedUrl(path, 7200, options ? { download: downloadFilename(options.download) } : undefined);
   if (signed?.data?.signedUrl) return signed.data.signedUrl;
   // Read-only public deployments may serve files without permission to sign them.
   const publicUrl = new URL(`/storage/v1/object/public/${object[1]}/${object[2]}`, url.origin);
+  if (options) publicUrl.searchParams.set("download", downloadFilename(options.download));
   const response = await fetch(publicUrl, { method: "HEAD", cache: "no-store", signal: AbortSignal.timeout(8000) });
   if (response.ok) return publicUrl.href;
   if (response.status === 400 || response.status === 404) return null;

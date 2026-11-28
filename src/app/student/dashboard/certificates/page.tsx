@@ -139,7 +139,7 @@ export default async function StudentCertificatesPage() {
                 </a>
 
                 <a
-                  href={cert.pdfUrl}
+                  href={`/api/files/certificate/${encodeURIComponent(cert.id)}/download`}
                   download={`${cert.certificateNumber}.pdf`}
                   className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-primary hover:bg-primary-hover active:bg-primary-active text-white text-xs font-bold transition-all shadow-xs btn-tactile"
                 >

@@ -1,5 +1,6 @@
 "use client";
 
+import { fileDownloadHref } from "@/lib/download";
 import { RecordingVideo } from "@/components/recordings/RecordingVideo";
 
 import React, { useState, useMemo, useEffect } from "react";
@@ -431,10 +432,8 @@ export function StudentRecordingsClient({
 
                     <div className="flex items-center gap-1.5">
                       <a
-                        href={lecture.primaryRecordingUrl}
+                        href={fileDownloadHref(lecture.primaryRecordingUrl)}
                         download
-                        target="_blank"
-                        rel="noopener noreferrer"
                         className="p-2 rounded-xl border border-neutral-200 text-body hover:text-heading hover:bg-neutral-50 transition-all active:scale-95"
                         title="Download MP4 recording"
                       >
@@ -536,10 +535,8 @@ export function StudentRecordingsClient({
 
               <div className="flex items-center gap-2">
                 <a
-                  href={currentPlayingUrl}
+                  href={fileDownloadHref(currentPlayingUrl)}
                   download
-                  target="_blank"
-                  rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-white/10 hover:bg-white/20 text-white font-bold transition-all active:scale-95"
                 >
                   <Download className="w-3.5 h-3.5" />

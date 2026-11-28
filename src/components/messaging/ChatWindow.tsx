@@ -238,6 +238,7 @@ export function ChatWindow({
         {groupedMessages.map((msg) => (
           <MessageBubble
             key={msg.id}
+            id={msg.id}
             body={msg.body}
             messageType={msg.messageType}
             fileName={msg.fileName}

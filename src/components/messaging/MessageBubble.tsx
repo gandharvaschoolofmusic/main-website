@@ -4,6 +4,7 @@ import { MessageType } from "@/types";
 import { FileText, Download, ClipboardList, Check, CheckCheck } from "lucide-react";
 
 type MessageBubbleProps = {
+  id: string;
   body: string | null;
   messageType: MessageType;
   fileName: string | null;
@@ -30,6 +31,7 @@ function formatTime(date: Date): string {
 }
 
 export function MessageBubble({
+  id,
   body,
   messageType,
   fileName,
@@ -116,9 +118,8 @@ export function MessageBubble({
               </div>
               {fileUrl && (
                 <a
-                  href={fileUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
+                  href={`/api/files/message/${encodeURIComponent(id)}/download`}
+                  download={fileName || "attachment"}
                   className={`p-1.5 rounded-lg transition-colors ${
                     isMine
                       ? "hover:bg-white/20 text-white/80 hover:text-white"

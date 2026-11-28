@@ -3,6 +3,7 @@
 import { useEffect, useRef } from "react";
 import { Download, X } from "lucide-react";
 import { RecordingVideo } from "@/components/recordings/RecordingVideo";
+import { fileDownloadHref } from "@/lib/download";
 import type { RecordingFileItem } from "./AdminRecordingsManager";
 
 export function RecordingDialog({ recording, instrument, onClose }: {
@@ -27,7 +28,7 @@ export function RecordingDialog({ recording, instrument, onClose }: {
       <RecordingVideo key={recording.id} source={recording.fileUrl} title={instrument + " lesson recording"}/>
       <footer className="flex flex-wrap items-center justify-between gap-3 px-5 py-4 text-sm sm:px-7">
         <time dateTime={recording.createdAt} className="text-body-muted">{recording.formattedDate}</time>
-        <a href={recording.fileUrl} download={recording.fileName} target="_blank" rel="noreferrer"
+        <a href={fileDownloadHref(recording.fileUrl)} download={recording.fileName}
           className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-primary/5 px-3 font-medium text-primary hover:bg-primary/10">
           <Download size={16}/> Download
         </a>
