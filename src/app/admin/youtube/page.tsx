@@ -31,7 +31,7 @@ export default async function AdminYoutubePage({ searchParams }: { searchParams:
   return <div className="space-y-6">
     <header><h1 className="text-2xl font-semibold text-heading">YouTube</h1><p className="mt-2 text-sm text-body">One lecture playlist for each student’s allotted course.</p></header>
     <aside className="rounded-xl bg-purple-50 p-4 text-sm leading-6 text-body">
-      <strong className="text-heading">Private video access.</strong> Adding a link here does not grant YouTube access. Invite the student’s Google account and, if needed, the allotted teacher to each private video in YouTube Studio. A playlist set to Private may be visible only to its owner; use a shareable playlist containing the privately shared videos. Do not make the lecture videos public.
+      <strong className="text-heading">Dashboard playback.</strong> Add a public or unlisted playlist with embedding enabled for its videos. Students and allotted teachers can watch inside their dashboard. Unlisted links are accessible to anyone who has the link; dashboard access does not make YouTube videos private.
     </aside>
     <form className="flex flex-wrap items-end gap-3" action="/admin/youtube">
       <label className="min-w-0 flex-1 text-sm font-medium">Find student or course<input name="q" defaultValue={q} placeholder="Student name, student ID or course" className="mt-2 min-h-11 w-full rounded-lg border border-neutral-300 bg-white px-3 font-normal" /></label>

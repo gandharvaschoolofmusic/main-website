@@ -68,6 +68,7 @@ async function main() {
   const scopes = [];
   const jsx = (type, props) => ({ type, props });
   const { YoutubeCourseLibrary: library } = load('src/components/dashboard/YoutubeCourseLibrary.tsx', {
+    './YoutubeCourseList': { YoutubeCourseList: () => null },
     'react/jsx-runtime': { jsx, jsxs: jsx },
     '@prisma/client': { Role: { STUDENT: 'STUDENT', TEACHER: 'TEACHER' } },
     '@/lib/auth-helpers': { requireRole: async role => ({ id: role === 'STUDENT' ? 'student-1' : 'teacher-1' }) },
