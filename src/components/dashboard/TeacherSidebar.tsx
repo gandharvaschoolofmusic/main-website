@@ -15,7 +15,6 @@ import {
   MessageSquare,
   FolderArchive,
   FileText,
-  ListVideo,
   Menu,
   X,
   PanelLeftClose,
@@ -51,7 +50,6 @@ const navItems: NavItem[] = [
     href: "/teacher/dashboard/resources",
     icon: FolderArchive,
   },
-  { name: "YouTube", href: "/teacher/dashboard/youtube", icon: ListVideo },
   {
     name: "Messages",
     href: "/teacher/dashboard/messages",

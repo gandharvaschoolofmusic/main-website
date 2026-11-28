@@ -24,6 +24,7 @@ export default async function BookTrialPage() {
           phone: true,
           phoneVerified: true,
           timezone: true,
+          gender: true,
         },
       }),
       db.trialRequest.findFirst({
@@ -52,6 +53,7 @@ export default async function BookTrialPage() {
                 phone: dbUser.phone ?? null,
                 phoneVerified: !!dbUser.phoneVerified,
                 timezone: dbUser.timezone || "UTC",
+                gender: dbUser.gender,
               }
             : null
         }

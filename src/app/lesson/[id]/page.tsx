@@ -165,7 +165,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
 
   // Too early — only teachers and admins can enter early via pre-flight
   const canEnterEarly = callerRole === "TEACHER" || viewer.role === "ADMIN";
-  if (now < earlyOpenTime && !(isEarlyRequested && canEnterEarly)) {
+  if (viewer.role !== "ADMIN" && now < earlyOpenTime && !(isEarlyRequested && canEnterEarly)) {
     const formattedStartTime = formatInViewerTimezone(
       startsAt,
       userTimezone,

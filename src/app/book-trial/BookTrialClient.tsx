@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { formatInternationalE164 } from "@/lib/phone-utils";
 import { createTrialRequestAction } from "@/actions/trial";
+import { TRIAL_GENDERS, TRIAL_REFERRAL_SOURCES } from "@/lib/trial-details";
 import { sendPhoneOtpAction, verifyPhoneOtpForSignupAction } from "@/actions/auth";
 import type { ConfirmationResult } from "firebase/auth";
 import {
@@ -51,6 +52,7 @@ export interface BookTrialClientProps {
     phone?: string | null;
     phoneVerified?: boolean;
     timezone: string;
+    gender?: string | null;
   } | null;
   isConvertedStudent?: boolean;
 }
@@ -401,6 +403,10 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
   const [selectedAgeGroup, setSelectedAgeGroup] = useState<string>("Children (8 - 12 years)");
   const [studentName, setStudentName] = useState(currentUser?.name || "");
   const [studentEmail, setStudentEmail] = useState(currentUser?.email || "");
+  const [gender, setGender] = useState<typeof TRIAL_GENDERS[number] | "">(
+    TRIAL_GENDERS.find(value => value === currentUser?.gender) || "",
+  );
+  const [leadSource, setLeadSource] = useState<typeof TRIAL_REFERRAL_SOURCES[number] | "">("");
   const [selectedCountry, setSelectedCountry] = useState<CountryOption>(() => {
     if (currentUser?.phone) {
       const matched = SUPPORTED_COUNTRIES.find((c) =>
@@ -662,6 +668,8 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
         ageGroup: selectedAgeGroup,
         studentName,
         studentEmail,
+        gender: gender || undefined,
+        leadSource: leadSource || undefined,
         studentPhone: getFullPhoneNumber() || undefined,
         otpCode: !currentUser ? (verifiedOtpCode || otpCode) : undefined,
         firebaseIdToken: !currentUser ? (firebaseIdToken || undefined) : undefined,
@@ -910,6 +918,21 @@ function TrialBookingForm({ currentUser }: Pick<BookTrialClientProps, "currentUs
                   placeholder="you@example.com"
                   className={inputClass}
                 />
+              </div>
+
+              <div>
+                <label htmlFor="studentGender" className={labelClass}>Student gender</label>
+                <select id="studentGender" value={gender} onChange={event => setGender(event.target.value as typeof gender)} className={inputClass}>
+                  <option value="">Select gender (optional)</option>
+                  {TRIAL_GENDERS.map(value => <option key={value} value={value}>{value}</option>)}
+                </select>
+              </div>
+              <div>
+                <label htmlFor="leadSource" className={labelClass}>How did you hear about us?</label>
+                <select id="leadSource" value={leadSource} onChange={event => setLeadSource(event.target.value as typeof leadSource)} className={inputClass}>
+                  <option value="">Select an option (optional)</option>
+                  {TRIAL_REFERRAL_SOURCES.map(value => <option key={value} value={value}>{value}</option>)}
+                </select>
               </div>
 
               {/* Mobile Phone Verification */}

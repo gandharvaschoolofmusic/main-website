@@ -432,12 +432,6 @@ export function AdminOverviewClient({
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                           In progress
                         </span>
-                        <Link
-                          href={item.lessonId ? `/lesson/${item.lessonId}` : "/admin/lessons"}
-                          className="px-3 py-1 rounded-xl border border-purple-200/90 hover:bg-purple-50 text-[#3C096C] text-xs font-bold transition-all active:scale-95 shadow-2xs"
-                        >
-                          Monitor
-                        </Link>
                       </>
                     )}
                     {item.status === "JOIN_OPENS" && (
@@ -454,6 +448,14 @@ export function AdminOverviewClient({
                       <span className="px-2.5 py-1 rounded-full bg-rose-50 text-rose-700 border border-rose-200 text-[11px] font-medium">
                         Cancelled
                       </span>
+                    )}
+                    {item.lessonId && ["SCHEDULED", "JOIN_OPENS", "IN_PROGRESS"].includes(item.status) && (
+                      <Link
+                        href={`/lesson/${item.lessonId}`}
+                        className="px-3 py-1 rounded-xl border border-purple-200/90 hover:bg-purple-50 text-[#3C096C] text-xs font-bold transition-all active:scale-95 shadow-2xs"
+                      >
+                        Monitor
+                      </Link>
                     )}
                   </div>
                 </div>

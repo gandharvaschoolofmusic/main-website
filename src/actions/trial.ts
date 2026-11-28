@@ -15,6 +15,7 @@ import {
 } from "@/lib/phone";
 import { createNotification, notifyAdmins } from "@/actions/notifications";
 import { generateNextStudentId, generateNextTrialId } from "@/lib/id-generator";
+import { TRIAL_GENDERS, TRIAL_REFERRAL_SOURCES } from "@/lib/trial-details";
 
 const CreateTrialRequestSchema = z.object({
   category: z.string().min(1, "Category is required"),
@@ -29,6 +30,8 @@ const CreateTrialRequestSchema = z.object({
   otpCode: z.string().optional(),
   firebaseIdToken: z.string().optional(),
   studentNotes: z.string().optional(),
+  gender: z.enum(TRIAL_GENDERS).optional(),
+  leadSource: z.enum(TRIAL_REFERRAL_SOURCES).optional(),
   password: z.string().optional(),
 });
 
@@ -348,6 +351,9 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
 
     const trialCustomId = await generateNextTrialId(db);
 
+    if (validated.gender) {
+      await db.user.update({ where: { id: studentUserId }, data: { gender: validated.gender } });
+    }
     const trialRequest = await db.trialRequest.create({
       data: {
         customId: trialCustomId,
@@ -362,6 +368,7 @@ export async function createTrialRequestAction(input: CreateTrialRequestInput) {
         studentEmail: validated.studentEmail.toLowerCase().trim(),
         studentPhone: savedPhone || (validated.studentPhone ? normalizePhoneNumber(validated.studentPhone) : null),
         studentNotes: validated.studentNotes?.trim() || null,
+        leadSource: validated.leadSource || "Direct Web",
         status: TrialRequestStatus.PENDING,
       },
     });

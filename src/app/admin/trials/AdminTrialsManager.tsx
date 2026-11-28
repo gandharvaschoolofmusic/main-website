@@ -2420,6 +2420,14 @@ export function AdminTrialsManager({
                             {formatTimezoneLabel(drawerLead.timezone || IST_TIMEZONE, drawerLead.requestedStartsAt, drawerLead.country)}
                           </span>
                         </div>
+                        <div className="flex items-center justify-between py-0.5">
+                          <span className="text-body/60">Gender</span>
+                          <span className="font-medium text-heading">{drawerLead.gender || "Not provided"}</span>
+                        </div>
+                        <div className="flex items-center justify-between gap-3 py-0.5">
+                          <span className="text-body/60">How did you hear about us?</span>
+                          <span className="font-medium text-heading text-right">{drawerLead.leadSource || "Not provided"}</span>
+                        </div>
                       </div>
                     </div>
 
