@@ -241,13 +241,27 @@ export function resolveProfileCountry(country?: string | null, timezone?: string
   return (TIMEZONE_LOCATIONS[zone] || TIMEZONE_LOCATIONS[canonical])?.country || null;
 }
 
+/** Country plus the timezone's representative city; no physical city is stored on profiles. */
+export function formatProfileLocation(country?: string | null, timezone?: string | null): string {
+  const resolvedCountry = resolveProfileCountry(country, timezone);
+  let city: string | undefined;
+  if (timezone && isValidTimezone(timezone)) {
+    const canonical = Intl.DateTimeFormat("en-US", { timeZone: timezone }).resolvedOptions().timeZone;
+    const location = TIMEZONE_LOCATIONS[timezone] || TIMEZONE_LOCATIONS[canonical];
+    if (canonical.includes("/") && !canonical.startsWith("Etc/")) {
+      city = location?.city || canonical.split("/").at(-1)!.replaceAll("_", " ");
+    }
+  }
+  return [...new Set([resolvedCountry, city].filter(Boolean))].join(" · ") || "Not provided";
+}
+
 /** Human-readable booking timezone; seasonal codes use the lesson date. */
 export function formatTimezoneLabel(timezone: string, date: Date | string | number, country?: string | null): string {
   if (!isValidTimezone(timezone)) return "Timezone unavailable";
   if (timezone === "UTC" || timezone === "Etc/UTC") return "Coordinated Universal Time · UTC";
   const canonical = Intl.DateTimeFormat("en-US", { timeZone: timezone }).resolvedOptions().timeZone;
   const location = TIMEZONE_LOCATIONS[timezone] || TIMEZONE_LOCATIONS[canonical];
-  const city = location?.city || timezone.split("/").at(-1)!.replaceAll("_", " ");
+  const city = location?.city || canonical.split("/").at(-1)!.replaceAll("_", " ");
   const abbr = getTimezoneAbbr(date, timezone);
   const code = location?.code && location.code !== abbr ? `${location.code} (${abbr})` : abbr;
   return [location?.country || country, city, code].filter(Boolean).join(" · ");

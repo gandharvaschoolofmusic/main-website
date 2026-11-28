@@ -1,7 +1,7 @@
 "use client";
 
 import { DateTimePicker } from "@/components/ui/DateTimePicker";
-import { formatToIST, fromISTInputToUtc } from "@/lib/timezone";
+import { formatToIST, fromISTInputToUtc, formatProfileLocation } from "@/lib/timezone";
 
 import { useState, useTransition, useMemo, useEffect } from "react";
 import Link from "next/link";
@@ -867,7 +867,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                           )}
                         </div>
                         <div className="text-[11px] text-body/70 truncate mt-0.5">
-                          {primaryCourse} · {st.country || "Not provided"}
+                          {primaryCourse} · {formatProfileLocation(st.country, st.timezone)}
                         </div>
                         <div className="mt-1">
                           {isDue ? (
@@ -1036,7 +1036,7 @@ Export Timestamp: ${new Date().toLocaleString("en-GB", { timeZone: "Asia/Kolkata
                 <div>
                   <div className="text-[11px] text-body/60 font-medium">Country / timezone</div>
                   <div className="font-bold text-heading mt-0.5">
-                    {selectedStudent.country || "Not provided"} · {selectedStudent.timezone}
+                    {formatProfileLocation(selectedStudent.country, selectedStudent.timezone)} · {selectedStudent.timezone}
                   </div>
                 </div>
                 <div>

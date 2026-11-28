@@ -102,7 +102,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
   }
 
   const dashboardHref =
-    callerRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+    viewer.role === "ADMIN" ? "/admin" : callerRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
 
   // 3. Status checks: CANCELLED
   if (lesson.status === "CANCELLED") {
@@ -310,6 +310,7 @@ export default async function LessonPage({ params, searchParams }: LessonPagePro
         durationMinutes: lesson.durationMinutes,
         partnerName,
         isTeacher: callerRole === "TEACHER",
+        isAdmin: viewer.role === "ADMIN",
         callerRole,
         lessonSource: lesson.lessonSource,
       }}

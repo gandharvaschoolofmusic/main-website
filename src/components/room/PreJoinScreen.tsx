@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { AudioMode } from "@/lib/audio-engine";
 import { microphoneOptions, resolveMicrophoneId } from "@/lib/lesson-microphone";
+import { needsInstrumentHeadphones } from "@/lib/lesson-prejoin";
 import { getCleanDeviceList, CleanedDeviceOption } from "@/lib/media-devices";
 import { AudioLevelMeter } from "./AudioLevelMeter";
 import { Mic, MicOff, Video as VideoIcon, VideoOff, Music, ArrowLeft } from "lucide-react";
@@ -18,6 +19,7 @@ interface PreJoinScreenProps {
     durationMinutes: number;
     partnerName: string;
     callerRole: "TEACHER" | "STUDENT";
+    isAdmin?: boolean;
     lessonSource?: string | null;
   };
   onJoin: (config: {
@@ -28,9 +30,10 @@ interface PreJoinScreenProps {
     isVideoMuted: boolean;
   }, microphone?: MediaStreamTrack) => void;
   onCancel?: () => void;
+  companion?: boolean;
 }
 
-export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) {
+export function PreJoinScreen({ lesson, onJoin, onCancel, companion = false }: PreJoinScreenProps) {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [stream, setStream] = useState<MediaStream | null>(null);
@@ -42,9 +45,30 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   const [selectedVideoDevice, setSelectedVideoDevice] = useState<string>("");
 
   const [audioMode, setAudioMode] = useState<AudioMode>("TALKING");
-  const [isVideoMuted, setIsVideoMuted] = useState(false);
-  const [isAudioMuted, setIsAudioMuted] = useState(false);
+  const [isVideoMuted, setIsVideoMuted] = useState(!!lesson.isAdmin);
+  const [isAudioMuted, setIsAudioMuted] = useState(!!lesson.isAdmin);
   const [headphonesAcknowledged, setHeadphonesAcknowledged] = useState(false);
+  const [participantNames, setParticipantNames] = useState<string[] | null>(null);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = async () => {
+      if (!document.hidden) {
+        try {
+          const response = await fetch(`/api/lessons/${lesson.id}/participants`, { cache: "no-store", signal: controller.signal });
+          if (!response.ok) throw new Error("Unavailable");
+          const data = await response.json();
+          if (!controller.signal.aborted) setParticipantNames(data.names);
+        } catch {
+          if (!controller.signal.aborted) setParticipantNames(null);
+        }
+      }
+      if (!controller.signal.aborted) timer = setTimeout(refresh, 10000);
+    };
+    void refresh();
+    return () => { controller.abort(); clearTimeout(timer); };
+  }, [lesson.id]);
 
   const [deviceError, setDeviceError] = useState<string | null>(null);
 
@@ -147,9 +171,9 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   }, [openPreview, releasePreview, refreshDevices]);
 
   useEffect(() => {
-    stream?.getAudioTracks().forEach(track => { track.enabled = !isAudioMuted; });
+    stream?.getAudioTracks().forEach(track => { track.enabled = !isAudioMuted && !companion; });
     stream?.getVideoTracks().forEach(track => { track.enabled = !isVideoMuted; });
-  }, [stream, isAudioMuted, isVideoMuted]);
+  }, [stream, isAudioMuted, isVideoMuted, companion]);
 
   const toggleVideo = () => {
     const nextState = !isVideoMuted;
@@ -160,7 +184,7 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
   };
 
   const toggleAudio = () => {
-    const nextState = !isAudioMuted;
+    const nextState = companion || !isAudioMuted;
     setIsAudioMuted(nextState);
     if (stream) {
       stream.getAudioTracks().forEach((t) => (t.enabled = !nextState));
@@ -195,7 +219,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
     onCancel?.();
   };
 
-  const canJoin = !changingPreview && (audioMode === "TALKING" || headphonesAcknowledged);
+  const needsHeadphones = needsInstrumentHeadphones({ audioMode, isAudioMuted, companion, headphonesAcknowledged });
+  const canJoin = !changingPreview && !needsHeadphones;
   const changeMode = (mode: AudioMode) => {
     if (!streamRef.current?.getAudioTracks().length) setAudioMode(mode);
     void openPreview(selectedAudioDevice, selectedVideoDevice, mode, false, true);
@@ -249,7 +274,8 @@ export function PreJoinScreen({ lesson, onJoin, onCancel }: PreJoinScreenProps) 
           {stream && !isAudioMuted && <AudioLevelMeter stream={stream} className="mt-3"/>}
           {deviceError && <p className="meet-chat-warning mt-4" role="alert">{deviceError}</p>}
         </section>
-        <section className="meet-ready"><h1>Ready to join?</h1><p>{lesson.instrument} with {lesson.partnerName}</p><p>Your lesson is ready when you are.</p><button type="button" className="meet-primary-button" disabled={!canJoin} onClick={handleJoin}>Join now</button>
+        <section className="meet-ready"><h1>Ready to join?</h1><p aria-live="polite">{participantNames?.length ? `In the room: ${participantNames.join(", ")}` : participantNames ? "No one has joined yet." : "Your lesson is ready when you are."}</p><button type="button" className="meet-primary-button" disabled={!canJoin} onClick={handleJoin}>Join now</button>
+          {needsHeadphones && <p className="meet-chat-warning">Confirm headphones, turn off your microphone, or choose Talking Mode to join.</p>}
           <div className="meet-prejoin-audio"><label><span><Music size={16} className="inline mr-2"/>Audio mode</span><select aria-label="Audio mode" value={audioMode} onChange={(event) => changeMode(event.target.value as AudioMode)}><option value="TALKING">Talking Mode</option><option value="PLAYING">Instrument Mode</option></select></label>{audioMode === "PLAYING" && <label className="meet-headphone-check"><input type="checkbox" checked={headphonesAcknowledged} onChange={(event) => setHeadphonesAcknowledged(event.target.checked)}/><span>I’m wearing headphones to prevent echo in Instrument Mode.</span></label>}</div>
           <button type="button" className="meet-text-button" onClick={handleCancel}><ArrowLeft size={16}/>Back to dashboard</button>
         </section>

@@ -21,6 +21,7 @@ interface LessonRoomClientProps {
     durationMinutes: number;
     partnerName: string;
     isTeacher: boolean;
+    isAdmin?: boolean;
     callerRole: "TEACHER" | "STUDENT";
     lessonSource?: string | null;
   };
@@ -149,7 +150,7 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
     hasLeftRouteRef.current = true;
     releaseAllMediaDevices();
     const dashboardRoute =
-      lesson.callerRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
+      lesson.isAdmin ? "/admin" : lesson.callerRole === "TEACHER" ? "/teacher/dashboard" : "/student/dashboard";
     router.replace(dashboardRoute);
   };
 
@@ -159,6 +160,7 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
       <label className="meet-companion-choice"><input type="checkbox" checked={companion} onChange={event => setCompanion(event.target.checked)} /> Join as second device — camera / screen sharing only, microphone and speakers off. Keep your main device connected.</label>
       <PreJoinScreen
         lesson={lesson}
+        companion={companion}
         onJoin={handlePreJoinComplete}
         onCancel={handleLeave}
       />
@@ -167,7 +169,7 @@ export function LessonRoomClient({ lesson }: LessonRoomClientProps) {
   }
 
   if (step === "CONNECTING") {
-    return <div className="meet-connection" role="status"><Loader2 size={40} className="animate-spin text-[#a8c7fa]"/><h2 className="text-2xl">Joining your lesson…</h2><p className="meet-muted">Connecting with {lesson.partnerName}</p></div>;
+    return <div className="meet-connection" role="status"><Loader2 size={40} className="animate-spin text-[#a8c7fa]"/><h2 className="text-2xl">Joining your lesson…</h2><p className="meet-muted">Connecting to the classroom</p></div>;
   }
 
   if (step === "ERROR") {

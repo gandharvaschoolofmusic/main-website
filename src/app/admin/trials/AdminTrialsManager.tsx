@@ -3,7 +3,7 @@
 import { useState, useTransition, useMemo, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { TrialRequestStatus } from "@prisma/client";
-import { IST_TIMEZONE, formatToIST, formatISTDateOnly, formatISTTimeOnly, fromISTInputToUtc, toISTInputString, getLocalDateString, formatTimezoneLabel, formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
+import { IST_TIMEZONE, formatToIST, formatISTDateOnly, formatISTTimeOnly, fromISTInputToUtc, toISTInputString, getLocalDateString, formatTimezoneLabel, formatProfileLocation, formatInViewerTimezone, getTimezoneAbbr } from "@/lib/timezone";
 import {
   allotTrialTeacherAction,
   updateTrialLeadStatusAction,
@@ -2253,7 +2253,7 @@ export function AdminTrialsManager({
                         </h3>
                       </div>
                       <div className="text-[11px] text-body/70 mt-0.5 leading-snug">
-                        {drawerLead.instrument} • Age {drawerLead.age || 16} • {drawerLead.country || "Not provided"}
+                        {drawerLead.instrument} • Age {drawerLead.age || 16} • {formatProfileLocation(drawerLead.country, drawerLead.timezone)}
                       </div>
                     </div>
                   </div>
@@ -2409,9 +2409,9 @@ export function AdminTrialsManager({
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">
-                          <span className="text-body/60">Country</span>
+                          <span className="text-body/60">Country / timezone city</span>
                           <span className="font-medium text-heading">
-                            {drawerLead.country || "Not provided"}
+                            {formatProfileLocation(drawerLead.country, drawerLead.timezone)}
                           </span>
                         </div>
                         <div className="flex items-center justify-between py-0.5">

@@ -24,10 +24,6 @@ export default async function TeacherTermsPage() {
         <p className="text-sm text-body">Your teacher collaboration policy, available here whenever you need it.</p>
       </header>
 
-      <div className="rounded-xl bg-amber-50 p-4 text-sm text-amber-900">
-        <strong>Draft reference document.</strong> The supplied policy contains an unfilled effective date and other placeholders. These remain as provided by the school.
-      </div>
-
       <nav aria-label="Policy sections" className="rounded-2xl bg-purple-50 p-5">
         <h2 className="font-semibold text-heading">Jump to a section</h2>
         <ul className="mt-3 grid gap-2 text-sm sm:grid-cols-2">
@@ -53,7 +49,6 @@ export default async function TeacherTermsPage() {
             }
             const text = block.text || "";
             if (index < 2) return <p key={index} className="font-serif text-xl font-bold text-heading">{text}</p>;
-            if (text.startsWith("Drafting note")) return <details key={index} className="rounded-lg bg-bg-alt p-4"><summary className="cursor-pointer font-semibold">Source document drafting note</summary><p className="mt-2">{text}</p></details>;
             if (isHeading(text)) return <h2 key={index} id={headingId(index)} className="scroll-mt-24 pt-6 font-serif text-xl font-bold text-heading">{text}</h2>;
             return <p key={index} className="whitespace-pre-line">{text}</p>;
           })}
