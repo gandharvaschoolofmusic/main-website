@@ -13,13 +13,17 @@ export async function getNotifications(limit = 30) {
   const userId = session.user.id;
   const userRole = session.user.role;
 
-  // Check existing notifications count
-  const count = await db.notification.count({
-    where: { userId },
-  });
+  return loadUserNotifications(userId, userRole, limit);
+}
 
-  // If user has zero notifications, seed initial fast info based on real platform state
-  if (count === 0) {
+async function loadUserNotifications(userId: string, userRole: string | undefined, limit: number) {
+  const existing = await db.notification.findMany({
+    where: { userId }, orderBy: { createdAt: "desc" }, take: limit,
+  });
+  if (existing.length) return normalizeNotificationLinks(existing);
+
+  // Seed initial notifications only for an empty inbox.
+  {
     try {
       if (userRole === Role.ADMIN) {
         // Find recent teachers, students, trials, and support tickets to give admin real fast info right away
@@ -165,11 +169,24 @@ export async function getNotifications(limit = 30) {
     orderBy: { createdAt: "desc" },
     take: limit,
   });
+  return normalizeNotificationLinks(notifications);
+}
+
+function normalizeNotificationLinks<T extends { link: string | null }>(notifications: T[]) {
   // Keep previously stored signup notifications usable after the page removal.
   return notifications.map(notification => ({
     ...notification,
     link: notification.link === "/admin/users" ? "/admin/students" : notification.link,
   }));
+}
+
+// One authenticated request for the bell, instead of two serialized Server Actions.
+export async function getNotificationSnapshot() {
+  const session = await auth();
+  if (!session?.user?.id) return { notifications: [], unreadCount: 0 };
+  const notifications = await loadUserNotifications(session.user.id, session.user.role, 25);
+  const unreadCount = await db.notification.count({ where: { userId: session.user.id, isRead: false } });
+  return { notifications, unreadCount };
 }
 
 // ─── Unread count ────────────────────────────────────────────────────────────

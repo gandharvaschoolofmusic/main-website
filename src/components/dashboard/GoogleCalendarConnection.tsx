@@ -1,8 +1,9 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { calendarConnection, disconnectMyCalendar, syncMyCalendar } from "@/actions/google-calendar";
 
 export function GoogleCalendarConnection() {
+  const initialSyncStarted = useRef(false);
   const [connection, setConnection] = useState<Awaited<ReturnType<typeof calendarConnection>>>();
   const [message, setMessage] = useState("");
   const [busy, setBusy] = useState(false);
@@ -29,7 +30,12 @@ export function GoogleCalendarConnection() {
   }
   useEffect(() => {
     void loadConnection().then(value => {
-      if (value?.email && value.configured) void sync();
+      const justConnected = new URLSearchParams(window.location.search).get("googleCalendar") === "connected";
+      if (value?.email && value.configured && justConnected && !initialSyncStarted.current) {
+        initialSyncStarted.current = true;
+        window.history.replaceState(null, "", window.location.pathname);
+        void sync();
+      }
       if (new URLSearchParams(window.location.search).get("googleCalendar") === "error") {
         setMessage("Connection failed or permission was declined. Please try again.");
       }

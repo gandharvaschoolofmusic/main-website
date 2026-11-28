@@ -50,6 +50,7 @@ export default async function StudentDashboardPage() {
         orderBy: { startedAt: "desc" },
       }),
       db.lesson.findMany({
+          omit: { attendanceLogs: true, chatLogs: true },
         where: {
           studentId: user.id,
         },

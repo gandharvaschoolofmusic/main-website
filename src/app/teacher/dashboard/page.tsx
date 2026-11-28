@@ -25,6 +25,7 @@ export default async function TeacherDashboardPage() {
           select: { id: true },
         },
         lessonsAsTeacher: {
+          omit: { attendanceLogs: true, chatLogs: true },
           include: {
             student: {
               select: {

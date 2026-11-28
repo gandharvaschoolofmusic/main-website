@@ -148,6 +148,7 @@ const getCachedAdminOverviewData = unstable_cache(
         }),
         // 16: Today's Lessons with details (also provides today's scheduled and completed counts!)
         db.lesson.findMany({
+          omit: { attendanceLogs: true, chatLogs: true },
           where: { startsAt: { gte: startOfToday, lt: startOfTomorrow } },
           include: {
             student: { select: { name: true } },

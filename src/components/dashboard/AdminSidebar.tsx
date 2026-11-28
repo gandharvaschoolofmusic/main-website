@@ -238,7 +238,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
               <Link
                 key={item.name}
                 href={item.href}
-                prefetch={true}
+                prefetch={null}
                 onClick={() => setNavigatingTo(item.href)}
                 title={isCollapsed ? item.name : undefined}
                 className={`relative flex items-center rounded-xl text-xs transition-all active:scale-[0.98] ${
@@ -379,7 +379,7 @@ export function AdminSidebar({ currentUser }: AdminSidebarProps = {}) {
                   <Link
                     key={item.name}
                     href={item.href}
-                    prefetch={true}
+                    prefetch={null}
                     onClick={() => {
                       setNavigatingTo(item.href);
                       setIsMobileDrawerOpen(false);

@@ -22,8 +22,7 @@ import {
   LifeBuoy,
 } from "lucide-react";
 import {
-  getNotifications,
-  getUnreadCount,
+  getNotificationSnapshot,
   markNotificationRead,
   markAllNotificationsRead,
   deleteNotification,
@@ -144,24 +143,30 @@ export function NotificationBell({ userRole }: { userRole?: string }) {
 
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Initial fetch and auto-polling every 25 seconds for fast updates
-  const loadNotifications = async () => {
-    try {
-      const [list, count] = await Promise.all([
-        getNotifications(25),
-        getUnreadCount(),
-      ]);
+  const notificationRequest = useRef<Promise<void> | null>(null);
+
+  // Share in-flight reads between opening the bell and background polling.
+  const loadNotifications = () => {
+    if (notificationRequest.current) return notificationRequest.current;
+    const request = getNotificationSnapshot().then(({ notifications: list, unreadCount: count }) => {
       setNotifications(list as NotificationItem[]);
       setUnreadCount(count);
-    } catch {
-      // Background poll failure silent
-    }
+    }).catch(() => {
+      // Leave the current inbox visible on transient failures.
+    }).finally(() => { notificationRequest.current = null; });
+    notificationRequest.current = request;
+    return request;
   };
 
   useEffect(() => {
-    loadNotifications();
-    const interval = setInterval(loadNotifications, 25000);
-    return () => clearInterval(interval);
+    const poll = () => { if (document.visibilityState === "visible") void loadNotifications(); };
+    poll();
+    const interval = setInterval(poll, 25000);
+    document.addEventListener("visibilitychange", poll);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", poll);
+    };
   }, []);
 
   // Close on outside click
