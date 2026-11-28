@@ -31,17 +31,24 @@ async function main() {
 
   let allowed = false;
   let saved = null;
+  let secondSaved = null;
   let writes = 0;
   const revalidated = [];
   const { saveEnrollmentPlaylist: save } = load('src/actions/youtube-playlists.ts', {
     '@prisma/client': { Role: { ADMIN: 'ADMIN' } },
-    'next/cache': { revalidatePath: path => revalidated.push(path) },
+    'next/cache': { revalidatePath: path => revalidated.push(path), updateTag: tag => assert.equal(tag, 'youtube-playlists') },
     '@/lib/auth-helpers': { requireRole: async role => {
       assert.equal(role, 'ADMIN');
       if (!allowed) throw new Error('Unauthorized');
     } },
     '@/lib/db': { db: { enrollment: { updateMany: async ({ where, data }) => {
       assert.equal(where.status.not, 'CANCELLED');
+      if (where.id === 'enrollment-2') {
+        if (secondSaved !== where.youtubePlaylistUrl) return { count: 0 };
+        secondSaved = data.youtubePlaylistUrl;
+        writes++;
+        return { count: 1 };
+      }
       if (where.id !== 'enrollment-1' || saved !== where.youtubePlaylistUrl) return { count: 0 };
       saved = data.youtubePlaylistUrl;
       writes++;
@@ -61,8 +68,16 @@ async function main() {
   assert.equal((await save({ enrollmentId: 'another-enrollment', url: '', expectedUrl: canonical })).success, false);
   assert.equal((await save({ enrollmentId: 'enrollment-1', url: '', expectedUrl: canonical })).success, true);
   assert.equal(saved, null);
+  assert.equal((await save({ enrollmentId: 'enrollment-1', url: canonical, expectedUrl: null })).success, true);
+  const secondPlaylist = 'https://www.youtube.com/playlist?list=PLsecondcourse1234';
+  assert.equal((await save({ enrollmentId: 'enrollment-2', url: secondPlaylist, expectedUrl: null })).success, true);
+  assert.equal(saved, canonical, 'Saving another course must not replace the first course playlist');
+  assert.equal(secondSaved, secondPlaylist);
+  await save({ enrollmentId: 'enrollment-2', url: '', expectedUrl: secondPlaylist });
+  assert.equal(saved, canonical, 'Removing another course must not remove the first course playlist');
+  assert.equal(secondSaved, null);
   assert.deepEqual([...new Set(revalidated)].sort(), [
-    '/admin/youtube', '/student/dashboard/youtube', '/teacher/dashboard/youtube',
+    '/admin/youtube', '/student/dashboard/youtube',
   ]);
 
   const scopes = [];

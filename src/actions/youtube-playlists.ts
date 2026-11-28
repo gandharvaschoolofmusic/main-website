@@ -1,7 +1,7 @@
 "use server";
 
 import { Role } from "@prisma/client";
-import { revalidatePath } from "next/cache";
+import { revalidatePath, updateTag } from "next/cache";
 import { requireRole } from "@/lib/auth-helpers";
 import { db } from "@/lib/db";
 import { normalizeYoutubePlaylist } from "@/lib/youtube-playlist";
@@ -20,7 +20,8 @@ export async function saveEnrollmentPlaylist(input: { enrollmentId: string; url:
       data: { youtubePlaylistUrl: url, youtubePlaylistUpdatedAt: new Date() },
     });
     if (!changed.count) return { success: false as const, error: "This enrollment changed or is no longer available. Refresh and try again." };
-    for (const path of ["/admin/youtube", "/student/dashboard/youtube", "/teacher/dashboard/youtube"]) revalidatePath(path);
+    updateTag("youtube-playlists");
+    for (const path of ["/admin/youtube", "/student/dashboard/youtube"]) revalidatePath(path);
     return { success: true as const, url };
   } catch { return { success: false as const, error: "Could not save the playlist. Please try again." }; }
 }
